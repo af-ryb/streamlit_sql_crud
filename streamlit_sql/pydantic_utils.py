@@ -196,7 +196,6 @@ class PydanticInputGenerator:
             Dictionary of form field values
         """
 
-        
         form_data = {}
         existing_values = existing_values or {}
         
@@ -209,32 +208,52 @@ class PydanticInputGenerator:
                 continue
                 
             input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
-            label = field_info.get('description', field_name.replace('_', ' ').title())
+            # Ensure label is always a string
+            description = field_info.get('description')
+            if description is None or description == '':
+                label = field_name.replace('_', ' ').title()
+            else:
+                label = str(description)
             
             if input_type == 'text_input':
                 form_data[field_name] = st.text_input(
                     label, 
-                    value=existing_value or "", 
+                    value=str(existing_value) if existing_value is not None else "", 
                     key=key
                 )
             elif input_type == 'number_input_int':
+                default_val = 0
+                if existing_value is not None:
+                    try:
+                        default_val = int(existing_value)
+                    except (ValueError, TypeError):
+                        default_val = 0
                 form_data[field_name] = st.number_input(
                     label, 
-                    value=existing_value or 0, 
+                    value=default_val, 
                     step=1, 
                     key=key
                 )
             elif input_type == 'number_input_float':
+                default_val = 0.0
+                if existing_value is not None:
+                    try:
+                        default_val = float(existing_value)
+                    except (ValueError, TypeError):
+                        default_val = 0.0
                 form_data[field_name] = st.number_input(
                     label, 
-                    value=existing_value or 0.0, 
+                    value=default_val, 
                     step=0.1, 
                     key=key
                 )
             elif input_type == 'checkbox':
+                default_val = False
+                if existing_value is not None:
+                    default_val = bool(existing_value)
                 form_data[field_name] = st.checkbox(
                     label, 
-                    value=existing_value or False, 
+                    value=default_val, 
                     key=key
                 )
             elif input_type == 'date_input':
