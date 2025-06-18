@@ -28,6 +28,7 @@ See the package in action [here](https://example-crud.streamlit.app/).
 - Display multiple CRUD interfaces in the same page using unique base_key.
 - Show *many-to-one* relation in edit forms with basic editing.
 - Log database modification to stderr or to your prefered loguru handler. (can be disabled)
+- **NEW**: Support for Pydantic schemas for enhanced validation and separate create/update models
 
 ### FILTER
 
@@ -51,10 +52,19 @@ See the package in action [here](https://example-crud.streamlit.app/).
 - Text columns offers candidates from existing values
 - Hide columns to fill by offering default values
 - ForeignKey columns are added by the string representation instead of its id number
+- **NEW**: Use Pydantic schemas for enhanced validation and custom field requirements
 
 ### DELETE
 
 - Delete one or multiple rows by selecting in DataFrame and clicking the corresponding button. A dialog will list selected rows and confirm deletion.
+
+### VALIDATION (NEW)
+
+- **Pydantic Integration**: Use separate Pydantic models for create and update operations
+- **Field Validation**: Leverage Pydantic's validation capabilities (regex, min/max lengths, number ranges, etc.)
+- **Type Safety**: Better type checking and IDE support
+- **Custom Error Messages**: User-friendly validation error messages
+- **Optional Fields**: Different field requirements for create vs update operations
 
 
 
@@ -63,9 +73,10 @@ See the package in action [here](https://example-crud.streamlit.app/).
 All the requirements you should probably have anyway.
 
 1. streamlit and sqlalchemy
-2. Sqlalchemy models needs a __str__ method
-2. Id column should be called "id"
-3. Relationships should be added for all ForeignKey columns 
+2. **NEW**: pydantic (optional, for enhanced validation)
+3. Sqlalchemy models needs a __str__ method
+4. Id column should be called "id"
+5. Relationships should be added for all ForeignKey columns 
 
 
 ## Basic Usage
@@ -120,4 +131,124 @@ show_sql_ui(conn, model_opts)
 ## Customize
 
 You can adjust the CRUD interface by the select statement you provide to *read_instance* arg and giving optional arguments to the *show_sql_ui* function. See the docstring for more information or at [documentation webpage](https://edkedk99.github.io/streamlit_sql/api/#streamlit_sql.SqlUi):
+
+## Pydantic Schema Integration (NEW)
+
+Starting from version 0.3.3, you can use Pydantic schemas for enhanced validation and separate create/update models.
+
+### Basic Pydantic Usage
+
+```python
+from streamlit_sql import SqlUi
+from pydantic import BaseModel, Field
+from typing import Optional
+import streamlit as st
+
+# Define Pydantic schemas
+class UserCreateSchema(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="User's full name")
+    email: str = Field(..., regex=r'^[\w\.-]+@[\w\.-]+\.\w+$', description="Valid email address")
+    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
+    department: str = Field(..., description="Department name")
+
+class UserUpdateSchema(BaseModel):
+    id: int = Field(..., description="User ID")
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="User's full name")
+    email: Optional[str] = Field(None, regex=r'^[\w\.-]+@[\w\.-]+\.\w+$', description="Valid email address")
+    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
+    department: Optional[str] = Field(None, description="Department name")
+
+# Use with SqlUi
+conn = st.connection("sql", url="your_database_url")
+
+stmt = select(
+    db.User.id,
+    db.User.name,
+    db.User.email,
+    db.User.age,
+    db.User.department
+).order_by(db.User.name)
+
+SqlUi(
+    conn=conn,
+    read_instance=stmt,
+    edit_create_model=db.User,        # ⚠️  Still required - SQLAlchemy model for database operations
+    create_schema=UserCreateSchema,   # 🆕 Optional - Pydantic schema for validation during creation
+    update_schema=UserUpdateSchema,   # 🆕 Optional - Pydantic schema for validation during updates
+    available_filter=["name", "department"],
+)
+```
+
+### Benefits of Pydantic Integration
+
+1. **Separate Validation Rules**: Different field requirements for create vs update operations
+2. **Enhanced Validation**: Use Pydantic validators like regex patterns, min/max values, custom validation functions
+3. **Better Error Messages**: User-friendly validation errors with field-specific messages
+4. **Type Safety**: Better IDE support and runtime type checking
+5. **Documentation**: Schema fields serve as form field documentation
+6. **Flexibility**: Exclude sensitive fields or add computed fields
+
+### Important Notes
+
+- **`edit_create_model` is still required**: This SQLAlchemy model handles the actual database operations
+- **Pydantic schemas are optional**: They provide an additional validation layer on top of SQLAlchemy
+- **Dual-layer approach**: Pydantic validates user input → SQLAlchemy persists to database
+- **Schema compatibility**: Pydantic schema fields must exist in the SQLAlchemy model
+
+### Backward Compatibility
+
+The Pydantic integration is completely optional. Existing code continues to work without any changes:
+
+```python
+# This still works exactly as before
+SqlUi(
+    conn=conn,
+    read_instance=stmt,
+    edit_create_model=db.User,  # Only this parameter needed
+)
+```
+
+### Advanced Example with Complex Validation
+
+```python
+from pydantic import BaseModel, Field, validator
+from typing import Optional
+from datetime import date
+
+class ProjectCreateSchema(BaseModel):
+    name: str = Field(..., min_length=3, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    start_date: date = Field(..., description="Project start date")
+    end_date: Optional[date] = Field(None, description="Project end date")
+    budget: float = Field(..., gt=0, description="Project budget in USD")
+    
+    @validator('end_date')
+    def end_date_must_be_after_start(cls, v, values):
+        if v and 'start_date' in values and v <= values['start_date']:
+            raise ValueError('End date must be after start date')
+        return v
+
+class ProjectUpdateSchema(BaseModel):
+    id: int
+    name: Optional[str] = Field(None, min_length=3, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    budget: Optional[float] = Field(None, gt=0, description="Project budget in USD")
+    
+    @validator('end_date')
+    def end_date_must_be_after_start(cls, v, values):
+        if v and 'start_date' in values and values['start_date'] and v <= values['start_date']:
+            raise ValueError('End date must be after start date')
+        return v
+
+# Use the schemas
+SqlUi(
+    conn=conn,
+    read_instance=select(db.Project),
+    edit_create_model=db.Project,           # ⚠️  Still required - SQLAlchemy model for database operations
+    create_schema=ProjectCreateSchema,      # 🆕 Optional - Enhanced validation for creation
+    update_schema=ProjectUpdateSchema,      # 🆕 Optional - Enhanced validation for updates
+)
+```
 

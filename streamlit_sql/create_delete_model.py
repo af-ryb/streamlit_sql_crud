@@ -1,4 +1,6 @@
+from typing import Optional, Type
 import streamlit as st
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
@@ -7,6 +9,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
+from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter, PydanticInputGenerator
 
 
 class CreateRow:
@@ -16,9 +19,11 @@ class CreateRow:
         Model: type[DeclarativeBase],
         default_values: dict | None = None,
         base_key: str = "create",
+        create_schema: Optional[Type[BaseModel]] = None,
     ) -> None:
         self.conn = conn
         self.Model = Model
+        self.create_schema = create_schema
 
         self.default_values = default_values or {}
         self.base_key = base_key
@@ -30,8 +35,26 @@ class CreateRow:
             self.input_fields = InputFields(
                 Model, base_key, self.default_values, self.existing_data
             )
+            
+        # Initialize Pydantic input generator if schema provided
+        if self.create_schema:
+            self.pydantic_generator = PydanticInputGenerator(
+                self.create_schema, base_key
+            )
 
     def get_fields(self):
+        if self.create_schema:
+            return self.get_pydantic_fields()
+        else:
+            return self.get_sqlalchemy_fields()
+    
+    def get_pydantic_fields(self):
+        """Generate fields using Pydantic schema"""
+        form_data = self.pydantic_generator.generate_form_data(self.default_values)
+        return form_data
+    
+    def get_sqlalchemy_fields(self):
+        """Original SQLAlchemy field generation logic"""
         cols = self.Model.__table__.columns
         created = {}
         for col in cols:
@@ -56,20 +79,60 @@ class CreateRow:
             create_btn = st.form_submit_button("Save", type="primary")
 
         if create_btn:
-            row = self.Model(**created)
-            with self.conn.session as s:
-                try:
-                    s.add(row)
-                    s.commit()
-                    ss.stsql_updated += 1
-                    log("CREATE", self.Model.__tablename__, row)
-                    return True, f"Created successfully {row}"
-                except Exception as e:
-                    ss.stsql_updated += 1
-                    log("CREATE", self.Model.__tablename__, row, success=False)
-                    return False, str(e)
+            if self.create_schema:
+                return self.save_pydantic(created)
+            else:
+                return self.save_sqlalchemy(created)
         else:
             return None, None
+    
+    def save_pydantic(self, form_data: dict):
+        """Save using Pydantic validation"""
+        try:
+            # Validate data using Pydantic schema
+            validated_data = self.create_schema(**form_data)
+            
+            # Convert to SQLAlchemy model
+            row = PydanticSQLAlchemyConverter.pydantic_to_sqlalchemy(
+                validated_data, self.Model
+            )
+            
+            with self.conn.session as s:
+                s.add(row)
+                s.commit()
+                ss.stsql_updated += 1
+                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                log("CREATE", table_name, row)
+                return True, f"Created successfully {row}"
+                
+        except ValidationError as e:
+            error_msg = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            ss.stsql_updated += 1
+            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            log("CREATE", table_name, form_data, success=False)
+            return False, f"Validation error: {error_msg}"
+        except Exception as e:
+            ss.stsql_updated += 1
+            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            log("CREATE", table_name, form_data, success=False)
+            return False, str(e)
+    
+    def save_sqlalchemy(self, created: dict):
+        """Original SQLAlchemy save logic"""
+        try:
+            row = self.Model(**created)
+            with self.conn.session as s:
+                s.add(row)
+                s.commit()
+                ss.stsql_updated += 1
+                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                log("CREATE", table_name, row)
+                return True, f"Created successfully {row}"
+        except Exception as e:
+            ss.stsql_updated += 1
+            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            log("CREATE", table_name, created, success=False)
+            return False, str(e)
 
     def show_dialog(self):
         pretty_name = get_pretty_name(self.Model.__tablename__)
@@ -137,11 +200,13 @@ class DeleteRows:
                     ss.stsql_updated += 1
                     qtty = len(self.rows_id)
                     lancs_str = ", ".join(lancs)
-                    log("DELETE", self.Model.__tablename__, lancs_str)
+                    table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                    log("DELETE", table_name, lancs_str)
                     return True, f"Successfully deleted {qtty}"
                 except Exception as e:
                     ss.stsql_updated += 1
-                    log("DELETE", self.Model.__tablename__, "")
+                    table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                    log("DELETE", table_name, "")
                     return False, str(e)
         else:
             return None, None

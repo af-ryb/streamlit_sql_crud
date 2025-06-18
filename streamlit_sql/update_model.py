@@ -1,4 +1,6 @@
+from typing import Optional, Type
 import streamlit as st
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
@@ -9,6 +11,7 @@ from streamlit_sql import many
 from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
+from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter, PydanticInputGenerator
 
 
 class UpdateRow:
@@ -19,12 +22,14 @@ class UpdateRow:
         row_id: int | str,
         default_values: dict | None = None,
         update_show_many: bool = False,
+        update_schema: Optional[Type[BaseModel]] = None,
     ) -> None:
         self.conn = conn
         self.Model = Model
         self.row_id = row_id
         self.default_values = default_values or {}
         self.update_show_many = update_show_many
+        self.update_schema = update_schema
 
         set_state("stsql_updated", 0)
 
@@ -35,8 +40,32 @@ class UpdateRow:
         self.input_fields = InputFields(
             Model, "update", self.default_values, self.existing_data
         )
+        
+        # Initialize Pydantic input generator if schema provided
+        if self.update_schema:
+            # Get current row values for pre-populating form
+            self.current_values = {
+                col.description: getattr(self.row, col.description)
+                for col in self.Model.__table__.columns
+                if col.description is not None
+            }
+            self.pydantic_generator = PydanticInputGenerator(
+                self.update_schema, "update"
+            )
 
     def get_updates(self):
+        if self.update_schema:
+            return self.get_pydantic_updates()
+        else:
+            return self.get_sqlalchemy_updates()
+    
+    def get_pydantic_updates(self):
+        """Generate updates using Pydantic schema"""
+        form_data = self.pydantic_generator.generate_form_data(self.current_values)
+        return form_data
+    
+    def get_sqlalchemy_updates(self):
+        """Original SQLAlchemy update logic"""
         cols = self.Model.__table__.columns
         updated = {}
 
@@ -56,6 +85,46 @@ class UpdateRow:
         return updated
 
     def save(self, updated: dict):
+        if self.update_schema:
+            return self.save_pydantic(updated)
+        else:
+            return self.save_sqlalchemy(updated)
+    
+    def save_pydantic(self, form_data: dict):
+        """Save using Pydantic validation"""
+        try:
+            # Validate data using Pydantic schema
+            validated_data = self.update_schema(**form_data)
+            
+            with self.conn.session as s:
+                stmt = select(self.Model).where(
+                    self.Model.__table__.columns.id == validated_data.id
+                )
+                row = s.execute(stmt).scalar_one()
+                
+                # Update only the fields present in the validated data
+                for field_name, field_value in validated_data.model_dump(exclude_unset=True).items():
+                    if hasattr(row, field_name):
+                        setattr(row, field_name, field_value)
+
+                s.add(row)
+                s.commit()
+                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                log("UPDATE", table_name, row)
+                return True, f"Updated successfully {row}"
+                
+        except ValidationError as e:
+            error_msg = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            log("UPDATE", table_name, form_data, success=False)
+            return False, f"Validation error: {error_msg}"
+        except Exception as e:
+            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            log("UPDATE", table_name, form_data, success=False)
+            return False, str(e)
+    
+    def save_sqlalchemy(self, updated: dict):
+        """Original SQLAlchemy save logic"""
         with self.conn.session as s:
             try:
                 stmt = select(self.Model).where(
@@ -67,12 +136,14 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                log("UPDATE", self.Model.__tablename__, row)
+                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"
             except Exception as e:
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
-                log("UPDATE", self.Model.__tablename__, updated_str)
+                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                log("UPDATE", table_name, updated_str, success=False)
                 return False, str(e)
 
     def show(self):

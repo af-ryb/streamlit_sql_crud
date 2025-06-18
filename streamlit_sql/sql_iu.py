@@ -1,7 +1,9 @@
 from collections.abc import Callable
+from typing import Optional, Type
 
 import pandas as pd
 import streamlit as st
+from pydantic import BaseModel
 from sqlalchemy import CTE, Select, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.types import Enum as SQLEnum
@@ -10,6 +12,7 @@ from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
 from streamlit_sql import create_delete_model, lib, read_cte, update_model
+from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000)
 
@@ -40,6 +43,8 @@ class SqlUi:
         style_fn: Callable[[pd.Series], list[str]] | None = None,
         update_show_many: bool = False,
         disable_log: bool = False,
+        create_schema: Optional[Type[BaseModel]] = None,
+        update_schema: Optional[Type[BaseModel]] = None,
     ):
         """The CRUD interface will be displayes just by initializing the class
 
@@ -57,6 +62,8 @@ class SqlUi:
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
+            create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
+            update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -124,6 +131,23 @@ class SqlUi:
         self.style_fn = style_fn
         self.update_show_many = update_show_many
         self.disable_log = disable_log
+        self.create_schema = create_schema
+        self.update_schema = update_schema
+
+        # Validate schema compatibility if provided
+        if self.create_schema:
+            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+                self.create_schema, self.edit_create_model, 'create'
+            ):
+                table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
+                raise ValueError(f"Create schema {self.create_schema.__name__} is not compatible with {table_name}")
+        
+        if self.update_schema:
+            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+                self.update_schema, self.edit_create_model, 'update'
+            ):
+                table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
+                raise ValueError(f"Update schema {self.update_schema.__name__} is not compatible with {table_name}")
 
         self.cte = self.get_cte()
         self.rolling_pretty_name = lib.get_pretty_name(self.rolling_total_column or "")
@@ -172,7 +196,8 @@ class SqlUi:
         self.data_container = st.container()
         self.pag_container = st.container()
 
-        table_name = lib.get_pretty_name(self.edit_create_model.__tablename__)
+        table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
+        table_name = lib.get_pretty_name(table_name)
         self.header_container.header(table_name, divider="orange")
 
         self.expander_container = self.header_container.expander(
@@ -386,6 +411,7 @@ class SqlUi:
                 conn=self.conn,
                 Model=self.edit_create_model,
                 default_values=self.edit_create_default_values,
+                create_schema=self.create_schema,
             )
             create_row.show_dialog()
         elif action == "edit":
@@ -397,6 +423,7 @@ class SqlUi:
                 row_id=row_id,
                 default_values=self.edit_create_default_values,
                 update_show_many=self.update_show_many,
+                update_schema=self.update_schema,
             )
             update_row.show_dialog()
         elif action == "delete":
@@ -423,6 +450,8 @@ def show_sql_ui(
     base_key: str = "",
     style_fn: Callable[[pd.Series], list[str]] | None = None,
     update_show_many: bool = False,
+    create_schema: Optional[Type[BaseModel]] = None,
+    update_schema: Optional[Type[BaseModel]] = None,
 ) -> tuple[pd.DataFrame, list[int]] | None:
     """Show A CRUD interface in a Streamlit Page
 
@@ -449,6 +478,8 @@ def show_sql_ui(
         base_key=base_key,
         style_fn=style_fn,
         update_show_many=update_show_many,
+        create_schema=create_schema,
+        update_schema=update_schema,
     )
 
     return ui.df, ui.rows_selected
