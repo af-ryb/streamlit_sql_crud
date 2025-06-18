@@ -270,7 +270,7 @@ class SqlUi:
             return 0
 
         saldo_toogle = self.saldo_toggle_col.toggle(
-            f"Adiciona Saldo Anterior em {self.rolling_pretty_name}",
+            f"Add Previous Balance in {self.rolling_pretty_name}",
             value=True,
             key=f"{self.base_key}_saldo_toggle_sql_ui",
         )
@@ -294,7 +294,7 @@ class SqlUi:
             )
 
         self.saldo_value_col.subheader(
-            f"Saldo Anterior {self.rolling_pretty_name}: {initial_balance:,.2f}"
+            f"Previous Balance {self.rolling_pretty_name}: {initial_balance:,.2f}"
         )
 
         return initial_balance
@@ -337,7 +337,7 @@ class SqlUi:
 
     def show_df(self, df: pd.DataFrame):
         if df.empty:
-            st.header(":red[Tabela Vazia]")
+            st.header(":red[Table is Empty]")
             return None
 
         column_order = None

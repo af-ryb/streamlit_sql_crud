@@ -68,7 +68,7 @@ class UpdateRow:
                 s.add(row)
                 s.commit()
                 log("UPDATE", self.Model.__tablename__, row)
-                return True, f"Atualizado com sucesso {row}"
+                return True, f"Updated successfully {row}"
             except Exception as e:
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)

@@ -63,7 +63,7 @@ class CreateRow:
                     s.commit()
                     ss.stsql_updated += 1
                     log("CREATE", self.Model.__tablename__, row)
-                    return True, f"Criado com sucesso {row}"
+                    return True, f"Created successfully {row}"
                 except Exception as e:
                     ss.stsql_updated += 1
                     log("CREATE", self.Model.__tablename__, row, success=False)
@@ -116,7 +116,7 @@ class DeleteRows:
         return rows_str
 
     def show(self, pretty_name):
-        st.subheader("Apagar items abaixo?")
+        st.subheader("Delete selected items?")
 
         rows_str = self.get_rows_str(self.rows_id)
         st.dataframe({pretty_name: rows_str}, hide_index=True)
@@ -138,7 +138,7 @@ class DeleteRows:
                     qtty = len(self.rows_id)
                     lancs_str = ", ".join(lancs)
                     log("DELETE", self.Model.__tablename__, lancs_str)
-                    return True, f"Deletado com sucesso {qtty} registros"
+                    return True, f"Successfully deleted {qtty}"
                 except Exception as e:
                     ss.stsql_updated += 1
                     log("DELETE", self.Model.__tablename__, "")
