@@ -58,8 +58,10 @@ class CreateRow:
         cols = self.Model.__table__.columns
         created = {}
         for col in cols:
-            col_name = col.description
-            assert col_name is not None
+            col_name = col.description or col.name
+            if col_name is None:
+                continue
+                
             default_value = self.default_values.get(col_name)
 
             if default_value:

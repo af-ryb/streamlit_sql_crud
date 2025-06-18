@@ -1,4 +1,5 @@
-from typing import Type, Dict, Any, Optional, get_origin, get_args
+import streamlit as st
+from typing import Type, Dict, Any, Optional, Union, get_origin, get_args
 from datetime import date
 from decimal import Decimal
 
@@ -194,7 +195,7 @@ class PydanticInputGenerator:
         Returns:
             Dictionary of form field values
         """
-        import streamlit as st
+
         
         form_data = {}
         existing_values = existing_values or {}

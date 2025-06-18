@@ -1,5 +1,5 @@
-from typing import Optional, Type
 import streamlit as st
+from typing import Optional, Type
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
@@ -44,11 +44,12 @@ class UpdateRow:
         # Initialize Pydantic input generator if schema provided
         if self.update_schema:
             # Get current row values for pre-populating form
-            self.current_values = {
-                col.description: getattr(self.row, col.description)
-                for col in self.Model.__table__.columns
-                if col.description is not None
-            }
+            self.current_values = {}
+            for col in self.Model.__table__.columns:
+                col_name = col.description or col.name
+                if col_name and hasattr(self.row, col_name):
+                    self.current_values[col_name] = getattr(self.row, col_name)
+            
             self.pydantic_generator = PydanticInputGenerator(
                 self.update_schema, "update"
             )
@@ -70,8 +71,10 @@ class UpdateRow:
         updated = {}
 
         for col in cols:
-            col_name = col.description
-            assert col_name is not None
+            col_name = col.description or col.name
+            if col_name is None:
+                continue
+                
             col_value = getattr(self.row, col_name)
             default_value = self.default_values.get(col_name)
 
