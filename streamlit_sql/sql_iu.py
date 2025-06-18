@@ -390,7 +390,7 @@ class SqlUi:
             create_row.show_dialog()
         elif action == "edit":
             selected_pos = rows_selected[0]
-            row_id = int(df.iloc[selected_pos]["id"])
+            row_id = df.iloc[selected_pos]["id"]
             update_row = update_model.UpdateRow(
                 conn=self.conn,
                 Model=self.edit_create_model,
@@ -400,7 +400,7 @@ class SqlUi:
             )
             update_row.show_dialog()
         elif action == "delete":
-            rows_id = df.iloc[rows_selected].id.astype(int).to_list()
+            rows_id = df.iloc[rows_selected].id.to_list()
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
                 Model=self.edit_create_model,

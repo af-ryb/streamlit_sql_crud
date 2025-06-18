@@ -16,7 +16,7 @@ class UpdateRow:
         self,
         conn: SQLConnection,
         Model: type[DeclarativeBase],
-        row_id: int,
+        row_id: int | str,
         default_values: dict | None = None,
         update_show_many: bool = False,
     ) -> None:
