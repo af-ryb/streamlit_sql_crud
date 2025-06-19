@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Optional, Type
+from typing import Optional, Type, Union
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
@@ -53,6 +53,54 @@ class UpdateRow:
             self.pydantic_generator = PydanticInputGenerator(
                 self.update_schema, "update"
             )
+    
+    def _preprocess_form_data(self, form_data: dict) -> dict:
+        """Preprocess form data to handle enum conversions and other transformations"""
+        processed_data = form_data.copy()
+        
+        if not self.update_schema:
+            return processed_data
+            
+        # Get schema field information
+        schema_fields = self.update_schema.model_fields
+        
+        for field_name, field_info in schema_fields.items():
+            if field_name in processed_data:
+                value = processed_data[field_name]
+                annotation = field_info.annotation
+                
+                # Handle List[Enum] types
+                if hasattr(annotation, '__origin__') and annotation.__origin__ is list:
+                    args = getattr(annotation, '__args__', ())
+                    if args and len(args) > 0:
+                        enum_type = args[0]
+                        if hasattr(enum_type, '__members__') and isinstance(value, list):
+                            # Convert string values to enum objects
+                            try:
+                                processed_data[field_name] = [enum_type(item) for item in value]
+                            except (ValueError, KeyError):
+                                # If conversion fails, try by name
+                                processed_data[field_name] = [getattr(enum_type, item.upper(), item) for item in value]
+                
+                # Handle Optional[List[Enum]] types  
+                elif hasattr(annotation, '__origin__') and annotation.__origin__ is Union:
+                    args = getattr(annotation, '__args__', ())
+                    if len(args) == 2 and type(None) in args:
+                        # This is Optional[T], get the non-None type
+                        non_none_type = next(arg for arg in args if arg is not type(None))
+                        if hasattr(non_none_type, '__origin__') and non_none_type.__origin__ is list:
+                            list_args = getattr(non_none_type, '__args__', ())
+                            if list_args and len(list_args) > 0:
+                                enum_type = list_args[0]
+                                if hasattr(enum_type, '__members__') and isinstance(value, list):
+                                    # Convert string values to enum objects
+                                    try:
+                                        processed_data[field_name] = [enum_type(item) for item in value]
+                                    except (ValueError, KeyError):
+                                        # If conversion fails, try by name
+                                        processed_data[field_name] = [getattr(enum_type, item.upper(), item) for item in value]
+        
+        return processed_data
 
     def get_updates(self):
         if self.update_schema:
@@ -96,8 +144,11 @@ class UpdateRow:
     def save_pydantic(self, form_data: dict):
         """Save using Pydantic validation"""
         try:
+            # Preprocess form data to handle enum conversions
+            processed_data = self._preprocess_form_data(form_data)
+            
             # Validate data using Pydantic schema
-            validated_data = self.update_schema(**form_data)
+            validated_data = self.update_schema(**processed_data)
             
             with self.conn.session as s:
                 stmt = select(self.Model).where(

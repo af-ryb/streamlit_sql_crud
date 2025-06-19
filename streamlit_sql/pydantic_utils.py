@@ -307,7 +307,11 @@ class PydanticInputGenerator:
                 current_values = []
                 if existing_value is not None:
                     if isinstance(existing_value, (list, tuple)):
-                        current_values = list(existing_value)
+                        # Convert enum objects to their string values for display
+                        current_values = [
+                            item.value if hasattr(item, 'value') else str(item) 
+                            for item in existing_value
+                        ]
                     elif isinstance(existing_value, str):
                         # Handle PostgreSQL array format: {val1,val2} or {\"val1\",\"val2\"}
                         value_str = existing_value.strip()
@@ -334,14 +338,33 @@ class PydanticInputGenerator:
                 annotation = field_info.get('annotation', None)
                 
                 # Try to extract enum options from List[EnumType] annotations
-                if annotation and hasattr(annotation, '__args__'):
-                    args = getattr(annotation, '__args__', ())
-                    if args and len(args) > 0:
-                        enum_type = args[0]
-                        if hasattr(enum_type, '__members__'):
-                            # This is an enum type
-                            enum_options = [member.value for member in enum_type.__members__.values()]
-                            options.extend([opt for opt in enum_options if opt not in options])
+                if annotation:
+                    enum_type = None
+                    
+                    # Handle List[Enum] directly
+                    if hasattr(annotation, '__args__'):
+                        args = getattr(annotation, '__args__', ())
+                        if args and len(args) > 0:
+                            enum_type = args[0]
+                    
+                    # Handle Optional[List[Enum]] (Union types)
+                    elif hasattr(annotation, '__origin__') and annotation.__origin__ is Union:
+                        union_args = getattr(annotation, '__args__', ())
+                        if len(union_args) == 2 and type(None) in union_args:
+                            # This is Optional[T], get the non-None type
+                            non_none_type = next(arg for arg in union_args if arg is not type(None))
+                            if hasattr(non_none_type, '__args__'):
+                                list_args = getattr(non_none_type, '__args__', ())
+                                if list_args and len(list_args) > 0:
+                                    enum_type = list_args[0]
+                    
+                    # Extract enum values if we found an enum type
+                    if enum_type and hasattr(enum_type, '__members__'):
+                        enum_options = [member.value for member in enum_type.__members__.values()]
+                        # Add all enum options to the available options
+                        for opt in enum_options:
+                            if opt not in options:
+                                options.append(opt)
                 
                 # Use multiselect with accept_new_options for flexibility
                 form_data[field_name] = st.multiselect(
