@@ -265,8 +265,18 @@ class PydanticInputGenerator:
     
     def _is_enum_field(self, annotation: Any) -> bool:
         """Check if field is a single enum"""
+        # Direct enum check
         if annotation and hasattr(annotation, '__members__'):
             return True
+            
+        # Check Optional[Enum] (Union with None)
+        origin = get_origin(annotation)
+        if origin is Union:
+            args = get_args(annotation)
+            for arg in args:
+                if arg is not type(None) and hasattr(arg, '__members__'):
+                    return True
+        
         return False
     
     def _is_enum_list_field(self, annotation: Any) -> bool:
@@ -306,7 +316,16 @@ class PydanticInputGenerator:
     
     def _render_enum_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
         """Render selectbox for single enum"""
-        enum_values = [member.value for member in annotation.__members__.values()]
+        # Extract actual enum type from Optional[Enum] if needed
+        enum_type = annotation
+        if get_origin(annotation) is Union:
+            args = get_args(annotation)
+            for arg in args:
+                if arg is not type(None) and hasattr(arg, '__members__'):
+                    enum_type = arg
+                    break
+        
+        enum_values = [member.value for member in enum_type.__members__.values()]
         current_index = None
         if existing_value and hasattr(existing_value, 'value'):
             try:
