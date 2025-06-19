@@ -10,7 +10,6 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum, Numeric
 from loguru import logger
-# streamlit-pydantic has compatibility issues with Pydantic v2, using custom implementation
 
 class PydanticSQLAlchemyConverter:
     """Handles conversion between Pydantic models and SQLAlchemy models"""
@@ -250,6 +249,17 @@ class PydanticInputGenerator:
         else:
             label = str(description)
         
+        # Debug: add logging for tags field
+        if field_name == 'tags':
+            logger.debug(f"DEBUG - Field: {field_name}")
+            logger.debug(f"DEBUG - Annotation: {annotation}")
+            logger.debug(f"DEBUG - Annotation type: {type(annotation)}")
+            logger.debug(f"DEBUG - get_origin: {get_origin(annotation)}")
+            logger.debug(f"DEBUG - get_args: {get_args(annotation)}")
+            logger.debug(f"DEBUG - is_enum_field: {self._is_enum_field(annotation)}")
+            logger.debug(f"DEBUG - is_enum_list_field: {self._is_enum_list_field(annotation)}")
+            logger.debug(f"DEBUG - is_list_field: {self._is_list_field(annotation)}")
+        
         # Check for enum types - simplified detection based on streamlit-pydantic approach
         if self._is_enum_field(annotation):
             return self._render_enum_input(label, annotation, existing_value, key)
@@ -322,7 +332,9 @@ class PydanticInputGenerator:
             except ValueError:
                 pass
                 
-        return st.selectbox(label, enum_values, index=current_index, key=key)
+        # Return the selected string value (not enum object) to prevent JSON serialization errors
+        selected_value = st.selectbox(label, enum_values, index=current_index, key=key)
+        return selected_value
     
     def _render_enum_list_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
         """Render multiselect for list of enums"""
@@ -331,9 +343,10 @@ class PydanticInputGenerator:
         if not enum_type:
             return st.multiselect(label, [], key=key)
             
+        # Always use enum values (strings) for the options
         enum_values = [member.value for member in enum_type.__members__.values()]
         
-        # Convert existing values to string format
+        # Convert existing values to string format for display
         current_values = []
         if existing_value is not None:
             if isinstance(existing_value, (list, tuple)):
@@ -346,13 +359,18 @@ class PydanticInputGenerator:
                 # Handle PostgreSQL array format
                 current_values = self._parse_array_string(existing_value)
         
-        return st.multiselect(
+        # Return the selected string values (not enum objects)
+        # This prevents JSON serialization errors
+        selected_values = st.multiselect(
             label, 
             enum_values, 
             default=current_values, 
             key=key,
             help=f"Available options: {', '.join(enum_values)}"
         )
+        
+        # Return string values - they'll be converted to enums in preprocessing
+        return selected_values
     
     def _extract_enum_from_list_annotation(self, annotation: Any) -> Any:
         """Extract enum type from List[Enum] or Optional[List[Enum]]"""
