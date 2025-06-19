@@ -381,7 +381,23 @@ class SqlUi:
         with self.conn.session as s:
             result = s.execute(stmt).all()
             
-            validated_rows = [self.read_schema.model_validate(row, from_attributes=True).model_dump() for row in result]
+            validated_rows = []
+            for row in result:
+                validated_data = self.read_schema.model_validate(row, from_attributes=True).model_dump()
+                
+                # Convert enum objects to strings for PyArrow compatibility
+                for key, value in validated_data.items():
+                    if isinstance(value, list):
+                        # Handle list of enums
+                        validated_data[key] = [
+                            item.value if hasattr(item, 'value') else str(item) 
+                            for item in value
+                        ]
+                    elif hasattr(value, 'value'):
+                        # Handle single enum
+                        validated_data[key] = value.value
+                
+                validated_rows.append(validated_data)
 
             # Create DataFrame from validated data
             df = pd.DataFrame(validated_rows)

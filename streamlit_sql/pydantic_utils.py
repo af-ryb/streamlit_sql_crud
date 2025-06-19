@@ -133,19 +133,21 @@ class PydanticSQLAlchemyConverter:
                         constraint_type = type(constraint).__name__
                         info['constraints'][constraint_type] = constraint
                 
-                # Handle Optional types
+                # Handle Optional types and extract inner types
                 if get_origin(field.annotation) is Union:
                     args = get_args(field.annotation)
                     if len(args) == 2 and type(None) in args:
                         # This is Optional[T]
                         info['is_optional'] = True
-                        info['inner_type'] = next(arg for arg in args if arg is not type(None))
+                        non_none_type = next(arg for arg in args if arg is not type(None))
+                        info['inner_type'] = get_origin(non_none_type) or non_none_type
                     else:
                         info['is_optional'] = False
-                        info['inner_type'] = field.annotation
+                        info['inner_type'] = get_origin(field.annotation) or field.annotation
                 else:
                     info['is_optional'] = not field.is_required()
-                    info['inner_type'] = field.annotation
+                    # Extract the origin type (e.g., list from List[str])
+                    info['inner_type'] = get_origin(field.annotation) or field.annotation
                 
                 field_info[field_name] = info
             
@@ -169,7 +171,11 @@ class PydanticSQLAlchemyConverter:
         annotation = pydantic_field_info.get('annotation', str)
         
         # Check for list types (including typing.List)
-        if inner_type is list or get_origin(annotation) is list:
+        if (inner_type is list or 
+            get_origin(annotation) is list or 
+            get_origin(inner_type) is list or
+            str(annotation).startswith('typing.List') or
+            str(inner_type).startswith('typing.List')):
             return 'multiselect'
         
         # Map Python types to Streamlit input types
@@ -322,17 +328,29 @@ class PydanticInputGenerator:
                         if not current_values and value_str:
                             current_values = [v.strip() for v in value_str.split(',') if v.strip()]
                 
-                # Start with current values as options
+                # Check if this is a List[Enum] type and extract enum options
                 options = current_values.copy()
+                enum_options = []
+                annotation = field_info.get('annotation', None)
+                
+                # Try to extract enum options from List[EnumType] annotations
+                if annotation and hasattr(annotation, '__args__'):
+                    args = getattr(annotation, '__args__', ())
+                    if args and len(args) > 0:
+                        enum_type = args[0]
+                        if hasattr(enum_type, '__members__'):
+                            # This is an enum type
+                            enum_options = [member.value for member in enum_type.__members__.values()]
+                            options.extend([opt for opt in enum_options if opt not in options])
                 
                 # Use multiselect with accept_new_options for flexibility
                 form_data[field_name] = st.multiselect(
                     label,
                     options=options,
                     default=current_values,
-                    accept_new_options=True,
+                    accept_new_options=True if not enum_options else False,  # Restrict to enum values if enum detected
                     key=key,
-                    help="Select existing options or type new ones"
+                    help="Select existing options or type new ones, if preselected option does not exists"
                 )
             else:
                 # Fallback to text input

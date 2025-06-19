@@ -170,6 +170,13 @@ class InputFields:
             input_value = col_value
         elif len(col.foreign_keys) > 0:
             input_value = self.input_fk(col_name, col_value)
+        elif ARRAY and isinstance(col.type, ARRAY):
+            input_value = self.input_array(col_name, col.type, col_value)
+        elif 'ARRAY' in str(col.type).upper():
+            # Fallback for ARRAY types that don't match isinstance check
+            input_value = self.input_array(col_name, col.type, col_value)
+        elif isinstance(col.type, SQLEnum):
+            input_value = self.input_enum(col.type, col_value)
         elif col.type.python_type is str:
             input_value = self.input_str(col_name, col_value)
         elif col.type.python_type is int:
@@ -183,13 +190,6 @@ class InputFields:
             input_value = st.date_input(pretty_name, value=col_value)
         elif col.type.python_type is bool:
             input_value = st.checkbox(pretty_name, value=col_value)
-        elif isinstance(col.type, SQLEnum):
-            input_value = self.input_enum(col.type, col_value)
-        elif ARRAY and isinstance(col.type, ARRAY):
-            input_value = self.input_array(col_name, col.type, col_value)
-        elif 'ARRAY' in str(col.type).upper():
-            # Fallback for ARRAY types that don't match isinstance check
-            input_value = self.input_array(col_name, col.type, col_value)
         else:
             input_value = None
 
