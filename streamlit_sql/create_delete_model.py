@@ -93,10 +93,8 @@ class CreateRow:
 
     def get_fields(self):
         if self.create_schema:
-            logger.debug("🔍 DEBUG - Using Pydantic create path")
             return self.get_pydantic_fields()
         else:
-            logger.debug("🔍 DEBUG - Using SQLAlchemy create path")
             return self.get_sqlalchemy_fields()
     
     def get_pydantic_fields(self):

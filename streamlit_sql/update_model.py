@@ -105,10 +105,8 @@ class UpdateRow:
 
     def get_updates(self):
         if self.update_schema:
-            logger.debug("🔍 DEBUG - Using Pydantic updates path")
             return self.get_pydantic_updates()
         else:
-            logger.debug("🔍 DEBUG - Using SQLAlchemy updates path")
             return self.get_sqlalchemy_updates()
     
     def get_pydantic_updates(self):
