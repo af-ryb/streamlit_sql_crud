@@ -10,6 +10,7 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum, Numeric
 from loguru import logger
+import streamlit_pydantic as sp
 
 class PydanticSQLAlchemyConverter:
     """Handles conversion between Pydantic models and SQLAlchemy models"""
@@ -215,7 +216,8 @@ class PydanticInputGenerator:
         Returns:
             Dictionary of form field values
         """
-
+        
+        # Use our hybrid approach: streamlit-pydantic for enum/list fields, custom for others
         form_data = {}
         existing_values = existing_values or {}
         
@@ -226,161 +228,289 @@ class PydanticInputGenerator:
             # Skip primary key fields for create operations
             if field_name == 'id' and existing_value is None:
                 continue
-                
-            input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
-            # Ensure label is always a string
-            description = field_info.get('description')
-            if description is None or description == '':
-                label = field_name.replace('_', ' ').title()
-            else:
-                label = str(description)
             
-            if input_type == 'text_input':
-                form_data[field_name] = st.text_input(
-                    label, 
-                    value=str(existing_value) if existing_value is not None else "", 
-                    key=key
-                )
-            elif input_type == 'number_input_int':
-                default_val = 0
-                if existing_value is not None:
-                    try:
-                        default_val = int(existing_value)
-                    except (ValueError, TypeError):
-                        default_val = 0
-                form_data[field_name] = st.number_input(
-                    label, 
-                    value=default_val, 
-                    step=1, 
-                    key=key
-                )
-            elif input_type == 'number_input_float':
-                default_val = 0.0
-                if existing_value is not None:
-                    try:
-                        default_val = float(existing_value)
-                    except (ValueError, TypeError):
-                        default_val = 0.0
-                form_data[field_name] = st.number_input(
-                    label, 
-                    value=default_val, 
-                    step=0.1, 
-                    key=key
-                )
-            elif input_type == 'checkbox':
-                default_val = False
-                if existing_value is not None:
-                    default_val = bool(existing_value)
-                form_data[field_name] = st.checkbox(
-                    label, 
-                    value=default_val, 
-                    key=key
-                )
-            elif input_type == 'date_input':
-                form_data[field_name] = st.date_input(
-                    label, 
-                    value=existing_value, 
-                    key=key
-                )
-            elif input_type == 'text_area_json':
-                import json
-                # Handle JSON fields with text area
-                json_value = ""
-                if existing_value is not None:
-                    try:
-                        if isinstance(existing_value, (dict, list)):
-                            json_value = json.dumps(existing_value, indent=2)
-                        else:
-                            json_value = str(existing_value)
-                    except:
-                        json_value = str(existing_value)
-                        
-                form_data[field_name] = st.text_area(
-                    label,
-                    value=json_value,
-                    height=150,
-                    key=key,
-                    help="Enter valid JSON"
-                )
-            elif input_type == 'multiselect':
-                # Handle list/array fields with multiselect
-                current_values = []
-                if existing_value is not None:
-                    if isinstance(existing_value, (list, tuple)):
-                        # Convert enum objects to their string values for display
-                        current_values = [
-                            item.value if hasattr(item, 'value') else str(item) 
-                            for item in existing_value
-                        ]
-                    elif isinstance(existing_value, str):
-                        # Handle PostgreSQL array format: {val1,val2} or {\"val1\",\"val2\"}
-                        value_str = existing_value.strip()
-                        
-                        if value_str.startswith('{') and value_str.endswith('}'):
-                            value_str = value_str[1:-1]  # Remove braces
-                            
-                        # Handle quoted values and unquoted values
-                        if value_str:
-                            # Split by comma, but handle quoted strings
-                            parts = re.findall(r'"([^"]*)"|\\b([^,]+)\\b', value_str)
-                            for quoted, unquoted in parts:
-                                val = quoted if quoted else unquoted
-                                if val.strip():
-                                    current_values.append(val.strip())
-                        
-                        # Fallback: simple comma split
-                        if not current_values and value_str:
-                            current_values = [v.strip() for v in value_str.split(',') if v.strip()]
-                
-                # Check if this is a List[Enum] type and extract enum options
-                options = current_values.copy()
-                enum_options = []
-                annotation = field_info.get('annotation', None)
-                
-                # Try to extract enum options from List[EnumType] annotations
-                if annotation:
-                    enum_type = None
-                    
-                    # Handle List[Enum] directly
-                    if hasattr(annotation, '__args__'):
-                        args = getattr(annotation, '__args__', ())
-                        if args and len(args) > 0:
-                            enum_type = args[0]
-                    
-                    # Handle Optional[List[Enum]] (Union types)
-                    elif hasattr(annotation, '__origin__') and annotation.__origin__ is Union:
-                        union_args = getattr(annotation, '__args__', ())
-                        if len(union_args) == 2 and type(None) in union_args:
-                            # This is Optional[T], get the non-None type
-                            non_none_type = next(arg for arg in union_args if arg is not type(None))
-                            if hasattr(non_none_type, '__args__'):
-                                list_args = getattr(non_none_type, '__args__', ())
-                                if list_args and len(list_args) > 0:
-                                    enum_type = list_args[0]
-                    
-                    # Extract enum values if we found an enum type
-                    if enum_type and hasattr(enum_type, '__members__'):
-                        enum_options = [member.value for member in enum_type.__members__.values()]
-                        # Add all enum options to the available options
-                        for opt in enum_options:
-                            if opt not in options:
-                                options.append(opt)
-                
-                # Use multiselect with accept_new_options for flexibility
-                form_data[field_name] = st.multiselect(
-                    label,
-                    options=options,
-                    default=current_values,
-                    accept_new_options=True if not enum_options else False,  # Restrict to enum values if enum detected
-                    key=key,
-                    help="Select existing options or type new ones, if preselected option does not exists"
+            # Get field annotation for better type detection
+            annotation = field_info.get('annotation')
+            
+            # Use streamlit-pydantic for complex types (enums, lists) where it excels
+            if self._should_use_streamlit_pydantic(annotation):
+                form_data[field_name] = self._render_with_streamlit_pydantic(
+                    field_name, field_info, annotation, existing_value, key
                 )
             else:
-                # Fallback to text input
-                form_data[field_name] = st.text_input(
-                    label, 
-                    value=str(existing_value) if existing_value is not None else "", 
-                    key=key
+                # Use our custom implementation for basic types
+                form_data[field_name] = self._render_field_input(
+                    field_name, field_info, annotation, existing_value, key
                 )
         
         return form_data
+    
+    def _should_use_streamlit_pydantic(self, annotation: Any) -> bool:
+        """Determine if we should use streamlit-pydantic for this field type"""
+        # Use streamlit-pydantic for enums and lists (where it's most robust)
+        return (self._is_enum_field(annotation) or 
+                self._is_enum_list_field(annotation) or 
+                self._is_list_field(annotation))
+    
+    def _render_with_streamlit_pydantic(self, field_name: str, field_info: Dict[str, Any], annotation: Any, existing_value: Any, key: str) -> Any:
+        """Use streamlit-pydantic for rendering complex field types"""
+        try:
+            # Create a minimal schema with just this field for streamlit-pydantic
+            from typing import get_type_hints
+            from pydantic import create_model
+            
+            # Get the field definition
+            field_default = field_info.get('default', ...)
+            field_description = field_info.get('description')
+            
+            # Create a temporary model with just this field
+            temp_model = create_model(
+                'TempModel',
+                **{field_name: (annotation, field_default)}
+            )
+            
+            # Set field description if available
+            if field_description:
+                temp_model.model_fields[field_name].description = field_description
+            
+            # Create instance with existing value if available
+            if existing_value is not None:
+                instance = temp_model(**{field_name: existing_value})
+            else:
+                instance = None
+            
+            # Use streamlit-pydantic to render just this field
+            result = sp.pydantic_input(
+                key=key, 
+                model=temp_model if instance is None else instance
+            )
+            
+            # Extract the field value from the result
+            return result.get(field_name) if isinstance(result, dict) else getattr(result, field_name, None)
+            
+        except Exception as e:
+            logger.warning(f"streamlit-pydantic rendering failed for {field_name}: {e}, using fallback")
+            # Fallback to our custom implementation
+            return self._render_field_input(field_name, field_info, annotation, existing_value, key)
+    
+    
+    def _render_field_input(self, field_name: str, field_info: Dict[str, Any], annotation: Any, existing_value: Any, key: str) -> Any:
+        """Render appropriate Streamlit input for a field based on its type"""
+        
+        # Ensure label is always a string
+        description = field_info.get('description')
+        if description is None or description == '':
+            label = field_name.replace('_', ' ').title()
+        else:
+            label = str(description)
+        
+        # Check for enum types - simplified detection based on streamlit-pydantic approach
+        if self._is_enum_field(annotation):
+            return self._render_enum_input(label, annotation, existing_value, key)
+        
+        # Check for list of enums 
+        elif self._is_enum_list_field(annotation):
+            return self._render_enum_list_input(label, annotation, existing_value, key)
+            
+        # Check for regular lists
+        elif self._is_list_field(annotation):
+            return self._render_list_input(label, annotation, existing_value, key)
+            
+        # Fall back to basic type detection
+        else:
+            return self._render_basic_input(label, field_info, existing_value, key)
+    
+    def _is_enum_field(self, annotation: Any) -> bool:
+        """Check if field is a single enum"""
+        if annotation and hasattr(annotation, '__members__'):
+            return True
+        return False
+    
+    def _is_enum_list_field(self, annotation: Any) -> bool:
+        """Check if field is a list of enums"""
+        origin = get_origin(annotation)
+        args = get_args(annotation)
+        
+        # Check List[Enum]
+        if origin is list and args and hasattr(args[0], '__members__'):
+            return True
+            
+        # Check Optional[List[Enum]]
+        if origin is Union and args:
+            for arg in args:
+                if arg is not type(None):
+                    inner_origin = get_origin(arg)
+                    inner_args = get_args(arg)
+                    if inner_origin is list and inner_args and hasattr(inner_args[0], '__members__'):
+                        return True
+        return False
+    
+    def _is_list_field(self, annotation: Any) -> bool:
+        """Check if field is a regular list"""
+        origin = get_origin(annotation)
+        
+        # Check List[T]
+        if origin is list:
+            return True
+            
+        # Check Optional[List[T]]
+        if origin is Union:
+            args = get_args(annotation)
+            for arg in args:
+                if arg is not type(None) and get_origin(arg) is list:
+                    return True
+        return False
+    
+    def _render_enum_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
+        """Render selectbox for single enum"""
+        enum_values = [member.value for member in annotation.__members__.values()]
+        current_index = None
+        if existing_value and hasattr(existing_value, 'value'):
+            try:
+                current_index = enum_values.index(existing_value.value)
+            except ValueError:
+                pass
+        elif existing_value in enum_values:
+            try:
+                current_index = enum_values.index(existing_value)
+            except ValueError:
+                pass
+                
+        return st.selectbox(label, enum_values, index=current_index, key=key)
+    
+    def _render_enum_list_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
+        """Render multiselect for list of enums"""
+        # Extract enum type
+        enum_type = self._extract_enum_from_list_annotation(annotation)
+        if not enum_type:
+            return st.multiselect(label, [], key=key)
+            
+        enum_values = [member.value for member in enum_type.__members__.values()]
+        
+        # Convert existing values to string format
+        current_values = []
+        if existing_value is not None:
+            if isinstance(existing_value, (list, tuple)):
+                for item in existing_value:
+                    if hasattr(item, 'value'):
+                        current_values.append(item.value)
+                    else:
+                        current_values.append(str(item))
+            elif isinstance(existing_value, str):
+                # Handle PostgreSQL array format
+                current_values = self._parse_array_string(existing_value)
+        
+        return st.multiselect(
+            label, 
+            enum_values, 
+            default=current_values, 
+            key=key,
+            help=f"Available options: {', '.join(enum_values)}"
+        )
+    
+    def _extract_enum_from_list_annotation(self, annotation: Any) -> Any:
+        """Extract enum type from List[Enum] or Optional[List[Enum]]"""
+        origin = get_origin(annotation)
+        args = get_args(annotation)
+        
+        # Check List[Enum]
+        if origin is list and args:
+            return args[0]
+            
+        # Check Optional[List[Enum]]
+        if origin is Union and args:
+            for arg in args:
+                if arg is not type(None):
+                    inner_origin = get_origin(arg)
+                    inner_args = get_args(arg)
+                    if inner_origin is list and inner_args:
+                        return inner_args[0]
+        return None
+    
+    def _parse_array_string(self, value_str: str) -> list:
+        """Parse PostgreSQL array string format"""
+        value_str = value_str.strip()
+        if value_str.startswith('{') and value_str.endswith('}'):
+            value_str = value_str[1:-1]
+            
+        if value_str:
+            # Handle quoted and unquoted values
+            parts = re.findall(r'"([^"]*)"|\\b([^,]+)\\b', value_str)
+            result = []
+            for quoted, unquoted in parts:
+                val = quoted if quoted else unquoted
+                if val.strip():
+                    result.append(val.strip())
+            
+            # Fallback: simple comma split
+            if not result:
+                result = [v.strip() for v in value_str.split(',') if v.strip()]
+            return result
+        return []
+    
+    def _render_list_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
+        """Render multiselect for regular lists"""
+        current_values = []
+        if existing_value is not None:
+            if isinstance(existing_value, (list, tuple)):
+                current_values = [str(item) for item in existing_value]
+            elif isinstance(existing_value, str):
+                current_values = self._parse_array_string(existing_value)
+        
+        return st.multiselect(
+            label, 
+            current_values,  # Start with current values as options
+            default=current_values, 
+            accept_new_options=True,
+            key=key,
+            help="Select existing options or type new ones"
+        )
+    
+    def _render_basic_input(self, label: str, field_info: Dict[str, Any], existing_value: Any, key: str) -> Any:
+        """Render basic input types"""
+        input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
+        
+        if input_type == 'text_input':
+            return st.text_input(
+                label, 
+                value=str(existing_value) if existing_value is not None else "", 
+                key=key
+            )
+        elif input_type == 'number_input_int':
+            default_val = 0
+            if existing_value is not None:
+                try:
+                    default_val = int(existing_value)
+                except (ValueError, TypeError):
+                    default_val = 0
+            return st.number_input(label, value=default_val, step=1, key=key)
+        elif input_type == 'number_input_float':
+            default_val = 0.0
+            if existing_value is not None:
+                try:
+                    default_val = float(existing_value)
+                except (ValueError, TypeError):
+                    default_val = 0.0
+            return st.number_input(label, value=default_val, step=0.1, key=key)
+        elif input_type == 'checkbox':
+            default_val = False
+            if existing_value is not None:
+                default_val = bool(existing_value)
+            return st.checkbox(label, value=default_val, key=key)
+        elif input_type == 'date_input':
+            return st.date_input(label, value=existing_value, key=key)
+        elif input_type == 'text_area_json':
+            import json
+            json_value = ""
+            if existing_value is not None:
+                try:
+                    if isinstance(existing_value, (dict, list)):
+                        json_value = json.dumps(existing_value, indent=2)
+                    else:
+                        json_value = str(existing_value)
+                except:
+                    json_value = str(existing_value)
+            return st.text_area(label, value=json_value, height=150, key=key, help="Enter valid JSON")
+        else:
+            # Fallback to text input
+            return st.text_input(label, value=str(existing_value) if existing_value is not None else "", key=key)
