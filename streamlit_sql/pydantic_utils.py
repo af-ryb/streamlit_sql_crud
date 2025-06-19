@@ -179,8 +179,10 @@ class PydanticSQLAlchemyConverter:
             return 'date_input'
         elif inner_type is Decimal:
             return 'number_input_decimal'
-        elif inner_type is dict or inner_type is list:
+        elif inner_type is dict:
             return 'text_area_json'
+        elif inner_type is list:
+            return 'multiselect'
         else:
             return 'text_input'  # Default fallback
 
@@ -287,6 +289,41 @@ class PydanticInputGenerator:
                     height=150,
                     key=key,
                     help="Enter valid JSON"
+                )
+            elif input_type == 'multiselect':
+                # Handle list/array fields with multiselect
+                current_values = []
+                if existing_value is not None:
+                    if isinstance(existing_value, (list, tuple)):
+                        current_values = list(existing_value)
+                    elif isinstance(existing_value, str):
+                        # Handle string representation like "{val1,val2}" or "val1,val2"
+                        if existing_value.startswith('{') and existing_value.endswith('}'):
+                            existing_value = existing_value[1:-1]  # Remove braces
+                        current_values = [v.strip() for v in existing_value.split(',') if v.strip()]
+                
+                # For now, provide common options or allow text input for new values
+                options = current_values.copy()  # Start with current values
+                
+                # Add a text input for new values
+                new_value_key = f"{key}_new_value"
+                new_value = st.text_input(
+                    f"Add new {label} (separate multiple with commas)",
+                    key=new_value_key,
+                    help="Enter new options separated by commas"
+                )
+                if new_value:
+                    new_values = [v.strip() for v in new_value.split(',') if v.strip()]
+                    options.extend(new_values)
+                
+                # Remove duplicates while preserving order
+                options = list(dict.fromkeys(options))
+                
+                form_data[field_name] = st.multiselect(
+                    label,
+                    options=options,
+                    default=current_values,
+                    key=key
                 )
             else:
                 # Fallback to text input

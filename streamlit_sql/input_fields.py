@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 import streamlit as st
-from sqlalchemy import Numeric
+from sqlalchemy import Numeric, ARRAY
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
@@ -97,6 +97,58 @@ class InputFields:
 
         return value_dec
 
+    def input_array(self, col_name: str, col_type, col_value=None):
+        """Handle ARRAY column input with multiselect"""
+        pretty_name = get_pretty_name(col_name)
+        
+        # Get array element type
+        if hasattr(col_type, 'item_type'):
+            item_type = col_type.item_type
+        else:
+            item_type = str  # fallback
+        
+        # Convert current value to list
+        current_values = []
+        if col_value is not None:
+            if isinstance(col_value, (list, tuple)):
+                current_values = list(col_value)
+            elif isinstance(col_value, str):
+                # Handle string representation like "{val1,val2}"
+                if col_value.startswith('{') and col_value.endswith('}'):
+                    col_value = col_value[1:-1]  # Remove braces
+                current_values = [v.strip() for v in col_value.split(',') if v.strip()]
+        
+        # Get existing values for options (if available)
+        existing_values = self.existing_data.text.get(col_name, set())
+        options = list(existing_values) if existing_values else []
+        
+        # Add current values to options if not already present
+        for val in current_values:
+            if val not in options:
+                options.append(val)
+        
+        # If no options available, provide some default ones or allow free text
+        if not options:
+            # Allow users to type new values
+            new_value = st.text_input(
+                f"Add new {pretty_name} (separate multiple values with commas)",
+                key=f"{col_name}_new_array_value"
+            )
+            if new_value:
+                new_values = [v.strip() for v in new_value.split(',') if v.strip()]
+                options.extend(new_values)
+        
+        # Multiselect input
+        selected_values = st.multiselect(
+            pretty_name,
+            options=options,
+            default=current_values,
+            accept_new_options=True,
+            key=f"{col_name}_multiselect"
+        )
+        
+        return selected_values
+
     def get_input_value(self, col: KeyedColumnElement, col_value):
         col_name = col.description
         assert col_name is not None
@@ -121,6 +173,11 @@ class InputFields:
             input_value = st.checkbox(pretty_name, value=col_value)
         elif isinstance(col.type, SQLEnum):
             input_value = self.input_enum(col.type, col_value)
+        elif ARRAY and isinstance(col.type, ARRAY):
+            input_value = self.input_array(col_name, col.type, col_value)
+        elif 'ARRAY' in str(col.type).upper():
+            # Fallback for ARRAY types that don't match isinstance check
+            input_value = self.input_array(col_name, col.type, col_value)
         else:
             input_value = None
 

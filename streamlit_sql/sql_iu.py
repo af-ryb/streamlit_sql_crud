@@ -348,6 +348,12 @@ class SqlUi:
                         json.dumps(x, indent=2) if x is not None and isinstance(x, (dict, list)) 
                         else str(x) if x is not None else None
                     )
+                elif 'ARRAY' in str(col.type).upper():
+                    # Handle ARRAY columns for display
+                    df[col_name] = df[col_name].apply(lambda x: 
+                        ', '.join(map(str, x)) if x is not None and isinstance(x, (list, tuple)) 
+                        else str(x) if x is not None else None
+                    )
 
         return df
 
