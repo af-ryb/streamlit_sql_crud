@@ -12,6 +12,7 @@ from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
 from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter, PydanticInputGenerator
+from loguru import logger
 
 
 class UpdateRow:
@@ -104,8 +105,10 @@ class UpdateRow:
 
     def get_updates(self):
         if self.update_schema:
+            logger.debug("🔍 DEBUG - Using Pydantic updates path")
             return self.get_pydantic_updates()
         else:
+            logger.debug("🔍 DEBUG - Using SQLAlchemy updates path")
             return self.get_sqlalchemy_updates()
     
     def get_pydantic_updates(self):

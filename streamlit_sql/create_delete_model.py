@@ -10,6 +10,7 @@ from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
 from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter, PydanticInputGenerator
+from loguru import logger
 
 
 class CreateRow:
@@ -92,8 +93,10 @@ class CreateRow:
 
     def get_fields(self):
         if self.create_schema:
+            logger.debug("🔍 DEBUG - Using Pydantic create path")
             return self.get_pydantic_fields()
         else:
+            logger.debug("🔍 DEBUG - Using SQLAlchemy create path")
             return self.get_sqlalchemy_fields()
     
     def get_pydantic_fields(self):

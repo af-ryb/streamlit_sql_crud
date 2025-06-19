@@ -249,7 +249,7 @@ class PydanticInputGenerator:
         else:
             label = str(description)
         
-        # Debug: add logging for tags field
+        # Debug: add visible logging for tags field
         if field_name == 'tags':
             logger.debug(f"DEBUG - Field: {field_name}")
             logger.debug(f"DEBUG - Annotation: {annotation}")
@@ -259,6 +259,14 @@ class PydanticInputGenerator:
             logger.debug(f"DEBUG - is_enum_field: {self._is_enum_field(annotation)}")
             logger.debug(f"DEBUG - is_enum_list_field: {self._is_enum_list_field(annotation)}")
             logger.debug(f"DEBUG - is_list_field: {self._is_list_field(annotation)}")
+            
+            # Also debug the enum type extraction
+            if self._is_enum_list_field(annotation):
+                enum_type = self._extract_enum_from_list_annotation(annotation)
+                logger.debug(f"🔍 DEBUG - Extracted enum type: {enum_type}")
+                if enum_type and hasattr(enum_type, '__members__'):
+                    enum_values = [member.value for member in enum_type.__members__.values()]
+                    logger.debug(f"🔍 DEBUG - Enum values: {enum_values}")
         
         # Check for enum types - simplified detection based on streamlit-pydantic approach
         if self._is_enum_field(annotation):
@@ -340,11 +348,21 @@ class PydanticInputGenerator:
         """Render multiselect for list of enums"""
         # Extract enum type
         enum_type = self._extract_enum_from_list_annotation(annotation)
+        
+        # Debug output
+        logger.debug(f"🔍 DEBUG - _render_enum_list_input called")
+        logger.debug(f"🔍 DEBUG - Label: {label}")
+        logger.debug(f"🔍 DEBUG - Enum type: {enum_type}")
+        logger.debug(f"🔍 DEBUG - Existing value: {existing_value}")
+        logger.debug(f"🔍 DEBUG - Key: {key}")
+        
         if not enum_type:
+            logger.debug(f"🔍 DEBUG - No enum type found, returning empty multiselect")
             return st.multiselect(label, [], key=key)
             
         # Always use enum values (strings) for the options
         enum_values = [member.value for member in enum_type.__members__.values()]
+        logger.debug(f"🔍 DEBUG - Enum values: {enum_values}")
         
         # Convert existing values to string format for display
         current_values = []
@@ -359,6 +377,8 @@ class PydanticInputGenerator:
                 # Handle PostgreSQL array format
                 current_values = self._parse_array_string(existing_value)
         
+        logger.debug(f"🔍 DEBUG - Current values: {current_values}")
+        
         # Return the selected string values (not enum objects)
         # This prevents JSON serialization errors
         selected_values = st.multiselect(
@@ -369,6 +389,8 @@ class PydanticInputGenerator:
             help=f"Available options: {', '.join(enum_values)}"
         )
         
+        logger.debug(f"🔍 DEBUG - Selected values: {selected_values}")
+        
         # Return string values - they'll be converted to enums in preprocessing
         return selected_values
     
@@ -377,8 +399,12 @@ class PydanticInputGenerator:
         origin = get_origin(annotation)
         args = get_args(annotation)
         
+        logger.debug(f"🔍 DEBUG - _extract_enum_from_list_annotation")
+        logger.debug(f"🔍 DEBUG - Origin: {origin}, Args: {args}")
+        
         # Check List[Enum]
         if origin is list and args:
+            logger.debug(f"🔍 DEBUG - Direct list, returning: {args[0]}")
             return args[0]
             
         # Check Optional[List[Enum]]
@@ -387,8 +413,12 @@ class PydanticInputGenerator:
                 if arg is not type(None):
                     inner_origin = get_origin(arg)
                     inner_args = get_args(arg)
+                    logger.debug(f"🔍 DEBUG - Union arg: {arg}, inner_origin: {inner_origin}, inner_args: {inner_args}")
                     if inner_origin is list and inner_args:
+                        logger.debug(f"🔍 DEBUG - Found list in union, returning: {inner_args[0]}")
                         return inner_args[0]
+        
+        logger.debug(f"🔍 DEBUG - No enum type found, returning None")
         return None
     
     def _parse_array_string(self, value_str: str) -> list:
