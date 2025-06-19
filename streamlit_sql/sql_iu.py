@@ -462,6 +462,7 @@ class SqlUi:
             self.btns_container,
             qtty_rows,
             ss.stsql_opened,
+            key=self.base_key,
         )
 
         if action == "add":
@@ -490,6 +491,7 @@ class SqlUi:
                 conn=self.conn,
                 Model=self.edit_create_model,
                 rows_id=rows_id,
+                base_key=self.base_key,
             )
             delete_rows.show_dialog()
 

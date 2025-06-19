@@ -168,12 +168,12 @@ class DeleteRows:
         conn: SQLConnection,
         Model: type[DeclarativeBase],
         rows_id: list[int],
-        base_key: str = "stsql_delete_rows",
+        base_key: str
     ) -> None:
         self.conn = conn
         self.Model = Model
         self.rows_id = rows_id
-        self.base_key = base_key
+        self.base_key = f"{base_key}_stsql_delete_rows",
 
     @st.cache_data
     def get_rows_str(_self, rows_id: list[int]):

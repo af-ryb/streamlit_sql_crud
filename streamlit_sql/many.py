@@ -129,7 +129,7 @@ def show_rel(conn: SQLConnection, Model, model_id: int, rel: RelationshipPropert
         with tab_delete:
             rows_id = df.iloc[rows_pos].index.to_list()
             if len(rows_id) == 0:
-                st.text("Selecione antes na outra aba as linhas para apagar.")
+                st.text("First select the rows to delete")
             else:
                 delete_rows = DeleteRows(
                     conn,
