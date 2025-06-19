@@ -14,6 +14,8 @@ from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_sql import params
 from streamlit_sql.lib import get_pretty_name
+from loguru import logger
+
 
 hash_funcs: dict[Any, Callable[[Any], Any]] = {
     pd.Series: lambda serie: serie.to_dict(),
@@ -32,8 +34,18 @@ def get_existing_cond(col: KeyedColumnElement):
     fks = list(col.foreign_keys)
     has_fk = len(fks) > 0
     int_not_fk_cond = col.type.python_type is int and not has_fk
+    
+    # Check for JSON column types that don't support SELECT DISTINCT in BigQuery
+    is_json_type = False
+    col_type_name = str(col.type).upper()
+    if 'JSON' in col_type_name or hasattr(col.type, '__class__') and 'JSON' in col.type.__class__.__name__.upper():
+        is_json_type = True
+    
+    # Also check for other unsupported types like ARRAY, STRUCT in BigQuery
+    unsupported_types = ['ARRAY', 'STRUCT', 'RECORD']
+    is_unsupported_type = any(unsupported in col_type_name for unsupported in unsupported_types)
 
-    cond = is_not_pk and (is_str or is_bool or int_not_fk_cond, is_enum)
+    cond = is_not_pk and not is_json_type and not is_unsupported_type and (is_str or is_bool or int_not_fk_cond or is_enum)
     return cond
 
 
@@ -50,15 +62,23 @@ def get_existing_values(
     cols = list(cte.columns)
 
     if len(available_col_filter) > 0:
+        cols = [col for col in cte.columns if col.description in available_col_filter and get_existing_cond(col)]
+    else:
         cols = [col for col in cte.columns if get_existing_cond(col)]
 
     result: dict[str, Any] = {}
     for col in cols:
-        stmt = select(distinct(col)).order_by(col).limit(10000)
-        values = _session.execute(stmt).scalars().all()
-        colname = col.description
-        assert colname is not None
-        result[colname] = values
+        try:
+            stmt = select(distinct(col)).order_by(col).limit(10000)
+            values = _session.execute(stmt).scalars().all()
+            colname = col.description
+            assert colname is not None
+            result[colname] = values
+        except Exception as e:
+            # Skip columns that cause errors (like JSON column type)
+            colname = col.description or col.name
+            logger.warning(f"Skipping column '{colname}' for filter values due to error: {e}")
+            continue
 
     return result
 
