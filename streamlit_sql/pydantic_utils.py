@@ -5,10 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel
-from pydantic.fields import FieldInfo
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.sql.elements import KeyedColumnElement
-from sqlalchemy.types import Enum as SQLEnum, Numeric
 from loguru import logger
 
 class PydanticSQLAlchemyConverter:
@@ -322,9 +319,7 @@ class PydanticInputGenerator:
             except ValueError:
                 pass
                 
-        # Return the selected string value (not enum object) to prevent JSON serialization errors
-        selected_value = st.selectbox(label, enum_values, index=current_index, key=key)
-        return selected_value
+        return st.selectbox(label, enum_values, index=current_index, key=key)
     
     def _render_enum_list_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
         """Render multiselect for list of enums"""
@@ -332,36 +327,27 @@ class PydanticInputGenerator:
         enum_type = self._extract_enum_from_list_annotation(annotation)
         
         if not enum_type:
-            return st.multiselect(label, [], key=key)
+            return st.multiselect(label, [], key=key, accept_new_options=True)
             
-        # Always use enum values (strings) for the options
+        # Use enum values for the options
         enum_values = [member.value for member in enum_type.__members__.values()]
         
-        # Convert existing values to string format for display
+        # Convert existing values to display format
         current_values = []
         if existing_value is not None:
             if isinstance(existing_value, (list, tuple)):
-                for item in existing_value:
-                    if hasattr(item, 'value'):
-                        current_values.append(item.value)
-                    else:
-                        current_values.append(str(item))
+                current_values = [str(item) for item in existing_value]
             elif isinstance(existing_value, str):
                 # Handle PostgreSQL array format
                 current_values = self._parse_array_string(existing_value)
         
-        # Return the selected string values (not enum objects)
-        # This prevents JSON serialization errors
-        selected_values = st.multiselect(
+        return st.multiselect(
             label, 
             enum_values, 
             default=current_values, 
             key=key,
             help=f"Available options: {', '.join(enum_values)}"
         )
-        
-        # Return string values - they'll be converted to enums in preprocessing
-        return selected_values
     
     def _extract_enum_from_list_annotation(self, annotation: Any) -> Any:
         """Extract enum type from List[Enum] or Optional[List[Enum]]"""

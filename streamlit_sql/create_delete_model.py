@@ -1,4 +1,4 @@
-from typing import Optional, Type, Union
+from typing import Optional, Type
 import streamlit as st
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
@@ -10,7 +10,6 @@ from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
 from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter, PydanticInputGenerator
-from loguru import logger
 
 
 class CreateRow:
@@ -44,52 +43,8 @@ class CreateRow:
             )
     
     def _preprocess_form_data(self, form_data: dict) -> dict:
-        """Preprocess form data to handle enum conversions and other transformations"""
-        processed_data = form_data.copy()
-        
-        if not self.create_schema:
-            return processed_data
-            
-        # Get schema field information
-        schema_fields = self.create_schema.model_fields
-        
-        for field_name, field_info in schema_fields.items():
-            if field_name in processed_data:
-                value = processed_data[field_name]
-                annotation = field_info.annotation
-                
-                # Handle List[Enum] types
-                if hasattr(annotation, '__origin__') and annotation.__origin__ is list:
-                    args = getattr(annotation, '__args__', ())
-                    if args and len(args) > 0:
-                        enum_type = args[0]
-                        if hasattr(enum_type, '__members__') and isinstance(value, list):
-                            # Convert string values to enum objects
-                            try:
-                                processed_data[field_name] = [enum_type(item) for item in value]
-                            except (ValueError, KeyError):
-                                # If conversion fails, try by name
-                                processed_data[field_name] = [getattr(enum_type, item.upper(), item) for item in value]
-                
-                # Handle Optional[List[Enum]] types  
-                elif hasattr(annotation, '__origin__') and annotation.__origin__ is Union:
-                    args = getattr(annotation, '__args__', ())
-                    if len(args) == 2 and type(None) in args:
-                        # This is Optional[T], get the non-None type
-                        non_none_type = next(arg for arg in args if arg is not type(None))
-                        if hasattr(non_none_type, '__origin__') and non_none_type.__origin__ is list:
-                            list_args = getattr(non_none_type, '__args__', ())
-                            if list_args and len(list_args) > 0:
-                                enum_type = list_args[0]
-                                if hasattr(enum_type, '__members__') and isinstance(value, list):
-                                    # Convert string values to enum objects
-                                    try:
-                                        processed_data[field_name] = [enum_type(item) for item in value]
-                                    except (ValueError, KeyError):
-                                        # If conversion fails, try by name
-                                        processed_data[field_name] = [getattr(enum_type, item.upper(), item) for item in value]
-        
-        return processed_data
+        """Preprocess form data - simplified since str-based enums work naturally"""
+        return form_data
 
     def get_fields(self):
         if self.create_schema:
