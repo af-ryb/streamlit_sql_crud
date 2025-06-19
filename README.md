@@ -36,12 +36,14 @@ See the package in action [here](https://example-crud.streamlit.app/).
 - Let users filter the columns by selecting conditions in the filter expander
 - Give possible candidates when filtering using existing values for the columns
 - Let users select ForeignKey's values using the string representation of the foreign table, instead of its id number
+- **NEW**: Custom foreign key selectboxes with user-friendly display names and flexible queries
 
 ### UPDATE
 
 - Users update rows with a dialog opened by selecting the row and clicking the icon
 - Text columns offers candidates from existing values
 - ForeignKey columns are added by the string representation instead of its id number
+- **NEW**: Custom foreign key selectboxes with configurable display fields and filtering
 - In Update form, list all ONE-TO-MANY related rows with pagination, where you can directly create and delete related table rows. 
 - Log updates to database to stderr or in anyway **loguru** can handle
 
@@ -52,6 +54,7 @@ See the package in action [here](https://example-crud.streamlit.app/).
 - Text columns offers candidates from existing values
 - Hide columns to fill by offering default values
 - ForeignKey columns are added by the string representation instead of its id number
+- **NEW**: Custom foreign key selectboxes with configurable display fields and filtering
 - **NEW**: Use Pydantic schemas for enhanced validation and custom field requirements
 
 ### DELETE
@@ -251,4 +254,159 @@ SqlUi(
     update_schema=ProjectUpdateSchema,      # 🆕 Optional - Enhanced validation for updates
 )
 ```
+
+## Custom Foreign Key Selectboxes (NEW)
+
+Starting from version 0.4.0, you can customize how foreign key fields are displayed in forms by providing custom queries and display fields.
+
+### Problem
+
+By default, foreign key selectboxes use the `__str__` method of related models, which often shows raw IDs or uninformative representations:
+
+```python
+# Default behavior - not user-friendly
+selectbox options: ["<Template id=abc123>", "<Template id=def456>"]
+```
+
+### Solution
+
+Use `foreign_key_options` to specify custom queries and display fields:
+
+```python
+from streamlit_sql import SqlUi
+from sqlalchemy import select
+
+# Configure custom foreign key display
+SqlUi(
+    conn=conn,
+    read_instance=select(Alert),
+    edit_create_model=Alert,
+    foreign_key_options={
+        'template_id': {
+            'query': select(Template),
+            'display_field': 'config_name',
+            'value_field': 'id'
+        },
+        'department_id': {
+            'query': select(Department).where(Department.active == True),
+            'display_field': 'name',
+            'value_field': 'id'
+        }
+    }
+)
+```
+
+### Configuration Options
+
+Each foreign key field can be configured with:
+
+- **`query`**: SQLAlchemy select statement to fetch available options
+- **`display_field`**: Column name to show in the selectbox (user-friendly names)
+- **`value_field`**: Column name for the actual value to save (usually 'id')
+
+### Real-World Example
+
+```python
+from sqlalchemy import Column, String, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+
+# Models
+class ConfigTemplate(Base):
+    __tablename__ = 'config_templates'
+    id = Column(String, primary_key=True)
+    config_name = Column(String, nullable=False)
+    description = Column(String)
+    is_active = Column(Boolean, default=True)
+
+class Alert(Base):
+    __tablename__ = 'alerts'
+    id = Column(String, primary_key=True)
+    template_id = Column(String, ForeignKey('config_templates.id'))
+    alert_name = Column(String, nullable=False)
+    
+    template = relationship("ConfigTemplate")
+
+# Usage
+SqlUi(
+    conn=conn,
+    read_instance=select(Alert).options(
+        selectinload(Alert.template)  # Eager loading for display
+    ),
+    edit_create_model=Alert,
+    foreign_key_options={
+        'template_id': {
+            # Custom query with filtering
+            'query': select(ConfigTemplate).where(
+                ConfigTemplate.is_active == True
+            ).order_by(ConfigTemplate.config_name),
+            'display_field': 'config_name',  # Show friendly names
+            'value_field': 'id'              # Save actual IDs
+        }
+    }
+)
+```
+
+### Before vs After
+
+**Before (default behavior):**
+```
+Template ID: [Select option]
+  ▼ <ConfigTemplate id=tpl_123>
+    <ConfigTemplate id=tpl_456>
+    <ConfigTemplate id=tpl_789>
+```
+
+**After (with custom options):**
+```
+Template ID: [Select option]
+  ▼ Customer Analytics Config
+    Fraud Detection Setup
+    Marketing Campaign Template
+```
+
+### Advanced Features
+
+#### Filtered Options
+```python
+foreign_key_options={
+    'category_id': {
+        'query': select(Category).where(
+            Category.department == 'Sales'
+        ).order_by(Category.priority.desc()),
+        'display_field': 'name',
+        'value_field': 'id'
+    }
+}
+```
+
+#### Computed Display Fields
+```python
+# Using SQL expressions for display
+from sqlalchemy import func
+
+foreign_key_options={
+    'user_id': {
+        'query': select(
+            User.id,
+            func.concat(User.first_name, ' ', User.last_name).label('full_name')
+        ),
+        'display_field': 'full_name',
+        'value_field': 'id'
+    }
+}
+```
+
+### Benefits
+
+1. **User-Friendly**: Show meaningful names instead of IDs or object representations
+2. **Flexible Queries**: Filter, order, and customize the available options
+3. **Data Integrity**: Maintains proper foreign key relationships
+4. **Automatic Handling**: Works seamlessly with create/edit forms
+5. **Current Value Support**: Preserves existing values when editing records
+
+### Compatibility
+
+- ✅ Works with SQLAlchemy models (full support)
+- ⚠️ Pydantic schemas (currently uses default FK handling, custom options planned for future release)
+- ✅ Backward compatible (existing code continues to work)
 

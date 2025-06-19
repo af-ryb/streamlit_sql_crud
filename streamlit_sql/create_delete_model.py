@@ -20,10 +20,12 @@ class CreateRow:
         default_values: dict | None = None,
         base_key: str = "create",
         create_schema: Optional[Type[BaseModel]] = None,
+        foreign_key_options: dict | None = None,
     ) -> None:
         self.conn = conn
         self.Model = Model
         self.create_schema = create_schema
+        self.foreign_key_options = foreign_key_options or {}
 
         self.default_values = default_values or {}
         self.base_key = base_key
@@ -31,7 +33,7 @@ class CreateRow:
         set_state("stsql_updated", 0)
 
         with conn.session as s:
-            self.existing_data = ExistingData(s, Model, self.default_values)
+            self.existing_data = ExistingData(s, Model, self.default_values, foreign_key_options=self.foreign_key_options)
             self.input_fields = InputFields(
                 Model, base_key, self.default_values, self.existing_data
             )

@@ -48,6 +48,7 @@ class SqlUi:
         create_schema: Optional[Type[BaseModel]] = None,
         update_schema: Optional[Type[BaseModel]] = None,
         read_schema: Optional[Type[BaseModel]] = None,
+        foreign_key_options: dict | None = None,
     ):
         """The CRUD interface will be displayes just by initializing the class
 
@@ -69,6 +70,7 @@ class SqlUi:
             create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
             read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, uses Pydantic model_validate for data processing and avoids pandas read_sql issues with JSON columns. Defaults to None
+            foreign_key_options (dict, optional): Custom foreign key selectbox configuration. Dict with field names as keys and config dicts as values. Each config should have 'query' (SQLAlchemy select statement), 'display_field' (column name for display), and 'value_field' (column name for value). Defaults to None
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -117,6 +119,13 @@ class SqlUi:
                 style_fn=style_fn,
                 update_show_many=True,
                 disable_log=False,
+                foreign_key_options={
+                    'client_id': {
+                        'query': select(db.Client),
+                        'display_field': 'name',
+                        'value_field': 'id'
+                    }
+                },
             )
 
             ```
@@ -142,6 +151,7 @@ class SqlUi:
         self.create_schema = create_schema
         self.update_schema = update_schema
         self.read_schema = read_schema
+        self.foreign_key_options = foreign_key_options or {}
 
         # Validate schema compatibility if provided
         if self.create_schema:
@@ -471,6 +481,7 @@ class SqlUi:
                 Model=self.edit_create_model,
                 default_values=self.edit_create_default_values,
                 create_schema=self.create_schema,
+                foreign_key_options=self.foreign_key_options,
             )
             create_row.show_dialog()
         elif action == "edit":
@@ -483,6 +494,7 @@ class SqlUi:
                 default_values=self.edit_create_default_values,
                 update_show_many=self.update_show_many,
                 update_schema=self.update_schema,
+                foreign_key_options=self.foreign_key_options,
             )
             update_row.show_dialog()
         elif action == "delete":

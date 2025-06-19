@@ -23,6 +23,7 @@ class UpdateRow:
         default_values: dict | None = None,
         update_show_many: bool = False,
         update_schema: Optional[Type[BaseModel]] = None,
+        foreign_key_options: dict | None = None,
     ) -> None:
         self.conn = conn
         self.Model = Model
@@ -30,12 +31,13 @@ class UpdateRow:
         self.default_values = default_values or {}
         self.update_show_many = update_show_many
         self.update_schema = update_schema
+        self.foreign_key_options = foreign_key_options or {}
 
         set_state("stsql_updated", 0)
 
         with conn.session as s:
             self.row = s.get_one(Model, row_id)
-            self.existing_data = ExistingData(s, Model, self.default_values, self.row)
+            self.existing_data = ExistingData(s, Model, self.default_values, self.row, foreign_key_options=self.foreign_key_options)
 
         self.input_fields = InputFields(
             Model, "update", self.default_values, self.existing_data
