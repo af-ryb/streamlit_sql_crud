@@ -1,8 +1,9 @@
+import json
+import pandas as pd
+import streamlit as st
 from collections.abc import Callable
 from typing import Optional, Type
 
-import pandas as pd
-import streamlit as st
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select, select
 from sqlalchemy.orm import DeclarativeBase
@@ -327,9 +328,16 @@ class SqlUi:
     def convert_arrow(self, df: pd.DataFrame):
         cols = self.cte.columns
         for col in cols:
-            if isinstance(col.type, SQLEnum):
-                col_name = col.name
-                df[col_name] = df[col_name].map(lambda v: v.value)
+            col_name = col.name
+            if col_name in df.columns:
+                if isinstance(col.type, SQLEnum):
+                    df[col_name] = df[col_name].map(lambda v: v.value if hasattr(v, 'value') else v)
+                elif 'JSON' in str(col.type).upper():
+                    # Handle JSON columns for display
+                    df[col_name] = df[col_name].apply(lambda x: 
+                        json.dumps(x, indent=2) if x is not None and isinstance(x, (dict, list)) 
+                        else str(x) if x is not None else None
+                    )
 
         return df
 
@@ -338,8 +346,15 @@ class SqlUi:
         stmt_pag: Select,
         initial_balance: float,
     ):
-        with self.conn.connect() as c:
-            df = pd.read_sql(stmt_pag, c)
+        df = None
+        try:
+            with self.conn.connect() as c:
+                df = pd.read_sql(stmt_pag, c)
+        except AttributeError:
+            df = self._execute_query_manually(stmt_pag)
+
+        if df is None:
+            raise RuntimeError("Failed to execute query - no DataFrame created")
 
         df = self.convert_arrow(df)
         if self.rolling_total_column is None:
@@ -349,6 +364,32 @@ class SqlUi:
         df[rolling_col_name] = df[self.rolling_total_column].cumsum() + initial_balance
 
         return df
+
+    def _execute_query_manually(self, stmt: Select):
+        """Execute query manually to handle JSON columns in BigQuery"""
+        import json
+        
+        with self.conn.session as s:
+            result = s.execute(stmt)
+            rows = result.fetchall()
+            columns = result.keys()
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(rows, columns=columns)
+            
+            # Handle JSON columns by converting string representations to proper format
+            for col in self.cte.columns:
+                col_name = col.name
+                if col_name in df.columns:
+                    col_type_name = str(col.type).upper()
+                    if 'JSON' in col_type_name:
+                        # Convert JSON strings to proper format for display
+                        df[col_name] = df[col_name].apply(lambda x: 
+                            json.dumps(x, indent=2) if x is not None and not isinstance(x, str) 
+                            else str(x) if x is not None else None
+                        )
+            
+            return df
 
     def add_balance_formatter(self, df_style_formatter: dict[str, str]):
         formatter = {}

@@ -175,6 +175,8 @@ class PydanticSQLAlchemyConverter:
             return 'date_input'
         elif inner_type is Decimal:
             return 'number_input_decimal'
+        elif inner_type is dict or inner_type is list:
+            return 'text_area_json'
         else:
             return 'text_input'  # Default fallback
 
@@ -261,6 +263,26 @@ class PydanticInputGenerator:
                     label, 
                     value=existing_value, 
                     key=key
+                )
+            elif input_type == 'text_area_json':
+                import json
+                # Handle JSON fields with text area
+                json_value = ""
+                if existing_value is not None:
+                    try:
+                        if isinstance(existing_value, (dict, list)):
+                            json_value = json.dumps(existing_value, indent=2)
+                        else:
+                            json_value = str(existing_value)
+                    except:
+                        json_value = str(existing_value)
+                        
+                form_data[field_name] = st.text_area(
+                    label,
+                    value=json_value,
+                    height=150,
+                    key=key,
+                    help="Enter valid JSON"
                 )
             else:
                 # Fallback to text input
