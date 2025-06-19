@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 from typing import Type, Dict, Any, Optional, Union, get_origin, get_args
 from datetime import date
 from decimal import Decimal
@@ -165,6 +166,11 @@ class PydanticSQLAlchemyConverter:
             String indicating the Streamlit input type to use
         """
         inner_type = pydantic_field_info.get('inner_type', str)
+        annotation = pydantic_field_info.get('annotation', str)
+        
+        # Check for list types (including typing.List)
+        if inner_type is list or get_origin(annotation) is list:
+            return 'multiselect'
         
         # Map Python types to Streamlit input types
         if inner_type is str:
@@ -297,33 +303,36 @@ class PydanticInputGenerator:
                     if isinstance(existing_value, (list, tuple)):
                         current_values = list(existing_value)
                     elif isinstance(existing_value, str):
-                        # Handle string representation like "{val1,val2}" or "val1,val2"
-                        if existing_value.startswith('{') and existing_value.endswith('}'):
-                            existing_value = existing_value[1:-1]  # Remove braces
-                        current_values = [v.strip() for v in existing_value.split(',') if v.strip()]
+                        # Handle PostgreSQL array format: {val1,val2} or {\"val1\",\"val2\"}
+                        value_str = existing_value.strip()
+                        
+                        if value_str.startswith('{') and value_str.endswith('}'):
+                            value_str = value_str[1:-1]  # Remove braces
+                            
+                        # Handle quoted values and unquoted values
+                        if value_str:
+                            # Split by comma, but handle quoted strings
+                            parts = re.findall(r'"([^"]*)"|\\b([^,]+)\\b', value_str)
+                            for quoted, unquoted in parts:
+                                val = quoted if quoted else unquoted
+                                if val.strip():
+                                    current_values.append(val.strip())
+                        
+                        # Fallback: simple comma split
+                        if not current_values and value_str:
+                            current_values = [v.strip() for v in value_str.split(',') if v.strip()]
                 
-                # For now, provide common options or allow text input for new values
-                options = current_values.copy()  # Start with current values
+                # Start with current values as options
+                options = current_values.copy()
                 
-                # Add a text input for new values
-                new_value_key = f"{key}_new_value"
-                new_value = st.text_input(
-                    f"Add new {label} (separate multiple with commas)",
-                    key=new_value_key,
-                    help="Enter new options separated by commas"
-                )
-                if new_value:
-                    new_values = [v.strip() for v in new_value.split(',') if v.strip()]
-                    options.extend(new_values)
-                
-                # Remove duplicates while preserving order
-                options = list(dict.fromkeys(options))
-                
+                # Use multiselect with accept_new_options for flexibility
                 form_data[field_name] = st.multiselect(
                     label,
                     options=options,
                     default=current_values,
-                    key=key
+                    accept_new_options=True,
+                    key=key,
+                    help="Select existing options or type new ones"
                 )
             else:
                 # Fallback to text input

@@ -113,10 +113,26 @@ class InputFields:
             if isinstance(col_value, (list, tuple)):
                 current_values = list(col_value)
             elif isinstance(col_value, str):
-                # Handle string representation like "{val1,val2}"
-                if col_value.startswith('{') and col_value.endswith('}'):
-                    col_value = col_value[1:-1]  # Remove braces
-                current_values = [v.strip() for v in col_value.split(',') if v.strip()]
+                # Handle various string representations
+                value_str = col_value.strip()
+                
+                # PostgreSQL array format: {val1,val2} or {"val1","val2"}
+                if value_str.startswith('{') and value_str.endswith('}'):
+                    value_str = value_str[1:-1]  # Remove braces
+                    
+                # Handle quoted values and unquoted values
+                if value_str:
+                    import re
+                    # Split by comma, but handle quoted strings
+                    parts = re.findall(r'"([^"]*)"|\b([^,]+)\b', value_str)
+                    for quoted, unquoted in parts:
+                        val = quoted if quoted else unquoted
+                        if val.strip():
+                            current_values.append(val.strip())
+                
+                # Fallback: simple comma split
+                if not current_values and value_str:
+                    current_values = [v.strip() for v in value_str.split(',') if v.strip()]
         
         # Get existing values for options (if available)
         existing_values = self.existing_data.text.get(col_name, set())
@@ -127,24 +143,20 @@ class InputFields:
             if val not in options:
                 options.append(val)
         
-        # If no options available, provide some default ones or allow free text
-        if not options:
-            # Allow users to type new values
-            new_value = st.text_input(
-                f"Add new {pretty_name} (separate multiple values with commas)",
-                key=f"{col_name}_new_array_value"
-            )
-            if new_value:
-                new_values = [v.strip() for v in new_value.split(',') if v.strip()]
-                options.extend(new_values)
+        # Check if this is an ARRAY of ENUM type
+        enum_options = []
+        if hasattr(col_type, 'item_type') and isinstance(col_type.item_type, SQLEnum):
+            enum_options = list(col_type.item_type.enums)
+            options.extend([opt for opt in enum_options if opt not in options])
         
-        # Multiselect input
+        # Multiselect input with accept_new_options for flexibility
         selected_values = st.multiselect(
             pretty_name,
             options=options,
             default=current_values,
             accept_new_options=True,
-            key=f"{col_name}_multiselect"
+            key=f"{col_name}_multiselect",
+            help="Select existing options or type new ones" if not enum_options else f"Select from: {', '.join(enum_options)}"
         )
         
         return selected_values
