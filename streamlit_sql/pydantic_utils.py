@@ -46,6 +46,10 @@ class PydanticSQLAlchemyConverter:
             if operation == 'update' and 'id' not in schema_fields:
                 logger.warning(f"Update schema {schema.__name__} must include 'id' field")
                 return False
+            
+            # For read operations, no specific requirements
+            if operation == 'read':
+                pass  # Read schemas can have any subset of fields
                 
             return True
             

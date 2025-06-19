@@ -46,6 +46,7 @@ class SqlUi:
         disable_log: bool = False,
         create_schema: Optional[Type[BaseModel]] = None,
         update_schema: Optional[Type[BaseModel]] = None,
+        read_schema: Optional[Type[BaseModel]] = None,
     ):
         """The CRUD interface will be displayes just by initializing the class
 
@@ -65,6 +66,7 @@ class SqlUi:
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
             create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
+            read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, uses Pydantic model_validate for data processing and avoids pandas read_sql issues with JSON columns. Defaults to None
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -134,6 +136,7 @@ class SqlUi:
         self.disable_log = disable_log
         self.create_schema = create_schema
         self.update_schema = update_schema
+        self.read_schema = read_schema
 
         # Validate schema compatibility if provided
         if self.create_schema:
@@ -149,6 +152,13 @@ class SqlUi:
             ):
                 table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
                 raise ValueError(f"Update schema {self.update_schema.__name__} is not compatible with {table_name}")
+        
+        if self.read_schema:
+            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+                self.read_schema, self.edit_create_model, 'read'
+            ):
+                table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
+                raise ValueError(f"Read schema {self.read_schema.__name__} is not compatible with {table_name}")
 
         self.cte = self.get_cte()
         self.rolling_pretty_name = lib.get_pretty_name(self.rolling_total_column or "")
@@ -346,17 +356,12 @@ class SqlUi:
         stmt_pag: Select,
         initial_balance: float,
     ):
-        df = None
-        try:
+        if self.read_schema:
+            df = self._execute_with_pydantic_schema(stmt_pag)
+        else:
             with self.conn.connect() as c:
                 df = pd.read_sql(stmt_pag, c)
-        except AttributeError:
-            df = self._execute_query_manually(stmt_pag)
-
-        if df is None:
-            raise RuntimeError("Failed to execute query - no DataFrame created")
-
-        df = self.convert_arrow(df)
+            df = self.convert_arrow(df)
         if self.rolling_total_column is None:
             return df
 
@@ -365,30 +370,15 @@ class SqlUi:
 
         return df
 
-    def _execute_query_manually(self, stmt: Select):
-        """Execute query manually to handle JSON columns in BigQuery"""
-        import json
-        
+    def _execute_with_pydantic_schema(self, stmt: Select):
+        """Execute query using Pydantic schema for data processing"""
         with self.conn.session as s:
-            result = s.execute(stmt)
-            rows = result.fetchall()
-            columns = result.keys()
+            result = s.execute(stmt).all()
             
-            # Convert to DataFrame
-            df = pd.DataFrame(rows, columns=columns)
-            
-            # Handle JSON columns by converting string representations to proper format
-            for col in self.cte.columns:
-                col_name = col.name
-                if col_name in df.columns:
-                    col_type_name = str(col.type).upper()
-                    if 'JSON' in col_type_name:
-                        # Convert JSON strings to proper format for display
-                        df[col_name] = df[col_name].apply(lambda x: 
-                            json.dumps(x, indent=2) if x is not None and not isinstance(x, str) 
-                            else str(x) if x is not None else None
-                        )
-            
+            validated_rows = [self.read_schema.model_validate(row, from_attributes=True).model_dump() for row in result]
+
+            # Create DataFrame from validated data
+            df = pd.DataFrame(validated_rows)
             return df
 
     def add_balance_formatter(self, df_style_formatter: dict[str, str]):
@@ -493,6 +483,7 @@ def show_sql_ui(
     update_show_many: bool = False,
     create_schema: Optional[Type[BaseModel]] = None,
     update_schema: Optional[Type[BaseModel]] = None,
+    read_schema: Optional[Type[BaseModel]] = None,
 ) -> tuple[pd.DataFrame, list[int]] | None:
     """Show A CRUD interface in a Streamlit Page
 
@@ -521,6 +512,7 @@ def show_sql_ui(
         update_show_many=update_show_many,
         create_schema=create_schema,
         update_schema=update_schema,
+        read_schema=read_schema,
     )
 
     return ui.df, ui.rows_selected
