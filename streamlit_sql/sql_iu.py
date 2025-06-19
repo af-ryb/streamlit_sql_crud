@@ -40,7 +40,8 @@ class SqlUi:
         df_style_formatter: dict[str, str] | None = None,
         read_use_container_width: bool = False,
         hide_id: bool = True,
-        base_key: str = "",
+        key: str | None = None,
+        base_key: str | None = None,
         style_fn: Callable[[pd.Series], list[str]] | None = None,
         update_show_many: bool = False,
         disable_log: bool = False,
@@ -60,7 +61,8 @@ class SqlUi:
             df_style_formatter (dict[str,str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): add use_container_width to st.dataframe args. Default to False
             hide_id (bool, optional): The id column will not be displayed if set to True. Defaults to True
-            base_key (str, optional): A prefix to add to widget's key argument. This is needed when creating more than one instance of this class in the same page. Defaults to empty str
+            key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
+            base_key (str, optional): Legacy parameter name for key. Use 'key' instead for Streamlit compatibility. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
@@ -111,7 +113,7 @@ class SqlUi:
                 df_style_formatter={"amount": "{:,.2f}"},
                 read_use_container_width=True,
                 hide_id=True,
-                base_key="my_base_sql_ui",
+                key="my_sql_ui",
                 style_fn=style_fn,
                 update_show_many=True,
                 disable_log=False,
@@ -130,7 +132,10 @@ class SqlUi:
         self.df_style_formatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
         self.hide_id = hide_id
-        self.base_key = base_key
+        # Handle key parameter compatibility - key takes precedence over base_key
+        if key is not None and base_key is not None:
+            raise ValueError("Cannot specify both 'key' and 'base_key' parameters. Use 'key' for Streamlit compatibility.")
+        self.base_key = key or base_key or ""
         self.style_fn = style_fn
         self.update_show_many = update_show_many
         self.disable_log = disable_log

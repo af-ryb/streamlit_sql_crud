@@ -13,17 +13,39 @@ from streamlit_sql.lib import get_pretty_name
 
 
 class InputFields:
+    """Generate Streamlit input widgets for SQLAlchemy model fields.
+    
+    Automatically detects field types and creates appropriate inputs:
+    - Enum fields: selectbox
+    - String fields with few unique values: selectbox (String(Enum) style)
+    - Array[Enum] fields: multiselect
+    - Regular string fields: text input with datalist
+    - Foreign keys: selectbox with related records
+    - Numbers, dates, booleans: appropriate input widgets
+    """
+    
     def __init__(
         self,
         Model: type[DeclarativeBase],
         key_prefix: str,
         default_values: dict,
         existing_data: ExistingData,
+        string_enum_threshold: int = 10,
     ) -> None:
+        """Initialize InputFields.
+        
+        Args:
+            Model: SQLAlchemy model class
+            key_prefix: Prefix for widget keys to avoid conflicts
+            default_values: Default values for fields
+            existing_data: Existing data helper for options
+            string_enum_threshold: Max unique values for string field to be treated as enum
+        """
         self.Model = Model
         self.key_prefix = key_prefix
         self.default_values = default_values
         self.existing_data = existing_data
+        self.string_enum_threshold = string_enum_threshold
 
     def input_fk(self, col_name: str, value: int | None):
         key = f"{self.key_prefix}_{col_name}"
@@ -64,6 +86,38 @@ class InputFields:
             index = None
         input_value = st.selectbox(col_name, opts, index=index)
         return input_value
+
+    def input_str_enum(self, col_name: str, value=None):
+        """Handle string columns that should be treated as enums using selectbox."""
+        key = f"{self.key_prefix}_{col_name}"
+        pretty_name = get_pretty_name(col_name)
+        
+        # Get available options from existing data
+        opts = list(self.existing_data.text[col_name])
+        
+        # Find current value index
+        index = None
+        if value and value in opts:
+            index = opts.index(value)
+        elif value and value not in opts:
+            # If current value is not in options, add it
+            opts.append(value)
+            index = len(opts) - 1
+        
+        input_value = st.selectbox(
+            pretty_name,
+            options=opts,
+            index=index,
+            key=key,
+            help=f"Select from {len(opts)} available options"
+        )
+        return input_value
+
+    def is_string_enum_candidate(self, col_name: str) -> bool:
+        """Determine if a string column should be treated as an enum based on unique value count."""
+        opts = list(self.existing_data.text[col_name])
+        # Treat as enum if there are threshold or fewer unique values
+        return len(opts) <= self.string_enum_threshold and len(opts) > 0
 
     def input_str(self, col_name: str, value=None):
         key = f"{self.key_prefix}_{col_name}"
@@ -178,7 +232,11 @@ class InputFields:
         elif isinstance(col.type, SQLEnum):
             input_value = self.input_enum(col.type, col_value)
         elif col.type.python_type is str:
-            input_value = self.input_str(col_name, col_value)
+            # Check if string column should be treated as enum
+            if self.is_string_enum_candidate(col_name):
+                input_value = self.input_str_enum(col_name, col_value)
+            else:
+                input_value = self.input_str(col_name, col_value)
         elif col.type.python_type is int:
             input_value = st.number_input(pretty_name, value=col_value, step=1)
         elif col.type.python_type is float:
