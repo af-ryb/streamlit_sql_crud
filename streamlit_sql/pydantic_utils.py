@@ -10,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum, Numeric
 from loguru import logger
-import streamlit_pydantic as sp
+# streamlit-pydantic has compatibility issues with Pydantic v2, using custom implementation
 
 class PydanticSQLAlchemyConverter:
     """Handles conversion between Pydantic models and SQLAlchemy models"""
@@ -217,7 +217,6 @@ class PydanticInputGenerator:
             Dictionary of form field values
         """
         
-        # Use our hybrid approach: streamlit-pydantic for enum/list fields, custom for others
         form_data = {}
         existing_values = existing_values or {}
         
@@ -232,66 +231,13 @@ class PydanticInputGenerator:
             # Get field annotation for better type detection
             annotation = field_info.get('annotation')
             
-            # Use streamlit-pydantic for complex types (enums, lists) where it excels
-            if self._should_use_streamlit_pydantic(annotation):
-                form_data[field_name] = self._render_with_streamlit_pydantic(
-                    field_name, field_info, annotation, existing_value, key
-                )
-            else:
-                # Use our custom implementation for basic types
-                form_data[field_name] = self._render_field_input(
-                    field_name, field_info, annotation, existing_value, key
-                )
+            # Use our custom implementation for all field types
+            form_data[field_name] = self._render_field_input(
+                field_name, field_info, annotation, existing_value, key
+            )
         
         return form_data
     
-    def _should_use_streamlit_pydantic(self, annotation: Any) -> bool:
-        """Determine if we should use streamlit-pydantic for this field type"""
-        # Use streamlit-pydantic for enums and lists (where it's most robust)
-        return (self._is_enum_field(annotation) or 
-                self._is_enum_list_field(annotation) or 
-                self._is_list_field(annotation))
-    
-    def _render_with_streamlit_pydantic(self, field_name: str, field_info: Dict[str, Any], annotation: Any, existing_value: Any, key: str) -> Any:
-        """Use streamlit-pydantic for rendering complex field types"""
-        try:
-            # Create a minimal schema with just this field for streamlit-pydantic
-            from typing import get_type_hints
-            from pydantic import create_model
-            
-            # Get the field definition
-            field_default = field_info.get('default', ...)
-            field_description = field_info.get('description')
-            
-            # Create a temporary model with just this field
-            temp_model = create_model(
-                'TempModel',
-                **{field_name: (annotation, field_default)}
-            )
-            
-            # Set field description if available
-            if field_description:
-                temp_model.model_fields[field_name].description = field_description
-            
-            # Create instance with existing value if available
-            if existing_value is not None:
-                instance = temp_model(**{field_name: existing_value})
-            else:
-                instance = None
-            
-            # Use streamlit-pydantic to render just this field
-            result = sp.pydantic_input(
-                key=key, 
-                model=temp_model if instance is None else instance
-            )
-            
-            # Extract the field value from the result
-            return result.get(field_name) if isinstance(result, dict) else getattr(result, field_name, None)
-            
-        except Exception as e:
-            logger.warning(f"streamlit-pydantic rendering failed for {field_name}: {e}, using fallback")
-            # Fallback to our custom implementation
-            return self._render_field_input(field_name, field_info, annotation, existing_value, key)
     
     
     def _render_field_input(self, field_name: str, field_info: Dict[str, Any], annotation: Any, existing_value: Any, key: str) -> Any:
