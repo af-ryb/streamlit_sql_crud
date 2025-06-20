@@ -198,9 +198,10 @@ class PydanticSQLAlchemyConverter:
 class PydanticInputGenerator:
     """Generates Streamlit inputs based on Pydantic schema"""
     
-    def __init__(self, schema: Type[BaseModel], key_prefix: str = ""):
+    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict = None):
         self.schema = schema
         self.key_prefix = key_prefix
+        self.foreign_key_options = foreign_key_options or {}
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
     
     def generate_form_data(self, existing_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -228,9 +229,13 @@ class PydanticInputGenerator:
             annotation = field_info.get('annotation')
             
             # Use our custom implementation for all field types
-            form_data[field_name] = self._render_field_input(
+            field_value = self._render_field_input(
                 field_name, field_info, annotation, existing_value, key
             )
+            
+            # Only include field in form data if it's not None (e.g., ID in create operations)
+            if field_value is not None:
+                form_data[field_name] = field_value
         
         return form_data
     
@@ -246,9 +251,16 @@ class PydanticInputGenerator:
         else:
             label = str(description)
         
+        # Handle ID field specially
+        if field_name == 'id':
+            return self._render_id_field(label, existing_value, key)
+        
+        # Check for custom foreign key fields first
+        elif field_name in self.foreign_key_options:
+            return self._render_foreign_key_input(label, field_name, existing_value, key)
         
         # Check for enum types - simplified detection based on streamlit-pydantic approach
-        if self._is_enum_field(annotation):
+        elif self._is_enum_field(annotation):
             return self._render_enum_input(label, annotation, existing_value, key)
         
         # Check for list of enums 
@@ -339,6 +351,70 @@ class PydanticInputGenerator:
                 pass
                 
         return st.selectbox(label, enum_values, index=current_index, key=key)
+    
+    def _render_foreign_key_input(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
+        """Render selectbox for foreign key fields using custom configuration"""
+        fk_config = self.foreign_key_options[field_name]
+        query = fk_config['query']
+        display_field = fk_config['display_field']
+        value_field = fk_config['value_field']
+        
+        # Execute query to get options
+        if hasattr(self, 'conn') and self.conn:
+            with self.conn.session as session:
+                rows = session.execute(query).scalars().all()
+                
+                # Build options
+                options = []
+                option_map = {}
+                for row in rows:
+                    value = getattr(row, value_field)
+                    display = getattr(row, display_field)
+                    options.append(value)
+                    option_map[value] = display
+                
+                # Find current index
+                current_index = None
+                if existing_value in options:
+                    current_index = options.index(existing_value)
+                
+                # Render selectbox with format_func
+                return st.selectbox(
+                    label,
+                    options=options,
+                    index=current_index,
+                    format_func=lambda x: option_map.get(x, str(x)),
+                    key=key,
+                    help=f"Select from {len(options)} available options"
+                )
+        else:
+            # Fallback to text input if no connection available
+            return st.text_input(
+                label,
+                value=str(existing_value) if existing_value is not None else "",
+                key=key,
+                help="Database connection not available for foreign key options"
+            )
+    
+    def _render_id_field(self, label: str, existing_value: Any, key: str) -> Any:
+        """Render ID field specially based on operation type"""
+        # Determine operation type based on key prefix and existing value
+        is_update = (self.key_prefix == "update" or 
+                     (existing_value is not None and existing_value != ""))
+        
+        if is_update:
+            # Update operation: show ID as disabled text input (visible but not editable)
+            return st.text_input(
+                label,
+                value=str(existing_value),
+                disabled=True,
+                key=key,
+                help="ID field (read-only)"
+            )
+        else:
+            # Create operation: don't show ID field at all
+            # Return None so it doesn't get included in form data
+            return None
     
     def _render_enum_list_input(self, label: str, annotation: Any, existing_value: Any, key: str) -> Any:
         """Render multiselect for list of enums"""

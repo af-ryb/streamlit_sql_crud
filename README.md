@@ -190,6 +190,7 @@ SqlUi(
 4. **Type Safety**: Better IDE support and runtime type checking
 5. **Documentation**: Schema fields serve as form field documentation
 6. **Flexibility**: Exclude sensitive fields or add computed fields
+7. **Smart ID Handling**: ID fields are automatically hidden in create forms and shown as read-only in update forms
 
 ### Important Notes
 
@@ -197,6 +198,7 @@ SqlUi(
 - **Pydantic schemas are optional**: They provide an additional validation layer on top of SQLAlchemy
 - **Dual-layer approach**: Pydantic validates user input → SQLAlchemy persists to database
 - **Schema compatibility**: Pydantic schema fields must exist in the SQLAlchemy model
+- **ID field handling**: Include `id: Optional[str]` in your schemas - it's automatically hidden in create forms and shown as read-only in update forms
 
 ### Backward Compatibility
 

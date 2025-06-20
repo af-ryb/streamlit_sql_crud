@@ -41,8 +41,10 @@ class CreateRow:
         # Initialize Pydantic input generator if schema provided
         if self.create_schema:
             self.pydantic_generator = PydanticInputGenerator(
-                self.create_schema, base_key
+                self.create_schema, base_key, self.foreign_key_options
             )
+            # Pass connection for foreign key queries
+            self.pydantic_generator.conn = self.conn
     
     def _preprocess_form_data(self, form_data: dict) -> dict:
         """Preprocess form data - simplified since str-based enums work naturally"""

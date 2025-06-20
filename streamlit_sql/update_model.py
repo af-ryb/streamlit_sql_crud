@@ -53,8 +53,10 @@ class UpdateRow:
                     self.current_values[col_name] = getattr(self.row, col_name)
             
             self.pydantic_generator = PydanticInputGenerator(
-                self.update_schema, "update"
+                self.update_schema, "update", self.foreign_key_options
             )
+            # Pass connection for foreign key queries
+            self.pydantic_generator.conn = self.conn
     
     def _preprocess_form_data(self, form_data: dict) -> dict:
         """Preprocess form data - simplified since str-based enums work naturally"""
