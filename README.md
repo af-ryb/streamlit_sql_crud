@@ -1,5 +1,7 @@
 # streamlit_sql
 
+> **Note**: This project is based on the excellent work of [Eduardo Davalos (edkedk99)](https://github.com/edkedk99) and his [streamlit_sql library](https://github.com/edkedk99/streamlit_sql). We extend our gratitude to the original author for creating such a useful tool for the Streamlit community. This fork adds additional features while maintaining backward compatibility with the original project.
+
 ## Introduction
 
 Creating a CRUD interface can be a tedious and repetitive task. This package is intended to replace all of that with a few lines of code that involves simply creating a sqlalchemy statement and calling the main *SqlUi* class with only 3 required arguments. All extra and advanced features are available by supplying non-required arguments to the class initialization.

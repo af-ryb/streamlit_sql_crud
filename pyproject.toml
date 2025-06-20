@@ -87,6 +87,7 @@ dev = [
 ]
 
 [project.urls]
-homepage = "https://github.com/edkedk99/streamlit_sql"
+homepage = "https://github.com/af-ryb/streamlit_sql_crud"
 documentation = "https://edkedk99.github.io/streamlit_sql/"
-repository = "https://github.com/edkedk99/streamlit_sql"
+repository = "https://github.com/af-ryb/streamlit_sql_crud"
+original = "https://github.com/edkedk99/streamlit_sql"
