@@ -50,6 +50,41 @@ class CreateRow:
         """Preprocess form data - simplified since str-based enums work naturally"""
         return form_data
 
+    def _format_database_error(self, error: Exception) -> str:
+        """Format database errors into user-friendly messages"""
+        error_str = str(error)
+        
+        # Handle NULL identity key error (auto-generated primary keys)
+        if "NULL identity key" in error_str:
+            return ("⚠️ Database Configuration Issue: This table appears to use auto-generated IDs, "
+                   "but the database is not properly configured for ID generation. "
+                   "Please ensure your database table has auto-increment/sequence enabled for the ID column, "
+                   "or exclude the ID field from your create schema.")
+        
+        # Handle unique constraint violations
+        elif "UNIQUE constraint failed" in error_str or "duplicate key" in error_str.lower():
+            return ("❌ Duplicate Entry: A record with these values already exists. "
+                   "Please check for duplicate entries and try again.")
+        
+        # Handle foreign key constraint violations
+        elif "FOREIGN KEY constraint failed" in error_str or "foreign key" in error_str.lower():
+            return ("🔗 Invalid Reference: One or more referenced records don't exist. "
+                   "Please ensure all referenced data is valid and try again.")
+        
+        # Handle NOT NULL constraint violations
+        elif "NOT NULL constraint failed" in error_str or "cannot be null" in error_str.lower():
+            return ("📝 Missing Required Fields: Some required fields are missing. "
+                   "Please fill in all required fields and try again.")
+        
+        # Handle connection/timeout errors
+        elif "connection" in error_str.lower() or "timeout" in error_str.lower():
+            return ("🌐 Database Connection Issue: Unable to connect to the database. "
+                   "Please check your connection and try again.")
+        
+        # Default fallback - return original error but more user-friendly
+        else:
+            return f"💾 Database Error: {error_str}"
+
     def get_fields(self):
         if self.create_schema:
             return self.get_pydantic_fields()
@@ -128,7 +163,10 @@ class CreateRow:
             ss.stsql_updated += 1
             table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
             log("CREATE", table_name, form_data, success=False)
-            return False, str(e)
+            
+            # Handle specific SQLAlchemy errors with user-friendly messages
+            error_msg = self._format_database_error(e)
+            return False, error_msg
     
     def save_sqlalchemy(self, created: dict):
         """Original SQLAlchemy save logic"""
@@ -145,7 +183,10 @@ class CreateRow:
             ss.stsql_updated += 1
             table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
             log("CREATE", table_name, created, success=False)
-            return False, str(e)
+            
+            # Handle specific SQLAlchemy errors with user-friendly messages
+            error_msg = self._format_database_error(e)
+            return False, error_msg
 
     def show_dialog(self):
         pretty_name = get_pretty_name(self.Model.__tablename__)
