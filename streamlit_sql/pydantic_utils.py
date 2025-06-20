@@ -505,6 +505,17 @@ class PydanticInputGenerator:
     
     def _render_basic_input(self, label: str, field_info: Dict[str, Any], existing_value: Any, key: str) -> Any:
         """Render basic input types"""
+        # Check if field should be rendered as text area based on description
+        description = field_info.get('description', '')
+        if description and '(text_area)' in description.lower():
+            return st.text_area(
+                label,
+                value=str(existing_value) if existing_value is not None else "",
+                height=150,
+                key=key,
+                help="Enter text content"
+            )
+        
         input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
         
         if input_type == 'text_input':

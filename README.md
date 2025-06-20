@@ -257,6 +257,75 @@ SqlUi(
 )
 ```
 
+## Text Area Fields for Long Content (NEW)
+
+Starting from version 0.4.0, you can render specific fields as text areas instead of text inputs by adding `(text_area)` to the field description in your Pydantic schemas. This is particularly useful for SQL queries, JSON configurations, and other long text content.
+
+### Usage
+
+Use Pydantic `Field` with a description containing `(text_area)` to render the field as a text area:
+
+```python
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class QueryConfigCreateSchema(BaseModel):
+    name: str = Field(..., description="Configuration name")
+    sql_query: str = Field(..., description="SQL Query (text_area)")
+    json_config: Optional[str] = Field(None, description="JSON Configuration (text_area)")
+    description: Optional[str] = Field(None, description="Description")
+    is_active: bool = Field(True, description="Is active")
+
+class QueryConfigUpdateSchema(BaseModel):
+    id: Optional[str] = Field(None, description="ID")
+    name: str = Field(..., description="Configuration name")
+    sql_query: str = Field(..., description="SQL Query (text_area)")
+    json_config: Optional[str] = Field(None, description="JSON Configuration (text_area)")
+    description: Optional[str] = Field(None, description="Description")
+    is_active: bool = Field(True, description="Is active")
+
+# Use with SqlUi
+SqlUi(
+    conn=conn,
+    read_instance=select(db.QueryConfig),
+    edit_create_model=db.QueryConfig,
+    create_schema=QueryConfigCreateSchema,
+    update_schema=QueryConfigUpdateSchema,
+)
+```
+
+### How It Works
+
+- Fields with `(text_area)` in their description are automatically rendered as `st.text_area`
+- Text areas have a default height of 150px for better readability
+- Regular fields without `(text_area)` continue to render as standard inputs
+- Works with all Pydantic schema types (create, update, read)
+
+### Benefits
+
+1. **Better UX**: Multi-line content is easier to read and edit in text areas
+2. **SQL Friendly**: Perfect for SQL queries, JSON configurations, and documentation
+3. **Automatic Detection**: Simple pattern-based detection requires no code changes
+4. **Backward Compatible**: Existing schemas without the pattern continue to work normally
+
+### Example Fields
+
+Common use cases for text area fields:
+
+```python
+# SQL queries
+sql_query: str = Field(..., description="SQL Query (text_area)")
+fact_query: str = Field(..., description="Fact SQL Query (text_area)")
+
+# JSON configurations  
+config_json: str = Field(..., description="JSON Configuration (text_area)")
+alert_config_json: str = Field(..., description="Alert JSON Configuration (text_area)")
+
+# Documentation
+description: str = Field(..., description="Detailed Description (text_area)")
+notes: str = Field(..., description="Additional Notes (text_area)")
+```
+
 ## Custom Foreign Key Selectboxes (NEW)
 
 Starting from version 0.4.0, you can customize how foreign key fields are displayed in forms by providing custom queries and display fields.
