@@ -14,6 +14,7 @@ from streamlit.elements.arrow import DataframeState
 
 from streamlit_sql import create_delete_model, lib, read_cte, update_model
 from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_sql.utils import convert_numpy_to_python, convert_numpy_list_to_python
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000)
 
@@ -524,7 +525,7 @@ class SqlUi:
             create_row.show_dialog()
         elif action == "edit":
             selected_pos = rows_selected[0]
-            row_id = df.iloc[selected_pos]["id"]
+            row_id = convert_numpy_to_python(df.iloc[selected_pos]["id"], self.edit_create_model)
             update_row = update_model.UpdateRow(
                 conn=self.conn,
                 Model=self.edit_create_model,
@@ -537,7 +538,7 @@ class SqlUi:
             )
             update_row.show_dialog()
         elif action == "delete":
-            rows_id = df.iloc[rows_selected].id.to_list()
+            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected].id.to_list(), self.edit_create_model)
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
                 Model=self.edit_create_model,
