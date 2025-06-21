@@ -90,13 +90,13 @@ class ColFilter:
         cte: CTE,
         existing_values: dict[str, Any],
         available_col_filter: list[str] | None = None,
-        base_key: str = "",
+        key: str = "",
     ) -> None:
         self.container = container
         self.cte = cte
         self.existing_values = existing_values
         self.available_col_filter = available_col_filter or []
-        self.base_key = base_key
+        self.key_prefix = f"{key}_create"
 
         self.dt_filters = self.get_dt_filters()
         self.no_dt_filters = self.get_no_dt_filters()
@@ -139,7 +139,7 @@ class ColFilter:
 
             default_inicio, default_final = params.get_dt_param(colname)
 
-            inicio_key = f"{self.base_key}_date_filter_inicio_{label}"
+            inicio_key = f"{self.key_prefix}_date_filter_inicio_{label}"
             inicio = inicio_c.date_input(
                 "Inicio",
                 value=default_inicio,
@@ -148,7 +148,7 @@ class ColFilter:
                 on_change=params.set_dt_param,
             )
 
-            final_key = f"{self.base_key}_date_filter_final_{label}"
+            final_key = f"{self.key_prefix}_date_filter_final_{label}"
             final = final_c.date_input(
                 "Final",
                 value=default_final,
@@ -202,7 +202,7 @@ class ColFilter:
                 return result
 
             label = get_pretty_name(colname)
-            key = f"{self.base_key}_no_dt_filter_{label}"
+            key = f"{self.key_prefix}_no_dt_filter_{label}"
             index = params.get_no_dt_param(col, existing_value)
             col1, col2 = self.container.columns(
                 [0.95, 0.05], vertical_alignment="bottom"
@@ -262,7 +262,7 @@ def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select):
     return qtty
 
 
-def show_pagination(count: int, opts_items_page: tuple[int, ...], base_key: str = ""):
+def show_pagination(count: int, opts_items_page: tuple[int, ...], key: str = ""):
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
     first_item_candidates = [item for item in opts_items_page if item > count]
@@ -275,7 +275,7 @@ def show_pagination(count: int, opts_items_page: tuple[int, ...], base_key: str 
         menu_cas = sac.cascader(
             items=items_page_str,  # pyright: ignore
             placeholder="Items per page",
-            key=f"{base_key}_menu_cascader",
+            key=f"{key}_menu_cascader",
         )
 
     items_per_page = menu_cas[0] if menu_cas else items_page_str[0]
@@ -286,7 +286,7 @@ def show_pagination(count: int, opts_items_page: tuple[int, ...], base_key: str 
             page_size=int(items_per_page),
             show_total=True,
             jump=True,
-            key=f"{base_key}_pagination",
+            key=f"{key}_pagination",
         )
 
     return (int(items_per_page), int(page))

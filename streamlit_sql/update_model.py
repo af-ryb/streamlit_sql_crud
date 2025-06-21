@@ -24,6 +24,7 @@ class UpdateRow:
         update_show_many: bool = False,
         update_schema: Optional[Type[BaseModel]] = None,
         foreign_key_options: dict | None = None,
+        key: str = "update",
     ) -> None:
         self.conn = conn
         self.Model = Model
@@ -32,15 +33,18 @@ class UpdateRow:
         self.update_show_many = update_show_many
         self.update_schema = update_schema
         self.foreign_key_options = foreign_key_options or {}
+        self.key_prefix = f"{key}_update"
 
         set_state("stsql_updated", 0)
 
         with conn.session as s:
             self.row = s.get_one(Model, row_id)
-            self.existing_data = ExistingData(s, Model, self.default_values, self.row, foreign_key_options=self.foreign_key_options)
+            self.existing_data = ExistingData(s, Model,
+                                              default_values=self.default_values, row=self.row,
+                                              foreign_key_options=self.foreign_key_options)
 
         self.input_fields = InputFields(
-            Model, "update", self.default_values, self.existing_data
+            Model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
         )
         
         # Initialize Pydantic input generator if schema provided

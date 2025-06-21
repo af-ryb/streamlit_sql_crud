@@ -31,8 +31,9 @@ class SqlUi:
     def __init__(
         self,
         conn: SQLConnection,
-        read_instance,
-        edit_create_model: type[DeclarativeBase],
+        read_instance = None,
+        edit_create_model: type[DeclarativeBase] = None,
+        model: type[DeclarativeBase] = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
         rolling_total_column: str | None = None,
@@ -54,16 +55,15 @@ class SqlUi:
 
         Arguments:
             conn (SQLConnection): A sqlalchemy connection created with st.connection(\"sql\", url=\"<sqlalchemy url>\")
-            read_instance (Select | CTE | Model): The sqlalchemy select statement to display or a CTE. Choose columns to display , join, query or order.If selecting columns, you need to add the id column. If a Model, it will select all columns.
+            model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the Model object
-            available_filter (list[str], optional): Define wich columns the user will be able to filter in the top expander. Defaults to all
+            available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
             rolling_total_column (str, optional): A numeric column name of the read_instance. A new column will be displayed with the rolling sum of these column
             rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
             df_style_formatter (dict[str,str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): add use_container_width to st.dataframe args. Default to False
             hide_id (bool, optional): The id column will not be displayed if set to True. Defaults to True
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
-            base_key (str, optional): Legacy parameter name for key. Use 'key' instead for Streamlit compatibility. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
@@ -105,10 +105,10 @@ class SqlUi:
                 .order_by(db.Invoice.date)
             )
 
+            # Recommended approach with new 'model' parameter
             sql_ui = SqlUi(
                 conn=conn,
-                read_instance=stmt,
-                edit_create_model=db.Invoice,
+                model=db.Invoice,  # Simplified: uses same model for read and write
                 available_filter=["name"],
                 rolling_total_column="amount",
                 rolling_orderby_colsname=["date", "id"],
@@ -127,13 +127,33 @@ class SqlUi:
                     }
                 },
             )
-
             ```
 
         """
+        # Handle model parameter consolidation
+        if model is not None:
+            if read_instance is not None or edit_create_model is not None:
+                import warnings
+                warnings.warn(
+                    "When 'model' parameter is provided, 'read_instance' and 'edit_create_model' are ignored. "
+                    "Use either 'model' (recommended) or the legacy 'read_instance'+'edit_create_model' combination.",
+                    DeprecationWarning,
+                    stacklevel=2
+                )
+            # Use model for both read and write operations
+            self.read_instance = model
+            self.edit_create_model = model
+        else:
+            # Legacy mode - require both parameters
+            if read_instance is None or edit_create_model is None:
+                raise ValueError(
+                    "Either provide 'model' parameter (recommended) or both 'read_instance' and 'edit_create_model' parameters. "
+                    "The 'model' parameter simplifies the API when using the same model for read and write operations."
+                )
+            self.read_instance = read_instance
+            self.edit_create_model = edit_create_model
+        
         self.conn = conn
-        self.read_instance = read_instance
-        self.edit_create_model = edit_create_model
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
         self.rolling_total_column = rolling_total_column
@@ -143,8 +163,25 @@ class SqlUi:
         self.hide_id = hide_id
         # Handle key parameter compatibility - key takes precedence over base_key
         if key is not None and base_key is not None:
-            raise ValueError("Cannot specify both 'key' and 'base_key' parameters. Use 'key' for Streamlit compatibility.")
-        self.base_key = key or base_key or ""
+            import warnings
+            warnings.warn(
+                "Both 'key' and 'base_key' specified. 'base_key' is deprecated, using 'key' instead. "
+                "Remove 'base_key' parameter in future versions.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.key = key
+        elif base_key is not None:
+            import warnings
+            warnings.warn(
+                "'base_key' parameter is deprecated and will be removed in v1.0.0. "
+                "Use 'key' parameter instead for Streamlit compatibility.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.key = base_key
+        else:
+            self.key = key or ""
         self.style_fn = style_fn
         self.update_show_many = update_show_many
         self.disable_log = disable_log
@@ -284,10 +321,10 @@ class SqlUi:
 
         col_filter = read_cte.ColFilter(
             self.expander_container,
-            self.cte,
-            existing,
-            filter_colsname,
-            self.base_key,
+            cte=self.cte,
+            existing_values=existing,
+            available_col_filter=filter_colsname,
+            key=self.key,
         )
         if str(col_filter) != "":
             self.filter_container.write(col_filter)
@@ -299,7 +336,7 @@ class SqlUi:
             items_per_page, page = read_cte.show_pagination(
                 qtty_rows,
                 OPTS_ITEMS_PAGE,
-                self.base_key,
+                self.key,
             )
 
         filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
@@ -323,7 +360,7 @@ class SqlUi:
         saldo_toogle = self.saldo_toggle_col.toggle(
             f"Add Previous Balance in {self.rolling_pretty_name}",
             value=True,
-            key=f"{self.base_key}_saldo_toggle_sql_ui",
+            key=f"{self.key}_saldo_toggle_sql_ui",
         )
 
         if not saldo_toogle:
@@ -451,7 +488,7 @@ class SqlUi:
             column_order=column_order,
             on_select="rerun",
             selection_mode="multi-row",
-            key=f"{self.base_key}_df_sql_ui",
+            key=f"{self.key}_df_sql_ui",
         )
         return selection_state
 
@@ -472,7 +509,7 @@ class SqlUi:
             self.btns_container,
             qtty_rows,
             ss.stsql_opened,
-            key=self.base_key,
+            key=self.key,
         )
 
         if action == "add":
@@ -482,6 +519,7 @@ class SqlUi:
                 default_values=self.edit_create_default_values,
                 create_schema=self.create_schema,
                 foreign_key_options=self.foreign_key_options,
+                key=self.key,
             )
             create_row.show_dialog()
         elif action == "edit":
@@ -495,6 +533,7 @@ class SqlUi:
                 update_show_many=self.update_show_many,
                 update_schema=self.update_schema,
                 foreign_key_options=self.foreign_key_options,
+                key=self.key
             )
             update_row.show_dialog()
         elif action == "delete":
@@ -503,57 +542,6 @@ class SqlUi:
                 conn=self.conn,
                 Model=self.edit_create_model,
                 rows_id=rows_id,
-                base_key=self.base_key,
+                key=self.key,
             )
             delete_rows.show_dialog()
-
-
-def show_sql_ui(
-    conn: SQLConnection,
-    read_instance,
-    edit_create_model: type[DeclarativeBase],
-    available_filter: list[str] | None = None,
-    edit_create_default_values: dict | None = None,
-    rolling_total_column: str | None = None,
-    rolling_orderby_colsname: list[str] | None = None,
-    df_style_formatter: dict[str, str] | None = None,
-    read_use_container_width: bool = False,
-    hide_id: bool = True,
-    base_key: str = "",
-    style_fn: Callable[[pd.Series], list[str]] | None = None,
-    update_show_many: bool = False,
-    create_schema: Optional[Type[BaseModel]] = None,
-    update_schema: Optional[Type[BaseModel]] = None,
-    read_schema: Optional[Type[BaseModel]] = None,
-) -> tuple[pd.DataFrame, list[int]] | None:
-    """Show A CRUD interface in a Streamlit Page
-
-    This function is deprecated and will be removed in future versions. See SqlUi class docs for details on each argument.
-
-     Returns:
-         tuple[pd.DataFrame, list[int]]: A Tuple with the DataFrame displayed as first item and a list of rows numbers selected as second item.
-
-    Example:
-        See SqlUi class for an example.
-
-    """
-    ui = SqlUi(
-        conn=conn,
-        read_instance=read_instance,
-        edit_create_model=edit_create_model,
-        available_filter=available_filter,
-        edit_create_default_values=edit_create_default_values,
-        rolling_total_column=rolling_total_column,
-        rolling_orderby_colsname=rolling_orderby_colsname,
-        df_style_formatter=df_style_formatter,
-        read_use_container_width=read_use_container_width,
-        hide_id=hide_id,
-        base_key=base_key,
-        style_fn=style_fn,
-        update_show_many=update_show_many,
-        create_schema=create_schema,
-        update_schema=update_schema,
-        read_schema=read_schema,
-    )
-
-    return ui.df, ui.rows_selected

@@ -96,7 +96,7 @@ def show_rel(conn: SQLConnection, Model, model_id: int, rel: RelationshipPropert
         items_per_page, page = read_cte.show_pagination(
             qtty_rows,
             read_many_rel.OPTS_ITEMS_PAGE,
-            base_key=f"stsql_read_many_pag_{read_many_rel.suffix_key}",
+            key=f"stsql_read_many_pag_{read_many_rel.suffix_key}",
         )
 
         data = read_many_rel.get_data(s, items_per_page, page)
@@ -122,7 +122,7 @@ def show_rel(conn: SQLConnection, Model, model_id: int, rel: RelationshipPropert
                 conn,
                 read_many_rel.other_model,
                 default_values,
-                f"stsql_create_many_{read_many_rel.suffix_key}",
+                key=f"stsql_create_many_{read_many_rel.suffix_key}",
             )
             create_row.show(pretty_name)
 

@@ -18,7 +18,7 @@ class CreateRow:
         conn: SQLConnection,
         Model: type[DeclarativeBase],
         default_values: dict | None = None,
-        base_key: str = "create",
+        key: str = "create",
         create_schema: Optional[Type[BaseModel]] = None,
         foreign_key_options: dict | None = None,
     ) -> None:
@@ -28,20 +28,20 @@ class CreateRow:
         self.foreign_key_options = foreign_key_options or {}
 
         self.default_values = default_values or {}
-        self.base_key = base_key
+        self.key_prefix = f"{key}_create"
 
         set_state("stsql_updated", 0)
 
         with conn.session as s:
             self.existing_data = ExistingData(s, Model, self.default_values, foreign_key_options=self.foreign_key_options)
             self.input_fields = InputFields(
-                Model, base_key, self.default_values, self.existing_data
+                Model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
             )
             
         # Initialize Pydantic input generator if schema provided
         if self.create_schema:
             self.pydantic_generator = PydanticInputGenerator(
-                self.create_schema, base_key, self.foreign_key_options
+                self.create_schema, key_prefix=self.key_prefix, foreign_key_options=self.foreign_key_options
             )
             # Pass connection for foreign key queries
             self.pydantic_generator.conn = self.conn
@@ -119,7 +119,7 @@ class CreateRow:
     def show(self, pretty_name: str):
         st.subheader(pretty_name)
 
-        with st.form(f"create_model_form_{pretty_name}_{self.base_key}", border=False):
+        with st.form(f"create_model_form_{pretty_name}_{self.key_prefix}", border=False):
             created = self.get_fields()
             create_btn = st.form_submit_button("Save", type="primary")
 
@@ -213,12 +213,12 @@ class DeleteRows:
         conn: SQLConnection,
         Model: type[DeclarativeBase],
         rows_id: list[int],
-        base_key: str
+        key: str
     ) -> None:
         self.conn = conn
         self.Model = Model
         self.rows_id = rows_id
-        self.base_key = f"{base_key}_stsql_delete_rows",
+        self.key_prefix = f"{key}_delete"
 
     @st.cache_data
     def get_rows_str(_self, rows_id: list[int]):
@@ -238,7 +238,7 @@ class DeleteRows:
         rows_str = self.get_rows_str(self.rows_id)
         st.dataframe({pretty_name: rows_str}, hide_index=True)
 
-        btn = st.button("Delete", key=self.base_key)
+        btn = st.button("Delete", key=self.key_prefix)
         if btn:
             id_col = self.Model.__table__.columns.get("id")
             assert id_col is not None
