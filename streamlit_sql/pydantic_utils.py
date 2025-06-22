@@ -197,6 +197,7 @@ class PydanticSQLAlchemyConverter:
         else:
             return 'text_input'  # Default fallback
 
+
 class PydanticInputGenerator:
     """Generates Streamlit inputs based on Pydantic schema"""
     
@@ -205,6 +206,9 @@ class PydanticInputGenerator:
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
+        
+        # For foreign key fields with preloaded options (no database connection needed)
+        self.foreign_key_data = {}
 
     @logger.catch()
     def generate_form_data(self, existing_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -276,7 +280,11 @@ class PydanticInputGenerator:
         
         # Check for custom foreign key fields first
         elif field_name in self.foreign_key_options:
-            return self._render_foreign_key_input(label, field_name, existing_value, key=key)
+            # Check if we have preloaded data for this field
+            if field_name in self.foreign_key_data:
+                return self._render_foreign_key_selectbox(label, field_name, existing_value, key)
+            else:
+                return self._render_foreign_key_input(label, field_name, existing_value, key=key)
         
         # Check for enum types - simplified detection based on streamlit-pydantic approach
         elif self._is_enum_field(annotation):
@@ -809,4 +817,73 @@ class PydanticInputGenerator:
         
         return (isinstance(step, float) or isinstance(min_val, float) or 
                 isinstance(max_val, float) or (step and '.' in str(step)))
+    
+    def set_foreign_key_options(self, field_name: str, options: list, display_field: str = None, value_field: str = None):
+        """Set foreign key options for a field with preloaded data.
+        
+        Args:
+            field_name: Name of the foreign key field
+            options: List of option values or dict objects
+            display_field: Field name to use for display (if options are dicts)
+            value_field: Field name to use for values (if options are dicts)
+        """
+        if isinstance(options, list) and options and isinstance(options[0], dict):
+            # Options are dict objects - extract display and value mappings
+            if not display_field or not value_field:
+                raise ValueError("display_field and value_field required when options are dicts")
+                
+            option_values = [item[value_field] for item in options]
+            option_map = {item[value_field]: item[display_field] for item in options}
+            
+            self.foreign_key_data[field_name] = {
+                'options': option_values,
+                'display_map': option_map
+            }
+        else:
+            # Options are simple values
+            self.foreign_key_data[field_name] = {
+                'options': options,
+                'display_map': None
+            }
+    
+    def _render_foreign_key_selectbox(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
+        """Render selectbox for foreign key fields using preloaded data."""
+        if field_name not in self.foreign_key_data:
+            # Fallback to text input if no data available
+            return st.text_input(
+                label,
+                value=str(existing_value) if existing_value is not None else "",
+                key=key,
+                help="Foreign key options not loaded"
+            )
+        
+        fk_data = self.foreign_key_data[field_name]
+        options = fk_data['options']
+        display_map = fk_data['display_map']
+        
+        # Find current index
+        current_index = None
+        if existing_value in options:
+            current_index = options.index(existing_value)
+        
+        # Render selectbox
+        if display_map:
+            # Use display mapping
+            return st.selectbox(
+                label,
+                options=options,
+                index=current_index,
+                format_func=lambda x: display_map.get(x, str(x)),
+                key=key,
+                help=f"Select from {len(options)} available options"
+            )
+        else:
+            # Use options directly
+            return st.selectbox(
+                label,
+                options=options,
+                index=current_index,
+                key=key,
+                help=f"Select from {len(options)} available options"
+            )
 

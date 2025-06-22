@@ -9,7 +9,9 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
-from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter, PydanticInputGenerator
+from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_sql.pydantic_ui import PydanticUi
+from loguru import logger
 
 
 class CreateRow:
@@ -38,13 +40,17 @@ class CreateRow:
                 Model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
             )
             
-        # Initialize Pydantic input generator if schema provided
+        # Initialize PydanticUi if schema provided
         if self.create_schema:
-            self.pydantic_generator = PydanticInputGenerator(
-                self.create_schema, key_prefix=self.key_prefix, foreign_key_options=self.foreign_key_options
+            self.pydantic_ui = PydanticUi(
+                schema=self.create_schema, 
+                key=self.key_prefix,
+                session_state_key=f"{self.key_prefix}_form_data",
+                foreign_key_options=self.foreign_key_options
             )
-            # Pass connection for foreign key queries
-            self.pydantic_generator.conn = self.conn
+            
+            # Load foreign key data for fields that need it
+            self._load_foreign_key_data()
     
     def _preprocess_form_data(self, form_data: dict) -> dict:
         """Preprocess form data - simplified since str-based enums work naturally"""
@@ -92,9 +98,45 @@ class CreateRow:
             return self.get_sqlalchemy_fields()
     
     def get_pydantic_fields(self):
-        """Generate fields using Pydantic schema"""
-        form_data = self.pydantic_generator.generate_form_data(self.default_values)
+        """Generate fields using PydanticUi"""
+        # Set default values in session state if provided
+        if self.default_values:
+            # Get current session state key
+            session_key = f"{self.key_prefix}_form_data"
+            if session_key not in st.session_state:
+                st.session_state[session_key] = self.default_values
+        
+        # Use PydanticUi to render the form with submit button
+        form_data = self.pydantic_ui.render_with_submit("Save")
         return form_data
+    
+    def _load_foreign_key_data(self):
+        """Load foreign key data from database for form fields."""
+        for field_name, fk_config in self.foreign_key_options.items():
+            try:
+                query = fk_config['query']
+                display_field = fk_config['display_field']
+                value_field = fk_config['value_field']
+                
+                with self.conn.session as session:
+                    rows = session.execute(query).scalars().all()
+                    
+                    # Convert to list of dicts for the input generator
+                    options = []
+                    for row in rows:
+                        options.append({
+                            value_field: getattr(row, value_field),
+                            display_field: getattr(row, display_field)
+                        })
+                    
+                    # Set the options in the input generator
+                    self.pydantic_ui.input_generator.set_foreign_key_options(
+                        field_name, options, display_field, value_field
+                    )
+                    
+            except Exception as e:
+                # Log error but continue - field will fall back to text input
+                logger.warning(f"Failed to load foreign key data for {field_name}: {e}")
     
     def get_sqlalchemy_fields(self):
         """Original SQLAlchemy field generation logic"""
@@ -119,27 +161,27 @@ class CreateRow:
     def show(self, pretty_name: str):
         st.subheader(pretty_name)
 
-        with st.form(f"create_model_form_{pretty_name}_{self.key_prefix}", border=False):
-            created = self.get_fields()
-            create_btn = st.form_submit_button("Save", type="primary")
-
-        if create_btn:
-            if self.create_schema:
+        if self.create_schema:
+            # Use PydanticUi which handles forms internally
+            created = self.get_pydantic_fields()
+            if created:
                 return self.save_pydantic(created)
             else:
-                return self.save_sqlalchemy(created)
+                return None, None
         else:
-            return None, None
+            # Use traditional form for SQLAlchemy-only mode
+            with st.form(f"create_model_form_{pretty_name}_{self.key_prefix}", border=False):
+                created = self.get_sqlalchemy_fields()
+                create_btn = st.form_submit_button("Save", type="primary")
+
+            if create_btn:
+                return self.save_sqlalchemy(created)
+            else:
+                return None, None
     
-    def save_pydantic(self, form_data: dict):
-        """Save using Pydantic validation"""
+    def save_pydantic(self, validated_data: BaseModel):
+        """Save using pre-validated Pydantic data from PydanticUi"""
         try:
-            # Preprocess form data to handle enum conversions
-            processed_data = self._preprocess_form_data(form_data)
-            
-            # Validate data using Pydantic schema
-            validated_data = self.create_schema(**processed_data)
-            
             # Convert to SQLAlchemy model
             row = PydanticSQLAlchemyConverter.pydantic_to_sqlalchemy(
                 validated_data, self.Model
@@ -151,23 +193,23 @@ class CreateRow:
                 ss.stsql_updated += 1
                 table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
                 log("CREATE", table_name, row)
+                
+                # Clear the form data after successful save
+                session_key = f"{self.key_prefix}_form_data"
+                if session_key in st.session_state:
+                    del st.session_state[session_key]
+                    
                 return True, f"Created successfully {row}"
                 
-        except ValidationError as e:
-            error_msg = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
-            ss.stsql_updated += 1
-            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
-            log("CREATE", table_name, form_data, success=False)
-            return False, f"Validation error: {error_msg}"
         except Exception as e:
             ss.stsql_updated += 1
             table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
-            log("CREATE", table_name, form_data, success=False)
+            log("CREATE", table_name, validated_data.model_dump(), success=False)
             
             # Handle specific SQLAlchemy errors with user-friendly messages
             error_msg = self._format_database_error(e)
             return False, error_msg
-    
+
     def save_sqlalchemy(self, created: dict):
         """Original SQLAlchemy save logic"""
         try:
