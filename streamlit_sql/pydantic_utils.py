@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 from loguru import logger
 
+
 class PydanticSQLAlchemyConverter:
     """Handles conversion between Pydantic models and SQLAlchemy models"""
     
@@ -250,6 +251,13 @@ class PydanticInputGenerator:
             label = field_name.replace('_', ' ').title()
         else:
             label = str(description)
+        
+        # Check for json_schema_extra customization first
+        if hasattr(self.schema, 'model_fields') and field_name in self.schema.model_fields:
+            field = self.schema.model_fields[field_name]
+            json_schema_extra = getattr(field, 'json_schema_extra', None)
+            if json_schema_extra:
+                return self._render_custom_field(label, field_name, field_info, annotation, existing_value, key, json_schema_extra)
         
         # Handle ID field specially
         if field_name == 'id':
@@ -502,7 +510,8 @@ class PydanticInputGenerator:
             key=key,
             help="Select existing options or type new ones"
         )
-    
+
+    @logger.catch()
     def _render_basic_input(self, label: str, field_info: Dict[str, Any], existing_value: Any, key: str) -> Any:
         """Render basic input types"""
         # Check if field should be rendered as text area based on description
@@ -562,3 +571,191 @@ class PydanticInputGenerator:
         else:
             # Fallback to text input
             return st.text_input(label, value=str(existing_value) if existing_value is not None else "", key=key)
+
+    @logger.catch()
+    def _render_custom_field(self, label: str, field_name: str, field_info: Dict[str, Any],
+                             annotation: Any, existing_value: Any, key: str, json_schema_extra: Dict[str, Any]) -> Any:
+        """Render field with custom json_schema_extra configuration"""
+        
+        # Extract custom configuration
+        widget_type = json_schema_extra.get('widget', None)
+        widget_kwargs = json_schema_extra.get('kw', {})
+        layout = json_schema_extra.get('layout', None)  # For future use
+        
+        # Merge default value
+        default_value = str(existing_value) if existing_value is not None else ""
+        
+        # Handle explicit widget type
+        if widget_type == 'text_area':
+            return st.text_area(
+                label,
+                value=default_value,
+                key=key,
+                **widget_kwargs
+            )
+        elif widget_type == 'text_input':
+            return st.text_input(
+                label,
+                value=default_value,
+                key=key,
+                **widget_kwargs
+            )
+        elif widget_type == 'number_input':
+            # Handle number input with custom kwargs
+            min_val = widget_kwargs.get('min_value')
+            max_val = widget_kwargs.get('max_value')
+            step = widget_kwargs.get('step')
+            
+            # Determine if we should use float or int based on parameters
+            use_float = (isinstance(step, float) or isinstance(min_val, float) or 
+                        isinstance(max_val, float) or (step and '.' in str(step)))
+            
+            try:
+                if use_float:
+                    # Convert all to float
+                    if min_val is not None:
+                        min_val = float(min_val)
+                    if max_val is not None:
+                        max_val = float(max_val)
+                    if step is not None:
+                        step = float(step)
+                    default_val = float(existing_value) if existing_value is not None else 0.0
+                else:
+                    # Convert all to int
+                    if min_val is not None:
+                        min_val = int(float(min_val))
+                    if max_val is not None:
+                        max_val = int(float(max_val))
+                    if step is not None:
+                        step = int(float(step))
+                    default_val = int(float(existing_value)) if existing_value is not None else 0
+            except (ValueError, TypeError):
+                # Fallback to safe defaults
+                default_val = 0.0 if use_float else 0
+            
+            # Ensure default_val is within bounds for number_input
+            if min_val is not None and max_val is not None:
+                default_val = max(min_val, min(max_val, default_val))
+            elif min_val is not None:
+                default_val = max(min_val, default_val)
+            elif max_val is not None:
+                default_val = min(max_val, default_val)
+                
+            # Update widget_kwargs with consistent types
+            updated_kwargs = widget_kwargs.copy()
+            if min_val is not None:
+                updated_kwargs['min_value'] = min_val
+            if max_val is not None:
+                updated_kwargs['max_value'] = max_val
+            if step is not None:
+                updated_kwargs['step'] = step
+                
+            return st.number_input(
+                label,
+                value=default_val,
+                key=key,
+                **updated_kwargs
+            )
+        elif widget_type == 'selectbox':
+            # Handle selectbox with options from kwargs
+            options = widget_kwargs.get('options', [])
+            index = None
+            if existing_value and existing_value in options:
+                index = options.index(existing_value)
+            return st.selectbox(
+                label,
+                options=options,
+                index=index,
+                key=key,
+                **{k: v for k, v in widget_kwargs.items() if k != 'options'}
+            )
+        elif widget_type == 'multiselect':
+            # Handle multiselect with options from kwargs
+            options = widget_kwargs.get('options', [])
+            default_vals = []
+            if existing_value:
+                if isinstance(existing_value, (list, tuple)):
+                    default_vals = list(existing_value)
+                elif isinstance(existing_value, str):
+                    default_vals = self._parse_array_string(existing_value)
+            return st.multiselect(
+                label,
+                options=options,
+                default=default_vals,
+                key=key,
+                **{k: v for k, v in widget_kwargs.items() if k != 'options'}
+            )
+        elif widget_type == 'checkbox':
+            default_val = bool(existing_value) if existing_value is not None else False
+            return st.checkbox(
+                label,
+                value=default_val,
+                key=key,
+                **widget_kwargs
+            )
+        elif widget_type == 'date_input':
+            return st.date_input(
+                label,
+                value=existing_value,
+                key=key,
+                **widget_kwargs
+            )
+        elif widget_type == 'slider':
+            return self._render_slider_widget(label, widget_kwargs, existing_value, key)
+        else:
+            # Fallback: use default rendering but apply widget_kwargs
+            # TOTO remove this fallback once all custom widgets are supported
+            basic_input = self._render_basic_input(label, field_info, existing_value, key)
+
+            
+            return basic_input
+    
+    def _render_slider_widget(self, label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str) -> Any:
+        """Helper method to render slider widget with proper type handling."""
+        min_val = widget_kwargs.get('min_value', 0)
+        max_val = widget_kwargs.get('max_value', 100)
+        step = widget_kwargs.get('step', 1)
+        
+        # Determine target type based on step or other parameters
+        use_float = (isinstance(step, float) or isinstance(min_val, float) or 
+                    isinstance(max_val, float) or '.' in str(step))
+        
+        # Convert all values to the same type
+        try:
+            if use_float:
+                # Use float type for all values
+                min_val = float(min_val)
+                max_val = float(max_val)
+                step = float(step)
+                if existing_value is not None:
+                    default_val = float(existing_value)
+                else:
+                    default_val = min_val
+            else:
+                # Use int type for all values
+                min_val = int(float(min_val))  # Convert through float first to handle strings like "1.0"
+                max_val = int(float(max_val))
+                step = int(float(step))
+                if existing_value is not None:
+                    default_val = int(float(existing_value))
+                else:
+                    default_val = min_val
+        except (ValueError, TypeError):
+            # Fallback to safe defaults
+            min_val = 0 if not use_float else 0.0
+            max_val = 100 if not use_float else 100.0
+            step = 1 if not use_float else 1.0
+            default_val = min_val
+
+        # Ensure default_val is within bounds
+        default_val = max(min_val, min(max_val, default_val))
+        
+        return st.slider(
+            label,
+            min_value=min_val,
+            max_value=max_val,
+            value=default_val,
+            step=step,
+            key=key,
+            **{k: v for k, v in widget_kwargs.items() if k not in ['min_value', 'max_value', 'step', 'value']}
+        )
