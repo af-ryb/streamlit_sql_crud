@@ -57,7 +57,7 @@ class SqlUi:
         Arguments:
             conn (SQLConnection): A sqlalchemy connection created with st.connection(\"sql\", url=\"<sqlalchemy url>\")
             model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
-            edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the Model object
+            edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
             rolling_total_column (str, optional): A numeric column name of the read_instance. A new column will be displayed with the rolling sum of these column
             rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
@@ -516,7 +516,7 @@ class SqlUi:
         if action == "add":
             create_row = create_delete_model.CreateRow(
                 conn=self.conn,
-                Model=self.edit_create_model,
+                model=self.edit_create_model,
                 default_values=self.edit_create_default_values,
                 create_schema=self.create_schema,
                 foreign_key_options=self.foreign_key_options,
@@ -528,7 +528,7 @@ class SqlUi:
             row_id = convert_numpy_to_python(df.iloc[selected_pos]["id"], self.edit_create_model)
             update_row = update_model.UpdateRow(
                 conn=self.conn,
-                Model=self.edit_create_model,
+                model=self.edit_create_model,
                 row_id=row_id,
                 default_values=self.edit_create_default_values,
                 update_show_many=self.update_show_many,
@@ -541,7 +541,7 @@ class SqlUi:
             rows_id = convert_numpy_list_to_python(df.iloc[rows_selected].id.to_list(), self.edit_create_model)
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
-                Model=self.edit_create_model,
+                model=self.edit_create_model,
                 rows_id=rows_id,
                 key=self.key,
             )

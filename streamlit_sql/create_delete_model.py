@@ -1,31 +1,30 @@
 from typing import Optional, Type
 import streamlit as st
-from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
-from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import DeclarativeBase
 
 from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
-from streamlit_sql.lib import get_pretty_name, log, set_state
+from streamlit_sql.lib import get_pretty_name, log, set_state, format_database_error
 from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_sql.pydantic_ui import PydanticCrudUi
 from loguru import logger
 
 
 class CreateRow:
-    def __init__(
-        self,
-        conn: SQLConnection,
-        Model: type[DeclarativeBase],
-        default_values: dict | None = None,
-        key: str = "create",
-        create_schema: Optional[Type[BaseModel]] = None,
-        foreign_key_options: dict | None = None,
-    ) -> None:
+    def __init__(self,
+                 conn: SQLConnection,
+                 model: type[DeclarativeBase],
+                 default_values: dict | None = None,
+                 key: str = "create",
+                 create_schema: Optional[Type[BaseModel]] = None,
+                 foreign_key_options: dict | None = None,
+                 ) -> None:
         self.conn = conn
-        self.Model = Model
+        self.model = model
         self.create_schema = create_schema
         self.foreign_key_options = foreign_key_options or {}
 
@@ -35,9 +34,9 @@ class CreateRow:
         set_state("stsql_updated", 0)
 
         with conn.session as s:
-            self.existing_data = ExistingData(s, Model, self.default_values, foreign_key_options=self.foreign_key_options)
+            self.existing_data = ExistingData(s, model, self.default_values, foreign_key_options=self.foreign_key_options)
             self.input_fields = InputFields(
-                Model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
+                model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
             )
             
         # Initialize PydanticUi if schema provided
@@ -51,45 +50,7 @@ class CreateRow:
             
             # Load foreign key data for fields that need it
             self._load_foreign_key_data()
-    
-    def _preprocess_form_data(self, form_data: dict) -> dict:
-        """Preprocess form data - simplified since str-based enums work naturally"""
-        return form_data
 
-    def _format_database_error(self, error: Exception) -> str:
-        """Format database errors into user-friendly messages"""
-        error_str = str(error)
-        
-        # Handle NULL identity key error (auto-generated primary keys)
-        if "NULL identity key" in error_str:
-            return ("⚠️ Database Configuration Issue: This table appears to use auto-generated IDs, "
-                   "but the database is not properly configured for ID generation. "
-                   "Please ensure your database table has auto-increment/sequence enabled for the ID column, "
-                   "or exclude the ID field from your create schema.")
-        
-        # Handle unique constraint violations
-        elif "UNIQUE constraint failed" in error_str or "duplicate key" in error_str.lower():
-            return ("❌ Duplicate Entry: A record with these values already exists. "
-                   "Please check for duplicate entries and try again.")
-        
-        # Handle foreign key constraint violations
-        elif "FOREIGN KEY constraint failed" in error_str or "foreign key" in error_str.lower():
-            return ("🔗 Invalid Reference: One or more referenced records don't exist. "
-                   "Please ensure all referenced data is valid and try again.")
-        
-        # Handle NOT NULL constraint violations
-        elif "NOT NULL constraint failed" in error_str or "cannot be null" in error_str.lower():
-            return ("📝 Missing Required Fields: Some required fields are missing. "
-                   "Please fill in all required fields and try again.")
-        
-        # Handle connection/timeout errors
-        elif "connection" in error_str.lower() or "timeout" in error_str.lower():
-            return ("🌐 Database Connection Issue: Unable to connect to the database. "
-                   "Please check your connection and try again.")
-        
-        # Default fallback - return original error but more user-friendly
-        else:
-            return f"💾 Database Error: {error_str}"
 
     def get_fields(self):
         if self.create_schema:
@@ -140,7 +101,7 @@ class CreateRow:
     
     def get_sqlalchemy_fields(self):
         """Original SQLAlchemy field generation logic"""
-        cols = self.Model.__table__.columns
+        cols = self.model.__table__.columns
         created = {}
         for col in cols:
             col_name = col.description or col.name
@@ -184,14 +145,14 @@ class CreateRow:
         try:
             # Convert to SQLAlchemy model
             row = PydanticSQLAlchemyConverter.pydantic_to_sqlalchemy(
-                validated_data, self.Model
+                validated_data, self.model
             )
             
             with self.conn.session as s:
                 s.add(row)
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                table_name = getattr(self.model, '__tablename__', self.model.__name__)
                 log("CREATE", table_name, row)
                 
                 # Clear the form data after successful save
@@ -203,35 +164,35 @@ class CreateRow:
                 
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            table_name = getattr(self.model, '__tablename__', self.model.__name__)
             log("CREATE", table_name, validated_data.model_dump(), success=False)
             
             # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = self._format_database_error(e)
+            error_msg = format_database_error(e)
             return False, error_msg
 
     def save_sqlalchemy(self, created: dict):
         """Original SQLAlchemy save logic"""
         try:
-            row = self.Model(**created)
+            row = self.model(**created)
             with self.conn.session as s:
                 s.add(row)
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                table_name = getattr(self.model, '__tablename__', self.model.__name__)
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+            table_name = getattr(self.model, '__tablename__', self.model.__name__)
             log("CREATE", table_name, created, success=False)
             
             # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = self._format_database_error(e)
+            error_msg = format_database_error(e)
             return False, error_msg
 
     def show_dialog(self):
-        pretty_name = get_pretty_name(self.Model.__tablename__)
+        pretty_name = get_pretty_name(self.model.__tablename__)
 
         @st.dialog(f"Create {pretty_name}", width="large")  # pyright: ignore
         def wrap_show_update():
@@ -250,23 +211,22 @@ class CreateRow:
 
 
 class DeleteRows:
-    def __init__(
-        self,
-        conn: SQLConnection,
-        Model: type[DeclarativeBase],
-        rows_id: list[int],
-        key: str
-    ) -> None:
+    def __init__(self,
+                 conn: SQLConnection,
+                 model: type[DeclarativeBase],
+                 rows_id: list[int],
+                 key: str
+                 ) -> None:
         self.conn = conn
-        self.Model = Model
+        self.model = model
         self.rows_id = rows_id
         self.key_prefix = f"{key}_delete"
 
     @st.cache_data
     def get_rows_str(_self, rows_id: list[int]):
-        id_col = _self.Model.__table__.columns.get("id")
+        id_col = _self.model.__table__.columns.get("id")
         assert id_col is not None
-        stmt = select(_self.Model).where(id_col.in_(rows_id))
+        stmt = select(_self.model).where(id_col.in_(rows_id))
 
         with _self.conn.session as s:
             rows = s.execute(stmt).scalars()
@@ -280,15 +240,15 @@ class DeleteRows:
         rows_str = self.get_rows_str(self.rows_id)
         st.dataframe({pretty_name: rows_str}, hide_index=True)
 
-        btn = st.button("Delete", key=self.key_prefix)
+        btn = st.button("Delete", key=f"{self.key_prefix}_del_btn")
         if btn:
-            id_col = self.Model.__table__.columns.get("id")
+            id_col = self.model.__table__.columns.get("id")
             assert id_col is not None
             lancs = []
             with self.conn.session as s:
                 try:
                     for row_id in self.rows_id:
-                        lanc = s.get(self.Model, row_id)
+                        lanc = s.get(self.model, row_id)
                         lancs.append(str(lanc))
                         s.delete(lanc)
 
@@ -296,19 +256,19 @@ class DeleteRows:
                     ss.stsql_updated += 1
                     qtty = len(self.rows_id)
                     lancs_str = ", ".join(lancs)
-                    table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                    table_name = getattr(self.model, '__tablename__', self.model.__name__)
                     log("DELETE", table_name, lancs_str)
                     return True, f"Successfully deleted {qtty}"
                 except Exception as e:
                     ss.stsql_updated += 1
-                    table_name = getattr(self.Model, '__tablename__', self.Model.__name__)
+                    table_name = getattr(self.model, '__tablename__', self.model.__name__)
                     log("DELETE", table_name, "")
-                    return False, str(e)
+                    return False, format_database_error(e)
         else:
             return None, None
 
     def show_dialog(self):
-        pretty_name = get_pretty_name(self.Model.__tablename__)
+        pretty_name = get_pretty_name(self.model.__tablename__)
 
         @st.dialog(f"Delete {pretty_name}", width="large")  # pyright: ignore
         def wrap_show_update():

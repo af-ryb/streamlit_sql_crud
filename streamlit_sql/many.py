@@ -1,10 +1,9 @@
-from functools import cached_property
-
 import pandas as pd
 import streamlit as st
+from streamlit.connections.sql_connection import SQLConnection
 from sqlalchemy import func, select
 from sqlalchemy.orm import RelationshipProperty, Session
-from streamlit.connections.sql_connection import SQLConnection
+from functools import cached_property
 
 from streamlit_sql import lib, read_cte
 from streamlit_sql.create_delete_model import CreateRow, DeleteRows
@@ -15,11 +14,11 @@ class ReadManyRel:
 
     def __init__(
         self,
-        Model,
+        model,
         model_id: int,
         rel: RelationshipProperty,
     ) -> None:
-        self.Model = Model
+        self.model = model
         self.model_id = model_id
         self.rel = rel
 
@@ -34,7 +33,7 @@ class ReadManyRel:
     def other_model(self):
         other_col = self.other_col
         other_colname: str = other_col.table.name
-        mappers = self.Model.registry.mappers
+        mappers = self.model.registry.mappers
 
         other_model = next(
             mapper.class_
@@ -46,7 +45,7 @@ class ReadManyRel:
 
     @cached_property
     def suffix_key(self):
-        model_name: str = self.Model.__table__.name
+        model_name: str = self.model.__table__.name
         key = f"{model_name}_{self.other_col.name}_{self.rel.target}"
         return key
 
@@ -54,8 +53,8 @@ class ReadManyRel:
     def base_stmt(self):
         stmt = select(self.other_model.id, self.other_model)
 
-        if self.Model != self.other_model:
-            stmt = stmt.join(self.Model, self.Model.id == self.other_col)
+        if self.model != self.other_model:
+            stmt = stmt.join(self.model, self.model.id == self.other_col)
 
         stmt = stmt.where(self.other_col == self.model_id)
         return stmt
@@ -80,8 +79,8 @@ class ReadManyRel:
 
 
 @st.fragment
-def show_rel(conn: SQLConnection, Model, model_id: int, rel: RelationshipProperty):
-    read_many_rel = ReadManyRel(Model, model_id, rel)
+def show_rel(conn: SQLConnection, model, model_id: int, rel: RelationshipProperty):
+    read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
     pretty_name = lib.get_pretty_name(exp_name)
@@ -140,8 +139,8 @@ def show_rel(conn: SQLConnection, Model, model_id: int, rel: RelationshipPropert
                 delete_rows.show(pretty_name)
 
 
-def show_rels(conn: SQLConnection, Model, model_id: int):
-    rels = [rel for rel in Model.__mapper__.relationships if rel.direction.value == 1]
+def show_rels(conn: SQLConnection, model, model_id: int):
+    rels = [rel for rel in model.__mapper__.relationships if rel.direction.value == 1]
 
     for rel in rels:
-        show_rel(conn, Model, model_id, rel)
+        show_rel(conn, model, model_id, rel)
