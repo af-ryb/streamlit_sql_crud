@@ -11,7 +11,7 @@ from streamlit_sql import many
 from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
-from streamlit_sql.pydantic_ui import PydanticUi
+from streamlit_sql.pydantic_ui import PydanticCrudUi
 from loguru import logger
 
 
@@ -67,7 +67,7 @@ class UpdateRow:
             import streamlit as st
             st.session_state[session_key] = self.current_values
             
-            self.pydantic_ui = PydanticUi(
+            self.pydantic_ui = PydanticCrudUi(
                 schema=self.update_schema, 
                 key=self.key_prefix,
                 session_state_key=session_key,

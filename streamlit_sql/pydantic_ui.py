@@ -1,7 +1,5 @@
-"""Standalone Pydantic-based Streamlit form generator."""
-
 import streamlit as st
-from typing import Type, Dict, Any, Optional, Union, get_origin, get_args
+from typing import Type, Dict, Any, Optional, Union
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
@@ -10,17 +8,14 @@ from streamlit_sql.pydantic_utils import PydanticInputGenerator
 
 class PydanticUi:
     """Standalone Pydantic-based Streamlit form generator.
-    
     Creates dynamic forms from Pydantic models with automatic validation,
     session state persistence, and flexible widget customization.
     """
-    
     def __init__(
         self,
         schema: Type[BaseModel],
         key: str,
         session_state_key: Optional[str] = None,
-        foreign_key_options: Optional[Dict] = None,
     ):
         """Initialize PydanticUi.
         
@@ -28,21 +23,12 @@ class PydanticUi:
             schema: Pydantic model class to generate form from
             key: Unique key for the form (used for widget keys)
             session_state_key: Key for session state persistence (defaults to key)
-            foreign_key_options: Configuration for foreign key fields
         """
         self.schema = schema
         self.key = key
         self.session_state_key = session_state_key or key
-        self.foreign_key_options = foreign_key_options or {}
-        
-        # Initialize input generator
-        self.input_generator = PydanticInputGenerator(
-            schema=schema,
-            key_prefix=key,
-            foreign_key_options=foreign_key_options
-        )
-        
-        # Initialize session state
+
+        self.input_generator = PydanticInputGenerator(schema=schema, key_prefix=key)
         self._init_session_state()
     
     def _init_session_state(self):
@@ -225,3 +211,40 @@ class PydanticUi:
             logger.error(f"Error rendering PydanticUi form with columns: {e}")
             st.error(f"Form rendering error: {str(e)}")
             return None
+
+
+class PydanticCrudUi(PydanticUi):
+    """Pydantic UI component with CRUD-specific functionality.
+    
+    Extends PydanticUi with foreign key support for SqlUi components.
+    """
+    
+    def __init__(
+        self,
+        schema: Type[BaseModel],
+        key: str,
+        session_state_key: Optional[str] = None,
+        foreign_key_options: Optional[Dict] = None,
+    ):
+        """Initialize PydanticCrudUi for CRUD operations.
+        
+        Args:
+            schema: Pydantic model class to generate form from
+            key: Unique key for the form (used for widget keys)
+            session_state_key: Key for session state persistence (defaults to key)
+            foreign_key_options: Configuration for foreign key fields
+        """
+        # Initialize parent without input generator
+        super().__init__(schema=schema, key=key, session_state_key=session_state_key)
+        
+        # Store foreign key options
+        self.foreign_key_options = foreign_key_options or {}
+        
+        # Reinitialize input generator with foreign key support
+        self.input_generator = PydanticInputGenerator(
+            schema=schema,
+            key_prefix=key,
+            foreign_key_options=foreign_key_options
+        )
+
+        self._init_session_state()

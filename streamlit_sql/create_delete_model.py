@@ -10,7 +10,7 @@ from streamlit_sql.filters import ExistingData
 from streamlit_sql.input_fields import InputFields
 from streamlit_sql.lib import get_pretty_name, log, set_state
 from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
-from streamlit_sql.pydantic_ui import PydanticUi
+from streamlit_sql.pydantic_ui import PydanticCrudUi
 from loguru import logger
 
 
@@ -42,7 +42,7 @@ class CreateRow:
             
         # Initialize PydanticUi if schema provided
         if self.create_schema:
-            self.pydantic_ui = PydanticUi(
+            self.pydantic_ui = PydanticCrudUi(
                 schema=self.create_schema, 
                 key=self.key_prefix,
                 session_state_key=f"{self.key_prefix}_form_data",
