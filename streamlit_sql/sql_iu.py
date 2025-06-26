@@ -41,7 +41,6 @@ class SqlUi:
         rolling_orderby_colsname: list[str] | None = None,
         df_style_formatter: dict[str, str] | None = None,
         read_use_container_width: bool = False,
-        hide_id: bool = True,
         key: str | None = None,
         base_key: str | None = None,
         style_fn: Callable[[pd.Series], list[str]] | None = None,
@@ -63,7 +62,6 @@ class SqlUi:
             rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
             df_style_formatter (dict[str,str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): add use_container_width to st.dataframe args. Default to False
-            hide_id (bool, optional): The id column will not be displayed if set to True. Defaults to True
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
@@ -115,7 +113,6 @@ class SqlUi:
                 rolling_orderby_colsname=["date", "id"],
                 df_style_formatter={"amount": "{:,.2f}"},
                 read_use_container_width=True,
-                hide_id=True,
                 key="my_sql_ui",
                 style_fn=style_fn,
                 update_show_many=True,
@@ -161,7 +158,6 @@ class SqlUi:
         self.rolling_orderby_colsname = rolling_orderby_colsname or ["id"]
         self.df_style_formatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
-        self.hide_id = hide_id
         # Handle key parameter compatibility - key takes precedence over base_key
         if key is not None and base_key is not None:
             import warnings
@@ -433,23 +429,27 @@ class SqlUi:
         """Execute query using Pydantic schema for data processing"""
         with self.conn.session as s:
             result = s.execute(stmt).all()
-            
+
             validated_rows = []
             for row in result:
                 validated_data = self.read_schema.model_validate(row, from_attributes=True).model_dump()
-                
+
+                # Ensure 'id' is always present for CRUD operations, even if not in the schema
+                if 'id' not in validated_data and hasattr(row, 'id'):
+                    validated_data['id'] = row.id
+
                 # Convert enum objects to strings for PyArrow compatibility
                 for key, value in validated_data.items():
                     if isinstance(value, list):
                         # Handle list of enums
                         validated_data[key] = [
-                            item.value if hasattr(item, 'value') else str(item) 
+                            item.value if hasattr(item, 'value') else str(item)
                             for item in value
                         ]
                     elif hasattr(value, 'value'):
                         # Handle single enum
                         validated_data[key] = value.value
-                
+
                 validated_rows.append(validated_data)
 
             # Create DataFrame from validated data
@@ -472,8 +472,9 @@ class SqlUi:
             return None
 
         column_order = None
-        if self.hide_id:
-            column_order = [colname for colname in df.columns if colname != "id"]
+        if self.read_schema:
+            # Display only the columns specified in the schema
+            column_order = list(self.read_schema.model_fields.keys())
 
         df_style = df.style
         formatter = self.add_balance_formatter(self.df_style_formatter)
@@ -493,7 +494,9 @@ class SqlUi:
         )
         return selection_state
 
-    def get_rows_selected(self, selection_state: DataframeState | None):
+    @staticmethod
+    def get_rows_selected(selection_state: DataframeState | None):
+        """Get rows selected from Streamlit dataframe selection state"""
         rows_pos = []
         if (
             selection_state
