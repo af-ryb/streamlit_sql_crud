@@ -8,7 +8,7 @@ When the main class is initialized, it will display the database table data with
 
 It also offers useful information about the data as property like:
 - df: The Dataframe displayed in the screen
-- selected_rows: The position of selected rows. This is not the row id
+- selected_rows: The position of selected rows. This is not the row d
 - qtty_rows: The quantity of all rows after filtering
 
 ## Demo
@@ -150,14 +150,14 @@ import streamlit as st
 # Define Pydantic schemas
 class UserCreateSchema(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="User's full name")
-    email: str = Field(..., regex=r'^[\w\.-]+@[\w\.-]+\.\w+$', description="Valid email address")
+    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$', description="Valid email address")
     age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
     department: str = Field(..., description="Department name")
 
 class UserUpdateSchema(BaseModel):
     id: int = Field(..., description="User ID")
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="User's full name")
-    email: Optional[str] = Field(None, regex=r'^[\w\.-]+@[\w\.-]+\.\w+$', description="Valid email address")
+    email: Optional[str] = Field(None, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$', description="Valid email address")
     age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
     department: Optional[str] = Field(None, description="Department name")
 
@@ -216,7 +216,7 @@ SqlUi(
 ### Advanced Example with Complex Validation
 
 ```python
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import date
 
@@ -227,9 +227,9 @@ class ProjectCreateSchema(BaseModel):
     end_date: Optional[date] = Field(None, description="Project end date")
     budget: float = Field(..., gt=0, description="Project budget in USD")
     
-    @validator('end_date')
-    def end_date_must_be_after_start(cls, v, values):
-        if v and 'start_date' in values and v <= values['start_date']:
+    @field_validator('end_date')
+    def end_date_must_be_after_start(cls, v, info):
+        if v and 'start_date' in info.data and v <= info.data['start_date']:
             raise ValueError('End date must be after start date')
         return v
 
@@ -241,9 +241,9 @@ class ProjectUpdateSchema(BaseModel):
     end_date: Optional[date] = None
     budget: Optional[float] = Field(None, gt=0, description="Project budget in USD")
     
-    @validator('end_date')
-    def end_date_must_be_after_start(cls, v, values):
-        if v and 'start_date' in values and values['start_date'] and v <= values['start_date']:
+    @field_validator('end_date')
+    def end_date_must_be_after_start(cls, v, info):
+        if v and 'start_date' in info.data and info.data['start_date'] and v <= info.data['start_date']:
             raise ValueError('End date must be after start date')
         return v
 
@@ -411,4 +411,353 @@ foreign_key_options={
 - ✅ Works with SQLAlchemy models (full support)
 - ⚠️ Pydantic schemas (currently uses default FK handling, custom options planned for future release)
 - ✅ Backward compatible (existing code continues to work)
+
+## PydanticUi - Standalone Form Component
+
+`PydanticUi` is a powerful, database-agnostic form component that generates Streamlit forms directly from Pydantic models. It provides automatic validation, session state persistence, and customizable widgets.
+
+### Basic Usage
+
+```python
+from streamlit_sql import PydanticUi
+from pydantic import BaseModel, Field
+from typing import Optional
+import streamlit as st
+
+class UserSchema(BaseModel):
+    name: str = Field(..., min_length=3, max_length=100)
+    email: str = Field(..., pattern=r"^\S+@\S+\.\S+$")
+    age: int = Field(..., ge=18, le=120)
+    bio: Optional[str] = Field(None, max_length=500)
+
+# Create and render form
+ui = PydanticUi(schema=UserSchema, key="user_form")
+form_data = ui.render()
+
+if form_data:
+    st.success(f"Valid data received: {form_data}")
+```
+
+### Constructor Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `schema` | `Type[BaseModel]` | Required | Pydantic model class defining form fields and validation |
+| `key` | `str` | Required | Unique identifier for form widgets (prevents conflicts) |
+| `session_state_key` | `Optional[str]` | `None` | Key for session state persistence. If None, defaults to `key` |
+
+### Methods
+
+#### `render() -> Optional[BaseModel]`
+Renders the form and returns validated data when all fields are valid.
+
+```python
+ui = PydanticUi(schema=MySchema, key="form1")
+data = ui.render()
+if data:
+    # Process validated data
+    pass
+```
+
+#### `render_with_submit(submit_label: str = "Submit") -> Optional[BaseModel]`
+Renders form with a submit button. Returns data only when button is clicked and validation passes.
+
+```python
+data = ui.render_with_submit("Create User")
+if data:
+    # Handle submitted data
+    pass
+```
+
+#### `render_with_columns(columns: int = 2) -> Optional[BaseModel]`
+Renders form fields in a multi-column layout.
+
+```python
+# Display form in 3 columns
+data = ui.render_with_columns(columns=3)
+```
+
+#### Session State Methods
+
+```python
+# Get validated data from session
+saved_data = ui.get_session_data()
+
+# Update session with new data
+ui.update_session_data({"name": "John", "age": 25})
+
+# Clear session data
+ui.clear_session_data()
+
+# Get current form data as dictionary (may include invalid data)
+current_data = ui.get_form_data()
+```
+
+### Widget Customization
+
+Customize form widgets using Pydantic's `json_schema_extra`:
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import date
+
+class AdvancedSchema(BaseModel):
+    # Text area widget
+    description: str = Field(
+        ...,
+        json_schema_extra={
+            "widget": "text_area",
+            "kw": {"height": 150, "help": "Enter detailed description"}
+        }
+    )
+    
+    # Selectbox widget
+    category: str = Field(
+        ...,
+        json_schema_extra={
+            "widget": "selectbox",
+            "kw": {"options": ["Sales", "Marketing", "Engineering"]}
+        }
+    )
+    
+    # Multiselect widget
+    tags: List[str] = Field(
+        default_factory=list,
+        json_schema_extra={
+            "widget": "multiselect",
+            "kw": {"options": ["urgent", "review", "approved", "pending"]}
+        }
+    )
+    
+    # Slider widget
+    priority: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+        json_schema_extra={
+            "widget": "slider",
+            "kw": {"min_value": 1, "max_value": 10, "step": 1}
+        }
+    )
+    
+    # Date input
+    deadline: date = Field(
+        ...,
+        json_schema_extra={
+            "widget": "date_input",
+            "kw": {"min_value": date.today()}
+        }
+    )
+```
+
+### Supported Widget Types
+
+| Widget Type | Pydantic Type | Configuration |
+|-------------|---------------|---------------|
+| `text_input` | `str` | Default for string fields |
+| `text_area` | `str` | Set via `json_schema_extra` |
+| `number_input` | `int`, `float` | Default for numeric fields |
+| `checkbox` | `bool` | Default for boolean fields |
+| `selectbox` | `str`, `Enum` | Requires `options` in `kw` |
+| `multiselect` | `List[str]` | Requires `options` in `kw` |
+| `slider` | `int`, `float` | Configure min/max/step in `kw` |
+| `date_input` | `date` | Default for date fields |
+| `time_input` | `time` | Default for time fields |
+| `color_picker` | `str` | Set via `json_schema_extra` |
+
+### Session State Persistence
+
+PydanticUi automatically persists form data in Streamlit's session state:
+
+```python
+# Form data persists across reruns
+ui = PydanticUi(
+    schema=ProjectSchema,
+    key="project_form",
+    session_state_key="project_data"  # Explicit session key
+)
+
+# Check if user has previously entered data
+if ui.get_session_data():
+    st.info("Resuming from saved data")
+
+# Render form - will restore previous values
+data = ui.render()
+
+# Clear data when needed
+if st.button("Reset Form"):
+    ui.clear_session_data()
+    st.rerun()
+```
+
+### Validation and Error Handling
+
+PydanticUi provides user-friendly validation messages:
+
+```python
+from pydantic import BaseModel, Field, field_validator
+
+class RegistrationSchema(BaseModel):
+    username: str = Field(..., min_length=3, pattern="^[a-zA-Z0-9_]+$")
+    password: str = Field(..., min_length=8)
+    confirm_password: str
+    
+    @field_validator('confirm_password')
+    def passwords_match(cls, v, info):
+        if 'password' in info.data and v != info.data['password']:
+            raise ValueError('Passwords do not match')
+        return v
+
+ui = PydanticUi(schema=RegistrationSchema, key="register")
+data = ui.render()
+
+# Validation errors appear automatically under each field
+# Form returns None until all validation passes
+```
+
+### Advanced Example: Project Management Form
+
+```python
+from datetime import date, datetime
+from enum import Enum
+from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator
+
+class ProjectStatus(str, Enum):
+    PLANNING = "Planning"
+    ACTIVE = "Active"
+    ON_HOLD = "On Hold"
+    COMPLETED = "Completed"
+
+class ProjectSchema(BaseModel):
+    name: str = Field(..., min_length=3, max_length=100)
+    
+    description: str = Field(
+        ...,
+        json_schema_extra={
+            "widget": "text_area",
+            "kw": {"height": 200, "placeholder": "Describe the project..."}
+        }
+    )
+    
+    status: ProjectStatus = Field(
+        default=ProjectStatus.PLANNING,
+        json_schema_extra={
+            "widget": "selectbox",
+            "kw": {"options": [s.value for s in ProjectStatus]}
+        }
+    )
+    
+    team_members: List[str] = Field(
+        default_factory=list,
+        json_schema_extra={
+            "widget": "multiselect",
+            "kw": {
+                "options": ["Alice", "Bob", "Charlie", "David"],
+                "help": "Select team members"
+            }
+        }
+    )
+    
+    budget: float = Field(
+        ...,
+        gt=0,
+        json_schema_extra={
+            "widget": "number_input",
+            "kw": {"format": "%.2f", "step": 1000.0}
+        }
+    )
+    
+    start_date: date = Field(default_factory=date.today)
+    
+    end_date: Optional[date] = Field(
+        None,
+        json_schema_extra={
+            "widget": "date_input",
+            "kw": {"help": "Leave empty for ongoing projects"}
+        }
+    )
+    
+    priority: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+        json_schema_extra={
+            "widget": "slider",
+            "kw": {"help": "1 = Low, 10 = Critical"}
+        }
+    )
+    
+    @field_validator('end_date')
+    def validate_dates(cls, v, info):
+        if v and 'start_date' in info.data and v < info.data['start_date']:
+            raise ValueError('End date must be after start date')
+        return v
+
+# Use in Streamlit app
+def project_form():
+    st.title("Create New Project")
+    
+    ui = PydanticUi(
+        schema=ProjectSchema,
+        key="new_project",
+        session_state_key="project_draft"
+    )
+    
+    # Render in columns
+    with st.container():
+        data = ui.render_with_columns(columns=2)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("Submit", type="primary"):
+            if data:
+                # Save to database
+                st.success(f"Project '{data.name}' created!")
+                ui.clear_session_data()
+                st.rerun()
+            else:
+                st.error("Please fix validation errors")
+    
+    with col2:
+        if st.button("Clear"):
+            ui.clear_session_data()
+            st.rerun()
+    
+    with col3:
+        if ui.get_session_data():
+            st.caption("✓ Draft saved")
+```
+
+### Integration with SqlUi
+
+While PydanticUi works standalone, it integrates seamlessly with SqlUi through the `PydanticCrudUi` subclass:
+
+```python
+from streamlit_sql import PydanticCrudUi
+
+# Extended version with foreign key support
+ui = PydanticCrudUi(
+    schema=MySchema,
+    key="crud_form",
+    foreign_key_options={
+        'department_id': {
+            'query': select(Department),
+            'display_field': 'name',
+            'value_field': 'id'
+        }
+    }
+)
+```
+
+### Best Practices
+
+1. **Unique Keys**: Always use unique keys to prevent widget conflicts
+2. **Session State**: Use explicit session state keys for important forms
+3. **Validation**: Leverage Pydantic validators for complex business rules
+4. **Widget Selection**: Choose appropriate widgets for better UX
+5. **Error Messages**: Provide clear validation messages via Field descriptions
+6. **Performance**: For large forms, consider using columns to improve layout
 
