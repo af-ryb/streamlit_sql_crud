@@ -258,17 +258,24 @@ class UpdateRow:
 
 def action_btns(container: DeltaGenerator, qtty_selected: int, opened: bool, key: str):
     set_state("stsql_action", "")
-    disabled_add = qtty_selected > 0
+    disabled_add = qtty_selected > 1
     disabled_edit = qtty_selected != 1
     disabled_delete = qtty_selected == 0
+
+    if qtty_selected == 1:
+        add_icon = ":material/content_copy:"
+        add_help = "Copy"
+    else:
+        add_icon = ":material/add:"
+        add_help = "Add"
 
     with container:
         add_col, edit_col, del_col, _empty_col = st.columns([1, 1, 1, 6])
 
         add_btn = add_col.button(
             "",
-            help="Add",
-            icon=":material/add:",
+            help=add_help,
+            icon=add_icon,
             type="secondary",
             disabled=disabled_add,
             use_container_width=True,
@@ -298,6 +305,8 @@ def action_btns(container: DeltaGenerator, qtty_selected: int, opened: bool, key
         if opened:
             return None
         if add_btn:
+            if qtty_selected == 1:
+                return "copy"
             return "add"
         if edit_btn:
             return "edit"

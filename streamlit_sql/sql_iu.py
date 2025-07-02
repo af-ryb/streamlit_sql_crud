@@ -526,6 +526,19 @@ class SqlUi:
                 key=self.key,
             )
             create_row.show_dialog()
+        elif action == "copy":
+            selected_pos = rows_selected[0]
+            initial_data = df.iloc[selected_pos].to_dict()
+            create_row = create_delete_model.CreateRow(
+                conn=self.conn,
+                model=self.edit_create_model,
+                default_values=self.edit_create_default_values,
+                create_schema=self.create_schema,
+                foreign_key_options=self.foreign_key_options,
+                key=self.key,
+                initial_data=initial_data,
+            )
+            create_row.show_dialog()
         elif action == "edit":
             selected_pos = rows_selected[0]
             row_id = convert_numpy_to_python(df.iloc[selected_pos]["id"], self.edit_create_model)

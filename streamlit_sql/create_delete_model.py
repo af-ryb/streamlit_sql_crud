@@ -22,11 +22,13 @@ class CreateRow:
                  key: str = "create",
                  create_schema: Optional[Type[BaseModel]] = None,
                  foreign_key_options: dict | None = None,
+                 initial_data: dict | None = None,
                  ) -> None:
         self.conn = conn
         self.model = model
         self.create_schema = create_schema
         self.foreign_key_options = foreign_key_options or {}
+        self.initial_data = initial_data or {}
 
         self.default_values = default_values or {}
         self.key_prefix = f"{key}_create"
@@ -41,10 +43,18 @@ class CreateRow:
             
         # Initialize PydanticUi if schema provided
         if self.create_schema:
+            session_key = f"{self.key_prefix}_form_data"
+            
+            # Pre-populate form with initial_data if provided (for "copy" action)
+            if self.initial_data:
+                # Remove 'id' to avoid conflicts, as it's a new record
+                self.initial_data.pop('id', None)
+                set_state(session_key, self.initial_data)
+
             self.pydantic_ui = PydanticCrudUi(
                 schema=self.create_schema, 
                 key=self.key_prefix,
-                session_state_key=f"{self.key_prefix}_form_data",
+                session_state_key=session_key,
                 foreign_key_options=self.foreign_key_options
             )
             
@@ -60,13 +70,6 @@ class CreateRow:
     
     def get_pydantic_fields(self):
         """Generate fields using PydanticUi"""
-        # Set default values in session state if provided
-        if self.default_values:
-            # Get current session state key
-            session_key = f"{self.key_prefix}_form_data"
-            if session_key not in st.session_state:
-                st.session_state[session_key] = self.default_values
-        
         # Use PydanticUi to render the form with submit button
         form_data = self.pydantic_ui.render_with_submit("Save")
         return form_data
@@ -109,11 +112,12 @@ class CreateRow:
                 continue
                 
             default_value = self.default_values.get(col_name)
+            initial_value = self.initial_data.get(col_name)
 
             if default_value:
                 input_value = default_value
             else:
-                input_value = self.input_fields.get_input_value(col, None)
+                input_value = self.input_fields.get_input_value(col, initial_value)
 
             created[col_name] = input_value
 
