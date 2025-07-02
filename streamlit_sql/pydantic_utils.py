@@ -245,7 +245,21 @@ class PydanticInputGenerator:
             
             # Only include field in form data if it's not None (e.g., ID in create operations)
             if field_value is not None:
-                form_data[field_name] = field_value
+                # For JSON text areas, attempt to parse the string back into a dict
+                input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
+                if input_type == 'text_area_json' and isinstance(field_value, str):
+                    try:
+                        # Do not parse empty strings
+                        if field_value:
+                            form_data[field_name] = json.loads(field_value)
+                        else:
+                            # Handle case where field is optional
+                            form_data[field_name] = None
+                    except json.JSONDecodeError:
+                        # If parsing fails, pass the original string to Pydantic for validation
+                        form_data[field_name] = field_value
+                else:
+                    form_data[field_name] = field_value
         
         return form_data
 
