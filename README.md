@@ -556,7 +556,7 @@ class AdvancedSchema(BaseModel):
 | Widget Type | Pydantic Type | Configuration |
 |-------------|---------------|---------------|
 | `text_input` | `str` | Default for string fields |
-| `text_area` | `str` | Set via `json_schema_extra` |
+| `text_area` | `str` | Set via `json_schema_extra` or by including `(text_area)` in the field's description |
 | `number_input` | `int`, `float` | Default for numeric fields |
 | `checkbox` | `bool` | Default for boolean fields |
 | `selectbox` | `str`, `Enum` | Requires `options` in `kw` |
