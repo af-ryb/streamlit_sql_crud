@@ -109,6 +109,12 @@ class PydanticUi:
         """Clear session state data for this form."""
         if self.session_state_key in st.session_state:
             del st.session_state[self.session_state_key]
+        
+        # Also clear individual widget keys
+        for field_name in self.schema.model_fields.keys():
+            widget_key = f"{self.key}_{field_name}"
+            if widget_key in st.session_state:
+                del st.session_state[widget_key]
     
     def update_session_data(self, data: Union[Dict[str, Any], BaseModel]):
         """Update session state with new data.
@@ -122,7 +128,17 @@ class PydanticUi:
             else:
                 data_dict = data
             
+            # Clear existing widget keys first to avoid Streamlit error
+            for field_name in self.schema.model_fields.keys():
+                widget_key = f"{self.key}_{field_name}"
+                if widget_key in st.session_state:
+                    del st.session_state[widget_key]
+            
+            # Update the main session state key
             st.session_state[self.session_state_key] = data_dict
+            
+            # Note: Individual widget keys will be populated on next render
+            # We cannot set them here as widgets may already be instantiated
             
         except Exception as e:
             logger.error(f"Error updating session data: {e}")
