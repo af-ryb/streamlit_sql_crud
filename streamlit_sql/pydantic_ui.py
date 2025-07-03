@@ -1,19 +1,21 @@
 import streamlit as st
-from typing import Type, Dict, Any, Optional, Union
+from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
 from streamlit_sql.pydantic_utils import PydanticInputGenerator
 
+T = TypeVar('T', bound=BaseModel)
 
-class PydanticUi:
+
+class PydanticUi(Generic[T]):
     """Standalone Pydantic-based Streamlit form generator.
     Creates dynamic forms from Pydantic models with automatic validation,
     session state persistence, and flexible widget customization.
     """
     def __init__(
         self,
-        schema: Type[BaseModel],
+        schema: Type[T],
         key: str,
         session_state_key: Optional[str] = None,
     ):
@@ -36,7 +38,7 @@ class PydanticUi:
         if self.session_state_key not in st.session_state:
             st.session_state[self.session_state_key] = {}
     
-    def render(self) -> Optional[BaseModel]:
+    def render(self) -> Optional[T]:
         """Render form UI and return validated model instance.
         
         Returns:
@@ -84,7 +86,7 @@ class PydanticUi:
             field_name = " → ".join(str(loc) for loc in err['loc'])
             st.error(f"**{field_name}**: {err['msg']}")
     
-    def get_session_data(self) -> Optional[BaseModel]:
+    def get_session_data(self) -> Optional[T]:
         """Get validated data from session state as model instance.
         
         Returns:
@@ -151,7 +153,7 @@ class PydanticUi:
         """
         return st.session_state.get(self.session_state_key, {})
     
-    def render_with_submit(self, submit_label: str = "Submit") -> Optional[BaseModel]:
+    def render_with_submit(self, submit_label: str = "Submit") -> Optional[T]:
         """Render form with submit button and return validated data on submit.
         
         Args:
@@ -172,7 +174,7 @@ class PydanticUi:
             
             return None
     
-    def render_with_columns(self, columns: int = 2) -> Optional[BaseModel]:
+    def render_with_columns(self, columns: int = 2) -> Optional[T]:
         """Render form fields in columns layout.
         
         Args:
@@ -229,7 +231,7 @@ class PydanticUi:
             return None
 
 
-class PydanticCrudUi(PydanticUi):
+class PydanticCrudUi(PydanticUi[T]):
     """Pydantic UI component with CRUD-specific functionality.
     
     Extends PydanticUi with foreign key support for SqlUi components.
@@ -237,7 +239,7 @@ class PydanticCrudUi(PydanticUi):
     
     def __init__(
         self,
-        schema: Type[BaseModel],
+        schema: Type[T],
         key: str,
         session_state_key: Optional[str] = None,
         foreign_key_options: Optional[Dict] = None,

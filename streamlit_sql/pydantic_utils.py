@@ -267,6 +267,13 @@ class PydanticInputGenerator:
                             key: str) -> Any:
         """Render the appropriate Streamlit input for a field based on its type"""
         
+        # Use default value if no existing value is provided
+        if existing_value is None:
+            default_value = field_info.get('default')
+            # Check if default is not PydanticUndefined
+            if default_value is not None and repr(default_value) != 'PydanticUndefined':
+                existing_value = default_value
+        
         # Ensure label is always a string
         description = field_info.get('description')
         if description is None or description == '':
