@@ -118,12 +118,15 @@ class PydanticUi(Generic[T]):
             if widget_key in st.session_state:
                 del st.session_state[widget_key]
     
-    def update_session_data(self, data: Union[Dict[str, Any], BaseModel]):
+    def update_session_data(self, data: Union[Dict[str, Any], BaseModel, None]):
         """Update session state with new data.
         
         Args:
             data: Dictionary or Pydantic model instance to update session with
         """
+        if data is None:
+            return
+
         try:
             if isinstance(data, BaseModel):
                 data_dict = data.model_dump()
