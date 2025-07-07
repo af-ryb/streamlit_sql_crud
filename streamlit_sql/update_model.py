@@ -25,6 +25,7 @@ class UpdateRow:
                  update_show_many: bool = False,
                  update_schema: Optional[Type[BaseModel]] = None,
                  foreign_key_options: dict | None = None,
+                 many_to_many_fields: dict | None = None,
                  key: str = "update",
                  ) -> None:
         self.conn = conn
@@ -34,6 +35,7 @@ class UpdateRow:
         self.update_show_many = update_show_many
         self.update_schema = update_schema
         self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
         self.key_prefix = f"{key}_update"
 
         set_state("stsql_updated", 0)
@@ -69,11 +71,13 @@ class UpdateRow:
                 schema=self.update_schema, 
                 key=self.key_prefix,
                 session_state_key=self.get_session_key,
-                foreign_key_options=self.foreign_key_options
+                foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
             )
             
             # Load foreign key data for fields that need it
             self._load_foreign_key_data()
+            self._load_many_to_many_data()
 
     @property
     def get_session_key(self):
@@ -92,6 +96,34 @@ class UpdateRow:
         form_data = self.pydantic_ui.render_with_submit("Save")
         return form_data
     
+    def _load_many_to_many_data(self):
+        """Load many-to-many relationship data from the database."""
+        for field_name, m2m_config in self.many_to_many_fields.items():
+            try:
+                relationship_name = m2m_config['relationship']
+                display_field = m2m_config['display_field']
+                
+                # Get the related model from the relationship
+                related_model = getattr(self.model, relationship_name).property.mapper.class_
+                
+                # Base query for the related model
+                query = select(related_model)
+                
+                # Apply optional filter
+                if 'filter' in m2m_config:
+                    query = m2m_config['filter'](query)
+                
+                with self.conn.session as session:
+                    rows = session.execute(query).scalars().all()
+                    
+                    # Set options in PydanticUi's input generator
+                    self.pydantic_ui.input_generator.set_many_to_many_options(
+                        field_name, rows, display_field
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"Failed to load many-to-many data for {field_name}: {e}")
+
     def _load_foreign_key_data(self):
         """Load foreign key data from database for form fields."""
         for field_name, fk_config in self.foreign_key_options.items():
@@ -160,10 +192,29 @@ class UpdateRow:
                 )
                 row = s.execute(stmt).scalar_one()
                 
+                # Separate many-to-many fields from the main data
+                m2m_data = {}
+                main_data = validated_data.model_dump(exclude_unset=True)
+                
+                for field_name in self.many_to_many_fields.keys():
+                    if field_name in main_data:
+                        m2m_data[field_name] = main_data.pop(field_name)
+
                 # Update only the fields present in the validated data
-                for field_name, field_value in validated_data.model_dump(exclude_unset=True).items():
+                for field_name, field_value in main_data.items():
                     if hasattr(row, field_name):
                         setattr(row, field_name, field_value)
+
+                # Handle many-to-many relationships
+                for field_name, selected_options in m2m_data.items():
+                    relationship_name = self.many_to_many_fields[field_name]['relationship']
+                    related_model = getattr(self.model, relationship_name).property.mapper.class_
+                    
+                    # Get the related objects from the database
+                    related_objects = s.query(related_model).filter(related_model.id.in_(selected_options)).all()
+                    
+                    # Update the relationship
+                    getattr(row, relationship_name)[:] = related_objects
 
                 s.add(row)
                 s.commit()

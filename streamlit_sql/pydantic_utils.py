@@ -33,9 +33,17 @@ class PydanticSQLAlchemyConverter:
             schema_fields = schema.model_fields
             sqlalchemy_columns = {col.name: col for col in model.__table__.columns}
             
+            # Get all relationships in the model
+            relationships = {}
+            for attr_name in dir(model):
+                attr = getattr(model, attr_name)
+                if hasattr(attr, 'property') and hasattr(attr.property, 'mapper'):
+                    relationships[attr_name] = attr
+            
             # Check if all schema fields exist in the SQLAlchemy model
             for field_name, field_info in schema_fields.items():
-                if field_name not in sqlalchemy_columns:
+                # Check if field exists as a column or relationship
+                if field_name not in sqlalchemy_columns and field_name not in relationships:
                     table_name = getattr(model, '__tablename__', model.__name__)
                     logger.warning(f"Field '{field_name}' in {schema.__name__} not found in {table_name}")
                     return False
@@ -201,14 +209,16 @@ class PydanticSQLAlchemyConverter:
 class PydanticInputGenerator:
     """Generates Streamlit inputs based on Pydantic schema"""
     
-    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict = None):
+    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict = None, many_to_many_fields: dict = None):
         self.schema = schema
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
         
         # For foreign key fields with preloaded options (no database connection needed)
         self.foreign_key_data = {}
+        self.many_to_many_data = {}
 
     @logger.catch()
     def generate_form_data(self, existing_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -307,6 +317,13 @@ class PydanticInputGenerator:
             else:
                 return self._render_foreign_key_input(label, field_name, existing_value, key=key)
         
+        # Check for many-to-many fields
+        elif field_name in self.many_to_many_fields:
+            if field_name in self.many_to_many_data:
+                return self._render_many_to_many_multiselect(label, field_name, existing_value, key)
+            else:
+                return self._render_foreign_key_input(label, field_name, existing_value, key=key)
+
         # Check for enum types - simplified detection based on streamlit-pydantic approach
         elif self._is_enum_field(annotation):
             return self._render_enum_input(label, annotation, existing_value, key=key)
@@ -907,4 +924,43 @@ class PydanticInputGenerator:
                 key=key,
                 help=f"Select from {len(options)} available options"
             )
+
+    def set_many_to_many_options(self, field_name: str, options: list, display_field: str):
+        """Set many-to-many options for a field with preloaded data."""
+        self.many_to_many_data[field_name] = {
+            'options': options,
+            'display_field': display_field,
+        }
+
+    def _render_many_to_many_multiselect(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
+        """Render multiselect for many-to-many fields using preloaded data."""
+        if field_name not in self.many_to_many_data:
+            return st.multiselect(label, [], key=key, help="Many-to-many options not loaded")
+
+        m2m_data = self.many_to_many_data[field_name]
+        options = m2m_data['options']
+        display_field = m2m_data['display_field']
+
+        # Create mappings for display and ID retrieval
+        id_to_display = {option.id: getattr(option, display_field) for option in options}
+        id_to_object = {option.id: option for option in options}
+
+        # Get the currently selected IDs
+        if existing_value and hasattr(existing_value, '__iter__'):
+            # For update: existing_value is a relationship collection
+            current_selection_ids = [obj.id for obj in existing_value if hasattr(obj, 'id')]
+        else:
+            current_selection_ids = []
+
+        # Use IDs in the multiselect
+        selected_ids = st.multiselect(
+            label,
+            options=list(id_to_display.keys()),
+            default=current_selection_ids,
+            format_func=lambda x: id_to_display.get(x, str(x)),
+            key=key,
+            help=f"Select from {len(options)} available options"
+        )
+        
+        return selected_ids
 

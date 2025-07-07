@@ -246,6 +246,7 @@ class PydanticCrudUi(PydanticUi[T]):
         key: str,
         session_state_key: Optional[str] = None,
         foreign_key_options: Optional[Dict] = None,
+        many_to_many_fields: Optional[Dict] = None,
     ):
         """Initialize PydanticCrudUi for CRUD operations.
         
@@ -254,18 +255,21 @@ class PydanticCrudUi(PydanticUi[T]):
             key: Unique key for the form (used for widget keys)
             session_state_key: Key for session state persistence (defaults to key)
             foreign_key_options: Configuration for foreign key fields
+            many_to_many_fields: Configuration for many-to-many fields
         """
         # Initialize parent without input generator
         super().__init__(schema=schema, key=key, session_state_key=session_state_key)
         
         # Store foreign key options
         self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
         
         # Reinitialize input generator with foreign key support
         self.input_generator = PydanticInputGenerator(
             schema=schema,
             key_prefix=key,
-            foreign_key_options=foreign_key_options
+            foreign_key_options=self.foreign_key_options,
+            many_to_many_fields=self.many_to_many_fields,
         )
 
         self._init_session_state()

@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from collections.abc import Callable
 from typing import Optional, Type
+from loguru import logger
 
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select, select
@@ -50,11 +51,12 @@ class SqlUi:
         update_schema: Optional[Type[BaseModel]] = None,
         read_schema: Optional[Type[BaseModel]] = None,
         foreign_key_options: dict | None = None,
+        many_to_many_fields: dict | None = None,
     ):
         """The CRUD interface will be displayes just by initializing the class
 
         Arguments:
-            conn (SQLConnection): A sqlalchemy connection created with st.connection(\"sql\", url=\"<sqlalchemy url>\")
+            conn (SQLConnection): A sqlalchemy connection created with st.connection("sql", url="<sqlalchemy url>")
             model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
@@ -70,6 +72,7 @@ class SqlUi:
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
             read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, uses Pydantic model_validate for data processing and avoids pandas read_sql issues with JSON columns. Defaults to None
             foreign_key_options (dict, optional): Custom foreign key selectbox configuration. Dict with field names as keys and config dicts as values. Each config should have 'query' (SQLAlchemy select statement), 'display_field' (column name for display), and 'value_field' (column name for value). Defaults to None
+            many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -186,6 +189,7 @@ class SqlUi:
         self.update_schema = update_schema
         self.read_schema = read_schema
         self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
 
         # Validate schema compatibility if provided
         if self.create_schema:
@@ -523,6 +527,7 @@ class SqlUi:
                 default_values=self.edit_create_default_values,
                 create_schema=self.create_schema,
                 foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
                 key=self.key,
             )
             create_row.show_dialog()
@@ -535,6 +540,7 @@ class SqlUi:
                 default_values=self.edit_create_default_values,
                 create_schema=self.create_schema,
                 foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
                 key=self.key,
                 initial_data=initial_data,
             )
@@ -550,6 +556,7 @@ class SqlUi:
                 update_show_many=self.update_show_many,
                 update_schema=self.update_schema,
                 foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
                 key=self.key
             )
             update_row.show_dialog()

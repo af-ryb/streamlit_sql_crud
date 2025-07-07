@@ -412,6 +412,60 @@ foreign_key_options={
 - ⚠️ Pydantic schemas (currently uses default FK handling, custom options planned for future release)
 - ✅ Backward compatible (existing code continues to work)
 
+## Many-to-Many Relationship Support (NEW)
+
+Starting from version 0.5.0, `SqlUi` now supports many-to-many relationships through a new `many_to_many_fields` parameter. This allows you to manage relationships stored in association tables using a user-friendly multiselect widget.
+
+### Problem
+
+Managing many-to-many relationships (e.g., a blog post having multiple tags) typically requires custom UI and complex back-end logic to handle the association table.
+
+### Solution
+
+Use the `many_to_many_fields` parameter to configure a multiselect widget for each many-to-many relationship. `SqlUi` will automatically handle the creation, updating, and deletion of records in the association table.
+
+```python
+from streamlit_sql import SqlUi
+from sqlalchemy import select
+
+# Example: A Post can have many Tags
+SqlUi(
+    conn=conn,
+    model=Post, # Your SQLAlchemy model for posts
+    create_schema=PostCreateSchema, # Your Pydantic schema for creating posts
+    update_schema=PostUpdateSchema, # Your Pydantic schema for updating posts
+    many_to_many_fields={
+        'tags': { # The name of the relationship attribute in your Post model
+            'relationship': 'tags',
+            'display_field': 'name', # The field to display in the multiselect widget
+            'filter': lambda q: q.filter(Tag.active == True) # Optional filter for the options
+        }
+    }
+)
+```
+
+### Configuration Options
+
+Each many-to-many field can be configured with:
+
+- **`relationship`**: The name of the SQLAlchemy relationship attribute in your model (e.g., `tags` in `Post.tags`).
+- **`display_field`**: The column name from the related model to show in the multiselect widget (e.g., `name` from the `Tag` model).
+- **`filter`** (optional): A lambda function that receives a SQLAlchemy query object and returns a modified query to filter the options in the multiselect widget.
+
+### How It Works
+
+1.  **UI**: `SqlUi` will render a `st.multiselect` widget for the specified relationship.
+2.  **Create**: When you create a new record, `SqlUi` will first create the main record, then add the selected related objects to the association table.
+3.  **Update**: When you update a record, `SqlUi` will automatically add or remove records from the association table to match your selection in the multiselect widget.
+4.  **Transactions**: All operations are performed within a single database transaction to ensure data integrity.
+
+### Benefits
+
+1.  **Simplified UI**: No need to build custom forms for many-to-many relationships.
+2.  **Automatic Relationship Management**: `SqlUi` handles all the back-end logic for you.
+3.  **Improved User Experience**: Users can easily manage complex relationships with a simple multiselect widget.
+4.  **Maintains Ease of Use**: The configuration is simple and consistent with other `SqlUi` parameters.
+
 ## PydanticUi - Standalone Form Component
 
 `PydanticUi` is a powerful, database-agnostic form component that generates Streamlit forms directly from Pydantic models. It provides automatic validation, session state persistence, and customizable widgets.

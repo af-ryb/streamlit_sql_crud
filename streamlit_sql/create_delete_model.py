@@ -22,12 +22,14 @@ class CreateRow:
                  key: str = "create",
                  create_schema: Optional[Type[BaseModel]] = None,
                  foreign_key_options: dict | None = None,
+                 many_to_many_fields: dict | None = None,
                  initial_data: dict | None = None,
                  ) -> None:
         self.conn = conn
         self.model = model
         self.create_schema = create_schema
         self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
         self.initial_data = initial_data or {}
 
         self.default_values = default_values or {}
@@ -55,11 +57,13 @@ class CreateRow:
                 schema=self.create_schema, 
                 key=self.key_prefix,
                 session_state_key=session_key,
-                foreign_key_options=self.foreign_key_options
+                foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
             )
             
             # Load foreign key data for fields that need it
             self._load_foreign_key_data()
+            self._load_many_to_many_data()
 
 
     def get_fields(self):
@@ -74,6 +78,34 @@ class CreateRow:
         form_data = self.pydantic_ui.render_with_submit("Save")
         return form_data
     
+    def _load_many_to_many_data(self):
+        """Load many-to-many relationship data from the database."""
+        for field_name, m2m_config in self.many_to_many_fields.items():
+            try:
+                relationship_name = m2m_config['relationship']
+                display_field = m2m_config['display_field']
+                
+                # Get the related model from the relationship
+                related_model = getattr(self.model, relationship_name).property.mapper.class_
+                
+                # Base query for the related model
+                query = select(related_model)
+                
+                # Apply optional filter
+                if 'filter' in m2m_config:
+                    query = m2m_config['filter'](query)
+                
+                with self.conn.session as session:
+                    rows = session.execute(query).scalars().all()
+                    
+                    # Set options in PydanticUi's input generator
+                    self.pydantic_ui.input_generator.set_many_to_many_options(
+                        field_name, rows, display_field
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"Failed to load many-to-many data for {field_name}: {e}")
+
     def _load_foreign_key_data(self):
         """Load foreign key data from database for form fields."""
         for field_name, fk_config in self.foreign_key_options.items():
@@ -147,13 +179,31 @@ class CreateRow:
     def save_pydantic(self, validated_data: BaseModel):
         """Save using pre-validated Pydantic data from PydanticUi"""
         try:
-            # Convert to SQLAlchemy model
-            row = PydanticSQLAlchemyConverter.pydantic_to_sqlalchemy(
-                validated_data, self.model
-            )
-            
             with self.conn.session as s:
+                # Separate many-to-many fields from the main data
+                m2m_data = {}
+                main_data = validated_data.model_dump()
+                
+                for field_name in self.many_to_many_fields.keys():
+                    if field_name in main_data:
+                        m2m_data[field_name] = main_data.pop(field_name)
+
+                # Create the main object without m2m fields
+                row = self.model(**main_data)
                 s.add(row)
+                s.flush()  # Flush to get the ID of the new row
+
+                # Handle many-to-many relationships
+                for field_name, selected_options in m2m_data.items():
+                    relationship_name = self.many_to_many_fields[field_name]['relationship']
+                    related_model = getattr(self.model, relationship_name).property.mapper.class_
+                    
+                    # Get the related objects from the database
+                    related_objects = s.query(related_model).filter(related_model.id.in_(selected_options)).all()
+                    
+                    # Append the related objects to the relationship
+                    getattr(row, relationship_name).extend(related_objects)
+
                 s.commit()
                 ss.stsql_updated += 1
                 table_name = getattr(self.model, '__tablename__', self.model.__name__)
