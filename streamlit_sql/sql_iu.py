@@ -432,7 +432,21 @@ class SqlUi:
     def _execute_with_pydantic_schema(self, stmt: Select):
         """Execute query using Pydantic schema for data processing"""
         with self.conn.session as s:
-            result = s.execute(stmt).all()
+            # For many-to-many, we need ORM objects, not Row objects
+            # Check if we have many_to_many_fields and use different approach
+            if self.many_to_many_fields:
+                from sqlalchemy.orm import selectinload
+                
+                # Build options for eager loading
+                options = []
+                for field_name, config in self.many_to_many_fields.items():
+                    relationship_attr = getattr(self.edit_create_model, config['relationship'])
+                    options.append(selectinload(relationship_attr))
+                
+                # Use ORM query instead of raw SQL
+                result = s.query(self.edit_create_model).options(*options).all()
+            else:
+                result = s.execute(stmt).all()
 
             validated_rows = []
             for row in result:
