@@ -41,7 +41,23 @@ class UpdateRow:
         set_state("stsql_updated", 0)
 
         with conn.session as s:
-            self.row = s.get_one(model, row_id)
+            # Load row with many-to-many relationships if needed
+            if self.many_to_many_fields:
+                from sqlalchemy.orm import selectinload
+                
+                # Build options for eager loading
+                options = []
+                for field_name, config in self.many_to_many_fields.items():
+                    relationship_attr = getattr(self.model, config['relationship'])
+                    options.append(selectinload(relationship_attr))
+                
+                # Use query with selectinload to get the row with relationships
+                self.row = s.query(self.model).options(*options).filter(
+                    self.model.id == row_id
+                ).one()
+            else:
+                self.row = s.get_one(model, row_id)
+                
             self.existing_data = ExistingData(s, model,
                                               default_values=self.default_values, row=self.row,
                                               foreign_key_options=self.foreign_key_options)
@@ -60,9 +76,17 @@ class UpdateRow:
                     value = getattr(self.row, col_name)
                     # Convert certain types for proper display
                     if value is not None:
-
                         value = convert_numpy_to_python(value, self.model)
                     self.current_values[col_name] = value
+            
+            # Add many-to-many field values 
+            for field_name, config in self.many_to_many_fields.items():
+                relationship_name = config['relationship']
+                if hasattr(self.row, relationship_name):
+                    # Get currently selected objects
+                    current_objects = getattr(self.row, relationship_name)
+                    # Convert to list of IDs for multiselect
+                    self.current_values[field_name] = [obj.id for obj in current_objects]
             
             # populate session state with current values
             set_state(self.get_session_key, self.current_values)

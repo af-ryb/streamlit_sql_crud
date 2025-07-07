@@ -427,18 +427,21 @@ Use the `many_to_many_fields` parameter to configure a multiselect widget for ea
 ```python
 from streamlit_sql import SqlUi
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 # Example: A Post can have many Tags
 SqlUi(
     conn=conn,
-    model=Post, # Your SQLAlchemy model for posts
-    create_schema=PostCreateSchema, # Your Pydantic schema for creating posts
-    update_schema=PostUpdateSchema, # Your Pydantic schema for updating posts
+    read_instance=select(Post).options(selectinload(Post.tags)),  # Include for read mode
+    edit_create_model=Post,  # Your SQLAlchemy model for posts
+    create_schema=PostCreateSchema,  # Your Pydantic schema for creating posts
+    update_schema=PostUpdateSchema,  # Your Pydantic schema for updating posts
+    read_schema=PostReadSchema,      # Optional: for read mode display
     many_to_many_fields={
-        'tags': { # The name of the relationship attribute in your Post model
-            'relationship': 'tags',
-            'display_field': 'name', # The field to display in the multiselect widget
-            'filter': lambda q: q.filter(Tag.active == True) # Optional filter for the options
+        'tags': {  # Field name in Pydantic schema
+            'relationship': 'tags',  # SQLAlchemy relationship name
+            'display_field': 'name',  # Field to display in multiselect
+            'filter': lambda q: q.filter(Tag.active == True)  # Optional filter
         }
     }
 )
@@ -451,6 +454,41 @@ Each many-to-many field can be configured with:
 - **`relationship`**: The name of the SQLAlchemy relationship attribute in your model (e.g., `tags` in `Post.tags`).
 - **`display_field`**: The column name from the related model to show in the multiselect widget (e.g., `name` from the `Tag` model).
 - **`filter`** (optional): A lambda function that receives a SQLAlchemy query object and returns a modified query to filter the options in the multiselect widget.
+
+### Pydantic Schema Requirements
+
+For many-to-many fields to work properly, you must include them in your Pydantic schemas:
+
+```python
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional
+
+class PostCreateSchema(BaseModel):
+    title: str
+    content: str
+    tags: Optional[List[int]] = Field(default_factory=list, description="Selected tag IDs")
+
+class PostUpdateSchema(BaseModel):
+    id: int
+    title: Optional[str] = None
+    content: Optional[str] = None
+    tags: Optional[List[int]] = Field(default_factory=list, description="Selected tag IDs")
+
+class PostReadSchema(BaseModel):
+    id: int
+    title: str
+    content: str
+    tags: Optional[List[str]] = Field(None, description="Tag names")
+    
+    @field_validator('tags', mode='before')
+    def convert_tags_to_strings(cls, v):
+        """Convert tag objects to their string representations."""
+        if v is None:
+            return []
+        if hasattr(v, '__iter__') and not isinstance(v, str):
+            return [tag.name if hasattr(tag, 'name') else str(tag) for tag in v]
+        return []
+```
 
 ### How It Works
 

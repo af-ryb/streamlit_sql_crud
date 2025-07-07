@@ -946,11 +946,19 @@ class PydanticInputGenerator:
         id_to_object = {option.id: option for option in options}
 
         # Get the currently selected IDs
-        if existing_value and hasattr(existing_value, '__iter__'):
-            # For update: existing_value is a relationship collection
-            current_selection_ids = [obj.id for obj in existing_value if hasattr(obj, 'id')]
-        else:
-            current_selection_ids = []
+        current_selection_ids = []
+        if existing_value:
+            if isinstance(existing_value, list):
+                # Check if it's a list of IDs or objects
+                if existing_value and isinstance(existing_value[0], int):
+                    # List of IDs from session state
+                    current_selection_ids = existing_value
+                elif hasattr(existing_value[0], 'id'):
+                    # List of objects from relationship
+                    current_selection_ids = [obj.id for obj in existing_value]
+            elif hasattr(existing_value, '__iter__') and not isinstance(existing_value, str):
+                # Relationship collection - extract IDs
+                current_selection_ids = [obj.id for obj in existing_value if hasattr(obj, 'id')]
 
         # Use IDs in the multiselect
         selected_ids = st.multiselect(
