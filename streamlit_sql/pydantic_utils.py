@@ -965,13 +965,21 @@ class PydanticInputGenerator:
 
         # Get the currently selected IDs
         current_selection_ids = []
-        if existing_value:
-            if isinstance(existing_value, list):
-                # Check if it's a list of IDs or objects
-                if existing_value and isinstance(existing_value[0], (int, str)):
-                    # List of IDs from session state (int or string/UUID)
-                    current_selection_ids = existing_value
-                elif hasattr(existing_value[0], 'id'):
+        if existing_value is not None:
+            if isinstance(existing_value, list) and existing_value:
+                # Check if it's a list of IDs, objects, or names
+                first_item = existing_value[0]
+                if isinstance(first_item, (int, str)):
+                    # Check if these are valid IDs or display names
+                    if first_item in id_to_display:
+                        # List of IDs from session state
+                        current_selection_ids = existing_value
+                    else:
+                        # List of display names (from copy mode) - need to convert to IDs
+                        name_to_id = {v: k for k, v in id_to_display.items()}
+                        current_selection_ids = [name_to_id.get(name) for name in existing_value if name in name_to_id]
+                        logger.debug(f"Converted display names to IDs for {field_name}: {existing_value} -> {current_selection_ids}")
+                elif hasattr(first_item, 'id'):
                     # List of objects from relationship
                     current_selection_ids = [obj.id for obj in existing_value]
             elif hasattr(existing_value, '__iter__') and not isinstance(existing_value, str):
