@@ -87,6 +87,9 @@ class UpdateRow:
                     current_objects = getattr(self.row, relationship_name)
                     # Convert to list of IDs for multiselect
                     self.current_values[field_name] = [obj.id for obj in current_objects]
+                    logger.debug(f"Set current values for m2m field {field_name}: {self.current_values[field_name]}")
+                else:
+                    logger.warning(f"Row does not have relationship {relationship_name}")
             
             # populate session state with current values
             set_state(self.get_session_key, self.current_values)
@@ -136,9 +139,11 @@ class UpdateRow:
                 # Apply optional filter
                 if 'filter' in m2m_config:
                     query = m2m_config['filter'](query)
+                    logger.debug(f"Applied filter to query for field {field_name}")
                 
                 with self.conn.session as session:
                     rows = session.execute(query).scalars().all()
+                    logger.debug(f"Loaded {len(rows)} options for many-to-many field {field_name}")
                     
                     # Set options in PydanticUi's input generator
                     self.pydantic_ui.input_generator.set_many_to_many_options(

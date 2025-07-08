@@ -216,6 +216,9 @@ class PydanticInputGenerator:
         self.many_to_many_fields = many_to_many_fields or {}
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
         
+        logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}")
+        logger.debug(f"Many-to-many fields configured: {list(self.many_to_many_fields.keys())}")
+        
         # For foreign key fields with preloaded options (no database connection needed)
         self.foreign_key_data = {}
         self.many_to_many_data = {}
@@ -241,6 +244,8 @@ class PydanticInputGenerator:
             # Skip primary key fields to create operations
             if field_name == 'id' and existing_value is None:
                 continue
+            
+            logger.debug(f"Processing field: {field_name}, is_m2m: {field_name in self.many_to_many_fields}")
             
             # Get field annotation for better type detection
             annotation = field_info.get('annotation')
@@ -319,9 +324,11 @@ class PydanticInputGenerator:
         
         # Check for many-to-many fields
         elif field_name in self.many_to_many_fields:
+            logger.debug(f"Field {field_name} is a many-to-many field. Data loaded: {field_name in self.many_to_many_data}")
             if field_name in self.many_to_many_data:
                 return self._render_many_to_many_multiselect(label, field_name, existing_value, key)
             else:
+                logger.warning(f"Many-to-many field {field_name} has no loaded data, falling back to foreign key input")
                 return self._render_foreign_key_input(label, field_name, existing_value, key=key)
 
         # Check for enum types - simplified detection based on streamlit-pydantic approach
@@ -421,6 +428,15 @@ class PydanticInputGenerator:
     
     def _render_foreign_key_input(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
         """Render selectbox for foreign key fields using custom configuration"""
+        if field_name not in self.foreign_key_options:
+            logger.warning(f"Field {field_name} not found in foreign_key_options")
+            return st.text_input(
+                label,
+                value=str(existing_value) if existing_value is not None else "",
+                key=key,
+                help="Configuration not available"
+            )
+        
         fk_config = self.foreign_key_options[field_name]
         query = fk_config['query']
         display_field = fk_config['display_field']
@@ -931,10 +947,12 @@ class PydanticInputGenerator:
             'options': options,
             'display_field': display_field,
         }
+        logger.debug(f"Set many-to-many options for field {field_name}: {len(options)} options")
 
     def _render_many_to_many_multiselect(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
         """Render multiselect for many-to-many fields using preloaded data."""
         if field_name not in self.many_to_many_data:
+            logger.warning(f"Many-to-many field {field_name} not found in loaded data. Available fields: {list(self.many_to_many_data.keys())}")
             return st.multiselect(label, [], key=key, help="Many-to-many options not loaded")
 
         m2m_data = self.many_to_many_data[field_name]
@@ -950,8 +968,8 @@ class PydanticInputGenerator:
         if existing_value:
             if isinstance(existing_value, list):
                 # Check if it's a list of IDs or objects
-                if existing_value and isinstance(existing_value[0], int):
-                    # List of IDs from session state
+                if existing_value and isinstance(existing_value[0], (int, str)):
+                    # List of IDs from session state (int or string/UUID)
                     current_selection_ids = existing_value
                 elif hasattr(existing_value[0], 'id'):
                     # List of objects from relationship
