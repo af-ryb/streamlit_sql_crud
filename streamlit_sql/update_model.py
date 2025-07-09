@@ -92,6 +92,9 @@ class UpdateRow:
                     logger.warning(f"Row does not have relationship {relationship_name}")
             
             # populate session state with current values
+            # Clear existing data before setting new values to avoid stale data
+            if self.get_session_key in st.session_state:
+                del st.session_state[self.get_session_key]
             set_state(self.get_session_key, self.current_values)
             
             self.pydantic_ui = PydanticCrudUi(
