@@ -3,7 +3,7 @@ from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
-from streamlit_sql.pydantic_utils import PydanticInputGenerator
+from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
 
 T = TypeVar('T', bound=BaseModel)
 

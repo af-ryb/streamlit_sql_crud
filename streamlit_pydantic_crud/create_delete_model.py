@@ -6,11 +6,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 
-from streamlit_sql.filters import ExistingData
-from streamlit_sql.input_fields import InputFields
-from streamlit_sql.lib import get_pretty_name, log, set_state, format_database_error
-from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
-from streamlit_sql.pydantic_ui import PydanticCrudUi
+from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.input_fields import InputFields
+from streamlit_pydantic_crud.lib import get_pretty_name, log, set_state, format_database_error
+from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from loguru import logger
 
 

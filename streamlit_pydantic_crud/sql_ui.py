@@ -13,9 +13,9 @@ from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_sql import create_delete_model, lib, read_cte, update_model
-from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
-from streamlit_sql.utils import convert_numpy_to_python, convert_numpy_list_to_python
+from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
+from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.utils import convert_numpy_to_python, convert_numpy_list_to_python
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000)
 

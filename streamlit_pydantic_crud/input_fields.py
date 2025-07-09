@@ -8,8 +8,8 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit_datalist import stDatalist
 
-from streamlit_sql.filters import ExistingData
-from streamlit_sql.lib import get_pretty_name
+from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.lib import get_pretty_name
 
 
 class InputFields:

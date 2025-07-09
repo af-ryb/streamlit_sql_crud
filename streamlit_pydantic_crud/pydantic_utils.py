@@ -245,7 +245,7 @@ class PydanticInputGenerator:
             if field_name == 'id' and existing_value is None:
                 continue
             
-            logger.debug(f"Processing field: {field_name}, is_m2m: {field_name in self.many_to_many_fields}")
+            # logger.debug(f"Processing field: {field_name}, is_m2m: {field_name in self.many_to_many_fields}")
             
             # Get field annotation for better type detection
             annotation = field_info.get('annotation')

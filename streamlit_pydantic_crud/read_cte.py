@@ -12,8 +12,8 @@ from sqlalchemy.types import Enum as SQLEnum
 from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
-from streamlit_sql import params
-from streamlit_sql.lib import get_pretty_name
+from streamlit_pydantic_crud import params
+from streamlit_pydantic_crud.lib import get_pretty_name
 from loguru import logger
 
 
@@ -21,7 +21,7 @@ hash_funcs: dict[Any, Callable[[Any], Any]] = {
     pd.Series: lambda serie: serie.to_dict(),
     CTE: lambda sel: (str(sel), sel.compile().params),
     Select: lambda sel: (str(sel), sel.compile().params),
-    "streamlit_sql.read_cte.ColFilter": lambda cl: (cl.dt_filters, cl.no_dt_filters),
+    "streamlit_pydantic_crud.read_cte.ColFilter": lambda cl: (cl.dt_filters, cl.no_dt_filters),
 }
 
 

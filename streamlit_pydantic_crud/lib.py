@@ -21,10 +21,10 @@ def log(
 
 def set_logging(disable_log: bool):
     if disable_log:
-        logger.disable("streamlit_sql")
+        logger.disable("streamlit_pydantic_crud")
         return
 
-    logger.enable("streamlit_sql")
+    logger.enable("streamlit_pydantic_crud")
     if not logger._core.handlers:  # pyright: ignore
         logger.add(sys.stderr, level="INFO")
 

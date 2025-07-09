@@ -5,8 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import RelationshipProperty, Session
 from functools import cached_property
 
-from streamlit_sql import lib, read_cte
-from streamlit_sql.create_delete_model import CreateRow, DeleteRows
+from streamlit_pydantic_crud import lib, read_cte
+from streamlit_pydantic_crud.create_delete_model import CreateRow, DeleteRows
 
 
 class ReadManyRel:
