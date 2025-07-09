@@ -8,8 +8,8 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit_datalist import stDatalist
 
-from streamlit_sql.filters import ExistingData
-from streamlit_sql.lib import get_pretty_name
+from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.lib import get_pretty_name
 
 
 class InputFields:
@@ -26,7 +26,7 @@ class InputFields:
     
     def __init__(
         self,
-        Model: type[DeclarativeBase],
+        model: type[DeclarativeBase],
         key_prefix: str,
         default_values: dict,
         existing_data: ExistingData,
@@ -35,13 +35,13 @@ class InputFields:
         """Initialize InputFields.
         
         Args:
-            Model: SQLAlchemy model class
+            model: SQLAlchemy model class
             key_prefix: Prefix for widget keys to avoid conflicts
             default_values: Default values for fields
             existing_data: Existing data helper for options
             string_enum_threshold: Max unique values for string field to be treated as enum
         """
-        self.Model = Model
+        self.model = model
         self.key_prefix = key_prefix
         self.default_values = default_values
         self.existing_data = existing_data

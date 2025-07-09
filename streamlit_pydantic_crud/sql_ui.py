@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from collections.abc import Callable
 from typing import Optional, Type
+from loguru import logger
 
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select, select
@@ -12,8 +13,9 @@ from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_sql import create_delete_model, lib, read_cte, update_model
-from streamlit_sql.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
+from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.utils import convert_numpy_to_python, convert_numpy_list_to_python
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000)
 
@@ -31,15 +33,15 @@ class SqlUi:
     def __init__(
         self,
         conn: SQLConnection,
-        read_instance,
-        edit_create_model: type[DeclarativeBase],
+        read_instance = None,
+        edit_create_model: type[DeclarativeBase] = None,
+        model: type[DeclarativeBase] = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
         rolling_total_column: str | None = None,
         rolling_orderby_colsname: list[str] | None = None,
         df_style_formatter: dict[str, str] | None = None,
         read_use_container_width: bool = False,
-        hide_id: bool = True,
         key: str | None = None,
         base_key: str | None = None,
         style_fn: Callable[[pd.Series], list[str]] | None = None,
@@ -49,21 +51,20 @@ class SqlUi:
         update_schema: Optional[Type[BaseModel]] = None,
         read_schema: Optional[Type[BaseModel]] = None,
         foreign_key_options: dict | None = None,
+        many_to_many_fields: dict | None = None,
     ):
         """The CRUD interface will be displayes just by initializing the class
 
         Arguments:
-            conn (SQLConnection): A sqlalchemy connection created with st.connection(\"sql\", url=\"<sqlalchemy url>\")
-            read_instance (Select | CTE | Model): The sqlalchemy select statement to display or a CTE. Choose columns to display , join, query or order.If selecting columns, you need to add the id column. If a Model, it will select all columns.
-            edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the Model object
-            available_filter (list[str], optional): Define wich columns the user will be able to filter in the top expander. Defaults to all
+            conn (SQLConnection): A sqlalchemy connection created with st.connection("sql", url="<sqlalchemy url>")
+            model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
+            edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
+            available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
             rolling_total_column (str, optional): A numeric column name of the read_instance. A new column will be displayed with the rolling sum of these column
             rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
             df_style_formatter (dict[str,str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): add use_container_width to st.dataframe args. Default to False
-            hide_id (bool, optional): The id column will not be displayed if set to True. Defaults to True
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
-            base_key (str, optional): Legacy parameter name for key. Use 'key' instead for Streamlit compatibility. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
@@ -71,6 +72,7 @@ class SqlUi:
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
             read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, uses Pydantic model_validate for data processing and avoids pandas read_sql issues with JSON columns. Defaults to None
             foreign_key_options (dict, optional): Custom foreign key selectbox configuration. Dict with field names as keys and config dicts as values. Each config should have 'query' (SQLAlchemy select statement), 'display_field' (column name for display), and 'value_field' (column name for value). Defaults to None
+            many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -105,16 +107,15 @@ class SqlUi:
                 .order_by(db.Invoice.date)
             )
 
+            # Recommended approach with new 'model' parameter
             sql_ui = SqlUi(
                 conn=conn,
-                read_instance=stmt,
-                edit_create_model=db.Invoice,
+                model=db.Invoice,  # Simplified: uses same model for read and write
                 available_filter=["name"],
                 rolling_total_column="amount",
                 rolling_orderby_colsname=["date", "id"],
                 df_style_formatter={"amount": "{:,.2f}"},
                 read_use_container_width=True,
-                hide_id=True,
                 key="my_sql_ui",
                 style_fn=style_fn,
                 update_show_many=True,
@@ -127,24 +128,60 @@ class SqlUi:
                     }
                 },
             )
-
             ```
 
         """
+        # Handle model parameter consolidation
+        if model is not None:
+            if read_instance is not None or edit_create_model is not None:
+                import warnings
+                warnings.warn(
+                    "When 'model' parameter is provided, 'read_instance' and 'edit_create_model' are ignored. "
+                    "Use either 'model' (recommended) or the legacy 'read_instance'+'edit_create_model' combination.",
+                    DeprecationWarning,
+                    stacklevel=2
+                )
+            # Use model for both read and write operations
+            self.read_instance = model
+            self.edit_create_model = model
+        else:
+            # Legacy mode - require both parameters
+            if read_instance is None or edit_create_model is None:
+                raise ValueError(
+                    "Either provide 'model' parameter (recommended) or both 'read_instance' and 'edit_create_model' parameters. "
+                    "The 'model' parameter simplifies the API when using the same model for read and write operations."
+                )
+            self.read_instance = read_instance
+            self.edit_create_model = edit_create_model
+        
         self.conn = conn
-        self.read_instance = read_instance
-        self.edit_create_model = edit_create_model
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
         self.rolling_total_column = rolling_total_column
         self.rolling_orderby_colsname = rolling_orderby_colsname or ["id"]
         self.df_style_formatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
-        self.hide_id = hide_id
         # Handle key parameter compatibility - key takes precedence over base_key
         if key is not None and base_key is not None:
-            raise ValueError("Cannot specify both 'key' and 'base_key' parameters. Use 'key' for Streamlit compatibility.")
-        self.base_key = key or base_key or ""
+            import warnings
+            warnings.warn(
+                "Both 'key' and 'base_key' specified. 'base_key' is deprecated, using 'key' instead. "
+                "Remove 'base_key' parameter in future versions.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.key = key
+        elif base_key is not None:
+            import warnings
+            warnings.warn(
+                "'base_key' parameter is deprecated and will be removed in v1.0.0. "
+                "Use 'key' parameter instead for Streamlit compatibility.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.key = base_key
+        else:
+            self.key = key or ""
         self.style_fn = style_fn
         self.update_show_many = update_show_many
         self.disable_log = disable_log
@@ -152,6 +189,7 @@ class SqlUi:
         self.update_schema = update_schema
         self.read_schema = read_schema
         self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
 
         # Validate schema compatibility if provided
         if self.create_schema:
@@ -284,10 +322,10 @@ class SqlUi:
 
         col_filter = read_cte.ColFilter(
             self.expander_container,
-            self.cte,
-            existing,
-            filter_colsname,
-            self.base_key,
+            cte=self.cte,
+            existing_values=existing,
+            available_col_filter=filter_colsname,
+            key=self.key,
         )
         if str(col_filter) != "":
             self.filter_container.write(col_filter)
@@ -299,7 +337,7 @@ class SqlUi:
             items_per_page, page = read_cte.show_pagination(
                 qtty_rows,
                 OPTS_ITEMS_PAGE,
-                self.base_key,
+                self.key,
             )
 
         filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
@@ -323,7 +361,7 @@ class SqlUi:
         saldo_toogle = self.saldo_toggle_col.toggle(
             f"Add Previous Balance in {self.rolling_pretty_name}",
             value=True,
-            key=f"{self.base_key}_saldo_toggle_sql_ui",
+            key=f"{self.key}_saldo_toggle_sql_ui",
         )
 
         if not saldo_toogle:
@@ -394,24 +432,42 @@ class SqlUi:
     def _execute_with_pydantic_schema(self, stmt: Select):
         """Execute query using Pydantic schema for data processing"""
         with self.conn.session as s:
-            result = s.execute(stmt).all()
-            
+            # For many-to-many, we need ORM objects, not Row objects
+            # Check if we have many_to_many_fields and use different approach
+            if self.many_to_many_fields:
+                from sqlalchemy.orm import selectinload
+                
+                # Build options for eager loading
+                options = []
+                for field_name, config in self.many_to_many_fields.items():
+                    relationship_attr = getattr(self.edit_create_model, config['relationship'])
+                    options.append(selectinload(relationship_attr))
+                
+                # Use ORM query instead of raw SQL
+                result = s.query(self.edit_create_model).options(*options).all()
+            else:
+                result = s.execute(stmt).all()
+
             validated_rows = []
             for row in result:
                 validated_data = self.read_schema.model_validate(row, from_attributes=True).model_dump()
-                
+
+                # Ensure 'id' is always present for CRUD operations, even if not in the schema
+                if 'id' not in validated_data and hasattr(row, 'id'):
+                    validated_data['id'] = row.id
+
                 # Convert enum objects to strings for PyArrow compatibility
                 for key, value in validated_data.items():
                     if isinstance(value, list):
                         # Handle list of enums
                         validated_data[key] = [
-                            item.value if hasattr(item, 'value') else str(item) 
+                            item.value if hasattr(item, 'value') else str(item)
                             for item in value
                         ]
                     elif hasattr(value, 'value'):
                         # Handle single enum
                         validated_data[key] = value.value
-                
+
                 validated_rows.append(validated_data)
 
             # Create DataFrame from validated data
@@ -434,8 +490,9 @@ class SqlUi:
             return None
 
         column_order = None
-        if self.hide_id:
-            column_order = [colname for colname in df.columns if colname != "id"]
+        if self.read_schema:
+            # Display only the columns specified in the schema
+            column_order = list(self.read_schema.model_fields.keys())
 
         df_style = df.style
         formatter = self.add_balance_formatter(self.df_style_formatter)
@@ -451,11 +508,13 @@ class SqlUi:
             column_order=column_order,
             on_select="rerun",
             selection_mode="multi-row",
-            key=f"{self.base_key}_df_sql_ui",
+            key=f"{self.key}_df_sql_ui",
         )
         return selection_state
 
-    def get_rows_selected(self, selection_state: DataframeState | None):
+    @staticmethod
+    def get_rows_selected(selection_state: DataframeState | None):
+        """Get rows selected from Streamlit dataframe selection state"""
         rows_pos = []
         if (
             selection_state
@@ -472,88 +531,55 @@ class SqlUi:
             self.btns_container,
             qtty_rows,
             ss.stsql_opened,
-            key=self.base_key,
+            key=self.key,
         )
 
         if action == "add":
             create_row = create_delete_model.CreateRow(
                 conn=self.conn,
-                Model=self.edit_create_model,
+                model=self.edit_create_model,
                 default_values=self.edit_create_default_values,
                 create_schema=self.create_schema,
                 foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
+                key=self.key,
+            )
+            create_row.show_dialog()
+        elif action == "copy":
+            selected_pos = rows_selected[0]
+            initial_data = df.iloc[selected_pos].to_dict()
+            create_row = create_delete_model.CreateRow(
+                conn=self.conn,
+                model=self.edit_create_model,
+                default_values=self.edit_create_default_values,
+                create_schema=self.create_schema,
+                foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
+                key=self.key,
+                initial_data=initial_data,
             )
             create_row.show_dialog()
         elif action == "edit":
             selected_pos = rows_selected[0]
-            row_id = df.iloc[selected_pos]["id"]
+            row_id = convert_numpy_to_python(df.iloc[selected_pos]["id"], self.edit_create_model)
             update_row = update_model.UpdateRow(
                 conn=self.conn,
-                Model=self.edit_create_model,
+                model=self.edit_create_model,
                 row_id=row_id,
                 default_values=self.edit_create_default_values,
                 update_show_many=self.update_show_many,
                 update_schema=self.update_schema,
                 foreign_key_options=self.foreign_key_options,
+                many_to_many_fields=self.many_to_many_fields,
+                key=self.key
             )
             update_row.show_dialog()
         elif action == "delete":
-            rows_id = df.iloc[rows_selected].id.to_list()
+            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected].id.to_list(), self.edit_create_model)
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
-                Model=self.edit_create_model,
+                model=self.edit_create_model,
                 rows_id=rows_id,
-                base_key=self.base_key,
+                key=self.key,
             )
             delete_rows.show_dialog()
-
-
-def show_sql_ui(
-    conn: SQLConnection,
-    read_instance,
-    edit_create_model: type[DeclarativeBase],
-    available_filter: list[str] | None = None,
-    edit_create_default_values: dict | None = None,
-    rolling_total_column: str | None = None,
-    rolling_orderby_colsname: list[str] | None = None,
-    df_style_formatter: dict[str, str] | None = None,
-    read_use_container_width: bool = False,
-    hide_id: bool = True,
-    base_key: str = "",
-    style_fn: Callable[[pd.Series], list[str]] | None = None,
-    update_show_many: bool = False,
-    create_schema: Optional[Type[BaseModel]] = None,
-    update_schema: Optional[Type[BaseModel]] = None,
-    read_schema: Optional[Type[BaseModel]] = None,
-) -> tuple[pd.DataFrame, list[int]] | None:
-    """Show A CRUD interface in a Streamlit Page
-
-    This function is deprecated and will be removed in future versions. See SqlUi class docs for details on each argument.
-
-     Returns:
-         tuple[pd.DataFrame, list[int]]: A Tuple with the DataFrame displayed as first item and a list of rows numbers selected as second item.
-
-    Example:
-        See SqlUi class for an example.
-
-    """
-    ui = SqlUi(
-        conn=conn,
-        read_instance=read_instance,
-        edit_create_model=edit_create_model,
-        available_filter=available_filter,
-        edit_create_default_values=edit_create_default_values,
-        rolling_total_column=rolling_total_column,
-        rolling_orderby_colsname=rolling_orderby_colsname,
-        df_style_formatter=df_style_formatter,
-        read_use_container_width=read_use_container_width,
-        hide_id=hide_id,
-        base_key=base_key,
-        style_fn=style_fn,
-        update_show_many=update_show_many,
-        create_schema=create_schema,
-        update_schema=update_schema,
-        read_schema=read_schema,
-    )
-
-    return ui.df, ui.rows_selected
