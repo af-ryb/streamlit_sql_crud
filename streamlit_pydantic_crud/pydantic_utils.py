@@ -40,10 +40,19 @@ class PydanticSQLAlchemyConverter:
                 if hasattr(attr, 'property') and hasattr(attr.property, 'mapper'):
                     relationships[attr_name] = attr
             
+            # Get all properties in the model
+            properties = {}
+            for attr_name in dir(model):
+                attr = getattr(model, attr_name)
+                if isinstance(attr, property):
+                    properties[attr_name] = attr
+            
             # Check if all schema fields exist in the SQLAlchemy model
             for field_name, field_info in schema_fields.items():
-                # Check if field exists as a column or relationship
-                if field_name not in sqlalchemy_columns and field_name not in relationships:
+                # Check if field exists as a column, relationship, or property
+                if (field_name not in sqlalchemy_columns and 
+                    field_name not in relationships and 
+                    field_name not in properties):
                     table_name = getattr(model, '__tablename__', model.__name__)
                     logger.warning(f"Field '{field_name}' in {schema.__name__} not found in {table_name}")
                     return False
