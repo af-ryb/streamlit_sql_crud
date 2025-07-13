@@ -321,6 +321,21 @@ class SqlUi:
         if isinstance(self.read_instance, Select):
             return hasattr(self.read_instance, '_with_options') and self.read_instance._with_options
         return False
+    
+    def _stmt_has_explicit_columns(self, stmt: Select) -> bool:
+        """Check if statement uses explicit column selection (expression-based entities)"""
+        if isinstance(self.read_instance, Select):
+            # Check if the statement selects specific columns rather than entire entities
+            selected_columns = self.read_instance.selected_columns
+            if selected_columns:
+                # If any selected item is not a full table/entity, it's expression-based
+                from sqlalchemy import Table
+                from sqlalchemy.orm import DeclarativeBase
+                for col in selected_columns:
+                    # If it's a column attribute rather than a full table/entity
+                    if hasattr(col, 'table') or hasattr(col, 'element'):
+                        return True
+        return False
 
     def filter(self):
         filter_cols_name = self.available_filter
@@ -433,11 +448,22 @@ class SqlUi:
         stmt_pag: Select,
         initial_balance: float,
     ):
+        # Check if we have ORM options but explicit column selection (incompatible combination)
+        has_orm_options = self._stmt_has_orm_options(stmt_pag)
+        has_explicit_columns = self._stmt_has_explicit_columns(stmt_pag)
+        
+        if has_orm_options and has_explicit_columns:
+            logger.warning(
+                "selectinload() options detected with explicit column selection. "
+                "ORM options will be ignored as they're incompatible with expression-based SELECT statements. "
+                "Consider using separate queries for many-to-many relationships or select full entities instead of individual columns."
+            )
+        
         # Check if we need special handling for many-to-many fields or specific statement types
         needs_orm_execution = (
             self.read_schema or 
             self.many_to_many_fields or 
-            self._stmt_has_orm_options(stmt_pag)
+            (has_orm_options and not has_explicit_columns)  # Only use ORM execution if compatible
         )
         
         if needs_orm_execution:
@@ -457,17 +483,28 @@ class SqlUi:
     def _execute_with_pydantic_schema(self, stmt: Select):
         """Execute query using ORM execution for many-to-many or selectinload support"""
         with self.conn.session as s:
+            has_orm_options = self._stmt_has_orm_options(stmt)
+            has_explicit_columns = self._stmt_has_explicit_columns(stmt)
+            
             # For many-to-many or selectinload, we need ORM objects, not Row objects
-            if self.many_to_many_fields or self._stmt_has_orm_options(stmt):
+            if self.many_to_many_fields or (has_orm_options and not has_explicit_columns):
                 from sqlalchemy.orm import selectinload
                 
                 # Build options for eager loading
                 options = []
                 
-                # Add selectinload options if original statement has them
-                if self._stmt_has_orm_options(stmt):
-                    # Use the original statement with options
-                    result = s.execute(self.read_instance).all()
+                # Add selectinload options if original statement has them and is compatible
+                if has_orm_options and not has_explicit_columns:
+                    # Use the original statement with options - but we need to modify it
+                    # to be compatible with CTE pagination
+                    base_query = s.query(self.edit_create_model)
+                    
+                    # Copy options from original statement if possible
+                    if hasattr(self.read_instance, '_with_options'):
+                        for option in self.read_instance._with_options:
+                            options.append(option)
+                    
+                    result = base_query.options(*options).all()
                 else:
                     # Add many_to_many options  
                     for field_name, config in self.many_to_many_fields.items():
