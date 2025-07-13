@@ -315,6 +315,13 @@ class SqlUi:
 
         return display_name, col.name
 
+    def _stmt_has_orm_options(self, stmt: Select) -> bool:
+        """Check if the statement has ORM options like selectinload"""
+        # Check if the original read_instance has options applied
+        if isinstance(self.read_instance, Select):
+            return hasattr(self.read_instance, '_with_options') and self.read_instance._with_options
+        return False
+
     def filter(self):
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
@@ -426,7 +433,14 @@ class SqlUi:
         stmt_pag: Select,
         initial_balance: float,
     ):
-        if self.read_schema:
+        # Check if we need special handling for many-to-many fields or specific statement types
+        needs_orm_execution = (
+            self.read_schema or 
+            self.many_to_many_fields or 
+            self._stmt_has_orm_options(stmt_pag)
+        )
+        
+        if needs_orm_execution:
             df = self._execute_with_pydantic_schema(stmt_pag)
         else:
             with self.conn.connect() as c:
@@ -441,29 +455,46 @@ class SqlUi:
         return df
 
     def _execute_with_pydantic_schema(self, stmt: Select):
-        """Execute query using Pydantic schema for data processing"""
+        """Execute query using ORM execution for many-to-many or selectinload support"""
         with self.conn.session as s:
-            # For many-to-many, we need ORM objects, not Row objects
-            # Check if we have many_to_many_fields and use different approach
-            if self.many_to_many_fields:
+            # For many-to-many or selectinload, we need ORM objects, not Row objects
+            if self.many_to_many_fields or self._stmt_has_orm_options(stmt):
                 from sqlalchemy.orm import selectinload
                 
                 # Build options for eager loading
                 options = []
-                for field_name, config in self.many_to_many_fields.items():
-                    relationship_attr = getattr(self.edit_create_model, config['relationship'])
-                    options.append(selectinload(relationship_attr))
                 
-                # Use ORM query instead of raw SQL
-                result = s.query(self.edit_create_model).options(*options).all()
+                # Add selectinload options if original statement has them
+                if self._stmt_has_orm_options(stmt):
+                    # Use the original statement with options
+                    result = s.execute(self.read_instance).all()
+                else:
+                    # Add many_to_many options  
+                    for field_name, config in self.many_to_many_fields.items():
+                        relationship_attr = getattr(self.edit_create_model, config['relationship'])
+                        options.append(selectinload(relationship_attr))
+                    
+                    # Use ORM query instead of raw SQL
+                    result = s.query(self.edit_create_model).options(*options).all()
             else:
                 result = s.execute(stmt).all()
 
             validated_rows = []
             for row in result:
-                validated_data = self.read_schema.model_validate(row, from_attributes=True).model_dump()
+                if self.read_schema:
+                    # Use Pydantic validation if schema is provided
+                    validated_data = self.read_schema.model_validate(row, from_attributes=True).model_dump()
+                else:
+                    # Convert ORM/Row object to dict directly
+                    if hasattr(row, '__dict__'):
+                        # ORM object
+                        validated_data = {key: value for key, value in row.__dict__.items() 
+                                        if not key.startswith('_')}
+                    else:
+                        # Row object  
+                        validated_data = row._asdict()
 
-                # Ensure 'id' is always present for CRUD operations, even if not in the schema
+                # Ensure 'id' is always present for CRUD operations
                 if 'id' not in validated_data and hasattr(row, 'id'):
                     validated_data['id'] = row.id
 
