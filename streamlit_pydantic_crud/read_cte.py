@@ -62,17 +62,19 @@ def get_existing_values(
     cols = list(cte.columns)
 
     if len(available_col_filter) > 0:
-        cols = [col for col in cte.columns if col.description in available_col_filter and get_existing_cond(col)]
+        # Use col.name as fallback if description is None (common for joined columns)
+        cols = [col for col in cte.columns if (col.description or col.name) in available_col_filter and get_existing_cond(col)]
     else:
         cols = [col for col in cte.columns if get_existing_cond(col)]
 
     result: dict[str, Any] = {}
     for col in cols:
         try:
-            stmt = select(distinct(col)).order_by(col).limit(10000)
+            # For joined columns, we need to select from the CTE itself
+            stmt = select(distinct(cte.c[col.name])).order_by(cte.c[col.name]).limit(10000)
             values = _session.execute(stmt).scalars().all()
-            colname = col.description
-            assert colname is not None
+            # Use col.name if description is None (common for joined columns)
+            colname = col.description or col.name
             result[colname] = values
         except Exception as e:
             # Skip columns that cause errors (like JSON column type)
@@ -123,14 +125,14 @@ class ColFilter:
         cols = [
             col
             for col in self.cte.columns
-            if col.description in self.available_col_filter
+            if (col.description or col.name) in self.available_col_filter
             and col.type.python_type is date
         ]
 
         result: dict[str, tuple[date | None, date | None]] = {}
         for col in cols:
-            colname = col.description
-            assert colname is not None
+            # Use col.name as fallback for joined columns
+            colname = col.description or col.name
             label = get_pretty_name(colname)
             self.container.write(label)
             inicio_c, final_c, btn_c = self.container.columns(
@@ -187,19 +189,19 @@ class ColFilter:
         cols = [
             col
             for col in self.cte.columns
-            if col.description in self.available_col_filter
+            if (col.description or col.name) in self.available_col_filter
             and col.type.python_type is not date
         ]
 
         result: dict[str, Any] = {}
         for col in cols:
-            colname = col.description
-            assert colname is not None
+            # Use col.name as fallback for joined columns
+            colname = col.description or col.name
 
             existing_value = self.existing_values.get(colname)
 
             if existing_value is None:
-                return result
+                continue  # Continue to check other columns instead of returning
 
             label = get_pretty_name(colname)
             key = f"{self.key_prefix}_no_dt_filter_{label}"
@@ -229,7 +231,12 @@ def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, str | None]):
     stmt = select(cte)
     for colname, value in no_dt_filters.items():
         if value:
-            col = cte.columns.get(colname)
+            # First try to get by description, then by name
+            col = None
+            for c in cte.columns:
+                if c.description == colname or c.name == colname:
+                    col = c
+                    break
             assert col is not None
             stmt = stmt.where(col == value)
 
@@ -242,7 +249,12 @@ def get_stmt_no_pag(cte: CTE, col_filter: ColFilter):
 
     dt_filters = col_filter.dt_filters
     for colname, filters in dt_filters.items():
-        col = cte.columns.get(colname)
+        # First try to get by description, then by name
+        col = None
+        for c in cte.columns:
+            if c.description == colname or c.name == colname:
+                col = c
+                break
         assert col is not None
         inicio, final = filters
         if inicio:

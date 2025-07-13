@@ -19,6 +19,7 @@ Key enhancements over the original streamlit_sql package:
 ### READ
 - Display as a standard st.dataframe with pagination
 - Configure using SQLAlchemy select statements (JOIN, ORDER BY, WHERE, etc.)
+- **Display fields from joined tables efficiently**
 - Add rolling sum columns for numeric data
 - Conditional row styling based on values
 - Custom number formatting
@@ -31,6 +32,7 @@ Key enhancements over the original streamlit_sql package:
 - Pre-filter data before display
 - User-friendly filter expander with conditions
 - Auto-complete with existing column values
+- **Filter by fields from joined tables**
 - Foreign key filtering by string representation
 - **Custom foreign key selectboxes with flexible queries**
 
@@ -205,6 +207,158 @@ SqlUi(
     }
 )
 ```
+
+## JOIN Fields Support
+
+Display and filter fields from joined tables efficiently:
+
+```python
+# Create a SELECT statement with JOINs
+read_stmt = (
+    select(
+        Alert.id,
+        Alert.alert_name,
+        Alert.threshold,
+        Template.app_name,
+        Template.platform,
+        Template.metric_name
+    )
+    .join(Template, Alert.template_id == Template.id)
+)
+
+# Use with SqlUi - joined fields are automatically available for filtering
+SqlUi(
+    conn=conn,
+    read_instance=read_stmt,
+    edit_create_model=Alert,
+    available_filter=["alert_name", "app_name", "platform", "metric_name"],
+)
+```
+
+### Benefits
+- **Performance**: Direct JOINs are more efficient than loading relationships
+- **Filtering**: All joined fields can be filtered using the standard filter interface
+- **No Property Methods**: No need for @property methods or selectinload()
+- **Complex Queries**: Supports multiple joins and complex SQL queries
+
+### Handling Column Name Conflicts
+Use `.label()` to rename columns when joining tables with identical column names:
+
+```python
+read_stmt = (
+    select(
+        Order,
+        Customer.name.label('customer_name'),
+        Product.name.label('product_name')
+    )
+    .join(Customer).join(Product)
+)
+```
+
+### Important: read_schema Limitations with JOINs
+
+⚠️ **Critical Note**: When using JOIN queries with fields from multiple tables, `read_schema` has important limitations:
+
+```python
+# ❌ PROBLEMATIC: read_schema with joined fields
+class ProjectWithDepartmentSchema(BaseModel):
+    id: int
+    name: str
+    # These fields from joined table will cause validation errors
+    department_name: str  # From Department table
+    department_type: str  # From Department table
+
+SqlUi(
+    conn=conn,
+    read_instance=select(Project, Department.name.label('department_name')).join(Department),
+    edit_create_model=Project,
+    read_schema=ProjectWithDepartmentSchema,  # ❌ Will fail validation
+)
+```
+
+```python
+# ✅ SOLUTION 1: Omit read_schema for JOIN queries
+SqlUi(
+    conn=conn,
+    read_instance=select(
+        Project.id,
+        Project.name,
+        Project.budget,
+        Department.name.label('department_name'),
+        Department.department_type
+    ).join(Department),
+    edit_create_model=Project,
+    # No read_schema - joined fields will still be displayed and filterable
+)
+```
+
+```python
+# ✅ SOLUTION 2: read_schema with only base model fields
+class ProjectOnlySchema(BaseModel):
+    id: int
+    name: str
+    budget: Decimal
+    # Only fields that exist in Project model
+
+SqlUi(
+    conn=conn,
+    read_instance=select(
+        Project.id,
+        Project.name, 
+        Project.budget,
+        Department.name.label('department_name')  # Will be displayed but not in schema
+    ).join(Department),
+    edit_create_model=Project,
+    read_schema=ProjectOnlySchema,  # ✅ Only base model fields
+)
+```
+
+**Why this happens**: Schema validation checks that all schema fields exist as columns, relationships, or properties in the base SQLAlchemy model. Joined fields don't exist in the base model, causing validation to fail.
+
+**Best Practice**: For JOIN queries, either omit `read_schema` entirely or only include fields from the base model. Joined fields will still be displayed, filtered, and formatted correctly.
+
+### Calculated Fields in JOIN Queries
+
+You can add calculated fields using SQL expressions in your SELECT statements:
+
+```python
+from sqlalchemy import func
+
+# JOIN with calculated fields
+read_stmt = (
+    select(
+        Project.id,
+        Project.name,
+        Project.budget,
+        Department.name.label('department_name'),
+        Department.budget.label('department_budget'),
+        
+        # Calculated field: percentage
+        (Project.budget / Department.budget * 100).label('budget_percent'),
+        
+    )
+    .join(Department, Project.department_id == Department.id)
+)
+
+SqlUi(
+    conn=conn,
+    read_instance=read_stmt,
+    edit_create_model=Project,
+    available_filter=["name", "department_name", "status_description", "budget_percent"],
+    df_style_formatter={
+        "budget": "${:,.2f}",
+        "budget_percent": "{:.1f}%",
+        "days_remaining": "{} days"
+    }
+)
+```
+
+**Calculated Fields Features**:
+- Mathematical operations between columns from different tables
+- CASE statements for conditional logic  
+- Date/time calculations with proper NULL handling
+- Window functions for analytics
+- All calculated fields can be included in filters and formatting
 
 ## PydanticUi - Standalone Forms
 

@@ -62,7 +62,7 @@ class SqlUi:
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
             rolling_total_column (str, optional): A numeric column name of the read_instance. A new column will be displayed with the rolling sum of these column
             rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
-            df_style_formatter (dict[str,str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
+            df_style_formatter (dict[str, str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): add use_container_width to st.dataframe args. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
@@ -305,11 +305,22 @@ class SqlUi:
 
         return cte
 
+    @staticmethod
+    def _get_column_info(col) -> tuple[str, str]:
+        """Helper method to get column information for joined columns
+        
+        Returns a tuple of (display_name, col_name)
+        """
+        display_name = col.description or col.name
+
+        return display_name, col.name
+
     def filter(self):
-        filter_colsname = self.available_filter
-        if len(filter_colsname) == 0:
-            filter_colsname = [
-                col.description for col in self.cte.columns if col.description
+        filter_cols_name = self.available_filter
+        if len(filter_cols_name) == 0:
+            # Include both columns with description and those without (joined columns)
+            filter_cols_name = [
+                col.description or col.name for col in self.cte.columns
             ]
 
         with self.conn.session as s:
@@ -317,14 +328,14 @@ class SqlUi:
                 _session=s,
                 cte=self.cte,
                 updated=ss.stsql_updated,
-                available_col_filter=filter_colsname,
+                available_col_filter=filter_cols_name,
             )
 
         col_filter = read_cte.ColFilter(
             self.expander_container,
             cte=self.cte,
             existing_values=existing,
-            available_col_filter=filter_colsname,
+            available_col_filter=filter_cols_name,
             key=self.key,
         )
         if str(col_filter) != "":
@@ -358,19 +369,19 @@ class SqlUi:
         if rolling_total_column is None:
             return 0
 
-        saldo_toogle = self.saldo_toggle_col.toggle(
+        saldo_toggle = self.saldo_toggle_col.toggle(
             f"Add Previous Balance in {self.rolling_pretty_name}",
             value=True,
             key=f"{self.key}_saldo_toggle_sql_ui",
         )
 
-        if not saldo_toogle:
+        if not saldo_toggle:
             return 0
 
         stmt_no_pag_dt = read_cte.get_stmt_no_pag_dt(base_cte, no_dt_filters)
 
         orderby_cols = [
-            base_cte.columns.get(colname) for colname in rolling_orderby_colsname
+            base_cte.columns.get(col_name) for col_name in rolling_orderby_colsname
         ]
         orderby_cols = [col for col in orderby_cols if col is not None]
         with self.conn.session as s:
