@@ -53,6 +53,41 @@ Key enhancements over the original streamlit_sql package:
 - **Pydantic validation with custom error messages**
 - **Many-to-many relationship selection**
 
+#### Copy Functionality
+
+The SqlUi interface includes a copy button that allows duplicating existing rows:
+- Select a single row and click the copy button (appears next to edit)
+- Creates a new record with all fields pre-populated from the selected row
+- The 'id' field is automatically removed to avoid conflicts
+
+**Important: read_schema and copy behavior**
+
+⚠️ **Critical**: When using `read_schema`, only fields included in the schema will be available for copying:
+
+```python
+# ❌ PROBLEMATIC: Missing fields in read schema
+class AlertReadSchema(BaseModel):
+    alert_name: str
+    is_active: bool
+    # fact_query field is missing!
+
+SqlUi(
+    conn=conn,
+    model=Alert,
+    read_schema=AlertReadSchema,  # fact_query won't be copied!
+)
+```
+
+```python
+# ✅ SOLUTION: Include all fields you want to copy
+class AlertReadSchema(BaseModel):
+    alert_name: str
+    is_active: bool
+    fact_query: str  # Now available for copying
+```
+
+**Why this happens**: The copy function retrieves data from the displayed dataframe, which only contains fields defined in the read_schema. Missing fields won't be available for copying, even if they exist in the database.
+
 ### DELETE
 - Delete single or multiple rows
 - Confirmation dialog with selected row preview
