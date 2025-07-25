@@ -75,8 +75,8 @@ class CreateRow:
     def get_pydantic_fields(self):
         """Generate fields using PydanticUi"""
         # Use PydanticUi to render the form with submit button
-        form_data = self.pydantic_ui.render_with_submit("Save")
-        return form_data
+        form_data, submitted = self.pydantic_ui.render_with_submit("Save")
+        return form_data if submitted else None
     
     def _load_many_to_many_data(self):
         """Load many-to-many relationship data from the database."""

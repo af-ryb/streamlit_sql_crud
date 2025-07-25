@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic
+from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
@@ -156,14 +156,14 @@ class PydanticUi(Generic[T]):
         """
         return st.session_state.get(self.session_state_key, {})
     
-    def render_with_submit(self, submit_label: str = "Submit") -> Optional[T]:
-        """Render form with submit button and return validated data on submit.
+    def render_with_submit(self, submit_label: str = "Submit") -> Tuple[Optional[T], bool]:
+        """Render form with submit button and return validated data with submit status.
         
         Args:
             submit_label: Label for the submit button
             
         Returns:
-            Validated Pydantic model instance or None if not submitted or invalid
+            Tuple of (validated Pydantic model instance or None, submit button pressed status)
         """
         with st.form(key=f"{self.key}_form"):
             # Render form fields
@@ -172,10 +172,7 @@ class PydanticUi(Generic[T]):
             # Submit button
             submitted = st.form_submit_button(submit_label)
             
-            if submitted and model_instance:
-                return model_instance
-            
-            return None
+            return model_instance, submitted
     
     def render_with_columns(self, columns: int = 2) -> Optional[T]:
         """Render form fields in columns layout.
