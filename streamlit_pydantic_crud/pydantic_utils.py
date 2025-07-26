@@ -232,6 +232,33 @@ class PydanticInputGenerator:
         self.foreign_key_data = {}
         self.many_to_many_data = {}
 
+    def _is_empty_value_for_optional_field(self, field_name: str, field_value: Any) -> bool:
+        """Check if a field value should be considered empty for optional fields.
+        
+        Args:
+            field_name: Name of the field
+            field_value: Value to check
+            
+        Returns:
+            True if the value should be treated as empty for optional fields
+        """
+        field_info = self.field_info.get(field_name, {})
+        is_optional = field_info.get('is_optional', False) or not field_info.get('is_required', True)
+        
+        # Only filter empty values for optional fields
+        if not is_optional:
+            return False
+        
+        # Check for various empty value types
+        if field_value == "":
+            return True
+        elif field_value == []:
+            return True
+        elif field_value is None:
+            return True
+        
+        return False
+
     @logger.catch()
     def generate_form_data(self, existing_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Generate form data dictionary for validation
@@ -268,7 +295,8 @@ class PydanticInputGenerator:
                                                    )
             
             # Only include field in form data if it's not None (e.g., ID in create operations)
-            if field_value is not None:
+            # and not an empty value for optional fields
+            if field_value is not None and not self._is_empty_value_for_optional_field(field_name, field_value):
                 # For JSON text areas, attempt to parse the string back into a dict
                 input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
                 if input_type == 'text_area_json' and isinstance(field_value, str):
@@ -277,8 +305,8 @@ class PydanticInputGenerator:
                         if field_value:
                             form_data[field_name] = json.loads(field_value)
                         else:
-                            # Handle case where field is optional
-                            form_data[field_name] = None
+                            # Handle case where field is optional - skip empty values
+                            continue
                     except json.JSONDecodeError:
                         # If parsing fails, pass the original string to Pydantic for validation
                         form_data[field_name] = field_value
