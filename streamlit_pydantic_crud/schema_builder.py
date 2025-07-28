@@ -65,8 +65,20 @@ def create_pydantic_model_from_json_schema(
                         base_type = List[str]
                     else:
                         items_schema = actual_type_schema.get("items", {})
-                        items_type = create_pydantic_model_from_json_schema(items_schema, field_options, f"{model_name}Item")
-                        base_type = List[items_type]
+                        # Check if items is a simple type
+                        items_type_str = items_schema.get("type")
+                        if items_type_str == "string":
+                            base_type = List[str]
+                        elif items_type_str == "integer":
+                            base_type = List[int]
+                        elif items_type_str == "number":
+                            base_type = List[float]
+                        elif items_type_str == "boolean":
+                            base_type = List[bool]
+                        else:
+                            # Complex type, create nested model
+                            items_type = create_pydantic_model_from_json_schema(items_schema, field_options, f"{model_name}Item")
+                            base_type = List[items_type]
                 elif field_type == "object":
                     base_type = create_pydantic_model_from_json_schema(actual_type_schema, field_options, f"{model_name}{field_name.capitalize()}")
                 else:
@@ -102,8 +114,21 @@ def create_pydantic_model_from_json_schema(
                     # Use List[str] for multiselect with options
                     python_type = List[str]
                 else:
-                    items_type = create_pydantic_model_from_json_schema(field_schema.get("items", {}), field_options, f"{model_name}Item")
-                    python_type = List[items_type]
+                    items_schema = field_schema.get("items", {})
+                    # Check if items is a simple type
+                    items_type_str = items_schema.get("type")
+                    if items_type_str == "string":
+                        python_type = List[str]
+                    elif items_type_str == "integer":
+                        python_type = List[int]
+                    elif items_type_str == "number":
+                        python_type = List[float]
+                    elif items_type_str == "boolean":
+                        python_type = List[bool]
+                    else:
+                        # Complex type, create nested model
+                        items_type = create_pydantic_model_from_json_schema(items_schema, field_options, f"{model_name}Item")
+                        python_type = List[items_type]
             elif field_type == "object":
                 python_type = create_pydantic_model_from_json_schema(field_schema, field_options, f"{model_name}{field_name.capitalize()}")
             else:
