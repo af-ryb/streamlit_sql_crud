@@ -646,6 +646,8 @@ class PydanticInputGenerator:
             return self._render_checkbox_widget(label, {}, existing_value, key)
         elif input_type == 'date_input':
             return self._render_date_input_widget(label, {}, existing_value, key)
+        elif input_type == 'number_input_decimal':
+            return self._render_number_input_widget(label, {"step": 0.01}, existing_value, key, use_int=False)
         elif input_type == 'text_area_json':
             return self._render_json_text_area_widget(label, {"height": 150, "help": "Enter valid JSON"},
                                                       existing_value=existing_value, key=key)
