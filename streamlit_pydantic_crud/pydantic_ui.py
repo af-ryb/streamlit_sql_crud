@@ -1,9 +1,10 @@
 import streamlit as st
-from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple
+from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple, List
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
 from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
+from streamlit_pydantic_crud.schema_builder import create_pydantic_model_from_json_schema
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -32,6 +33,61 @@ class PydanticUi(Generic[T]):
 
         self.input_generator = PydanticInputGenerator(schema=schema, key_prefix=key)
         self._init_session_state()
+    
+    @classmethod
+    def from_json_schema(
+        cls, 
+        json_schema: Dict[str, Any], 
+        field_options: Dict[str, List[str]] = None,
+        key: str = "form",
+        model_name: str = "DynamicModel",
+        session_state_key: Optional[str] = None
+    ) -> 'PydanticUi':
+        """Create PydanticUi from JSON schema with field options.
+        
+        This method allows creating a PydanticUi instance directly from a JSON schema
+        and field options, eliminating the need to manually create the Pydantic model first.
+        
+        Args:
+            json_schema: JSON schema dictionary (from model.model_json_schema())
+            field_options: Dictionary mapping field names to option lists for widgets
+            key: Unique key for the form
+            model_name: Name for the dynamically created model
+            session_state_key: Key for session state persistence
+            
+        Returns:
+            PydanticUi instance with dynamically created schema
+            
+        Example:
+            ```python
+            # Instead of:
+            # schema_model = create_pydantic_model_with_options(json_schema, field_options)
+            # ui = PydanticUi(schema=schema_model, key="form")
+            
+            # Use:
+            ui = PydanticUi.from_json_schema(
+                json_schema=json_schema,
+                field_options=field_options,
+                key="form"
+            )
+            ```
+        """
+        if field_options is None:
+            field_options = {}
+            
+        # Create the dynamic Pydantic model from JSON schema
+        dynamic_schema = create_pydantic_model_from_json_schema(
+            json_schema=json_schema,
+            field_options=field_options,
+            model_name=model_name
+        )
+        
+        # Create and return PydanticUi instance
+        return cls(
+            schema=dynamic_schema,
+            key=key,
+            session_state_key=session_state_key
+        )
     
     def _init_session_state(self):
         """Initialize session state for form data persistence."""

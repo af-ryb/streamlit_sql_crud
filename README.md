@@ -452,6 +452,92 @@ class AdvancedSchema(BaseModel):
     )
 ```
 
+### Dynamic Schema Creation
+
+Create PydanticUi forms directly from JSON schemas with field options:
+
+```python
+from streamlit_pydantic_crud import PydanticUi
+
+# JSON schema (typically from API response)
+json_schema = {
+    "properties": {
+        "task_type": {
+            "type": "string",
+            "default": "data_processing",
+            "widget": "text_input",
+            "kw": {"disabled": True}
+        },
+        "start_date": {
+            "anyOf": [
+                {"type": "string", "format": "date"},
+                {"type": "null"}
+            ],
+            "default": None
+        },
+        "tags": {
+            "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "null"}
+            ],
+            "widget": "multiselect"
+        }
+    },
+    "required": ["task_type"]
+}
+
+# Field options for widgets
+field_options = {
+    "tags": ["analytics", "processing", "reporting", "automation"]
+}
+
+# Create form directly from JSON schema
+ui = PydanticUi.from_json_schema(
+    json_schema=json_schema,
+    field_options=field_options,
+    key="dynamic_form",
+    model_name="TaskConfig"
+)
+
+# Use normally
+model_instance, submitted = ui.render_with_submit("Submit Task")
+if submitted and model_instance:
+    # Process the validated data
+    st.write(model_instance.model_dump())
+```
+
+#### Benefits of `from_json_schema`
+
+- **Single-step creation**: No need to manually create Pydantic models first
+- **Type preservation**: Optional fields maintain correct types (`Optional[date]`, `Optional[List[str]]`)
+- **Widget integration**: Field options are automatically applied to appropriate widgets
+- **API compatibility**: Perfect for forms generated from API schema responses
+- **Backward compatible**: Existing `PydanticUi(schema=MyModel)` usage unchanged
+
+#### Use Cases
+
+1. **Dynamic API forms**: Create forms from API-provided schemas
+2. **Configuration interfaces**: Build forms from JSON configuration schemas
+3. **Multi-tenant applications**: Different form schemas per tenant
+4. **Schema evolution**: Handle changing schemas without code updates
+
+```python
+# Example: API-driven form creation
+def create_task_form(task_type: str):
+    # Get schema from API
+    api_response = requests.get(f"/api/schemas/{task_type}")
+    schema_data = api_response.json()
+    
+    # Create form directly
+    ui = PydanticUi.from_json_schema(
+        json_schema=schema_data["py_schema"],
+        field_options=schema_data["field_options"],
+        key=f"task_form_{task_type}"
+    )
+    
+    return ui.render_with_submit("Create Task")
+```
+
 ## Advanced Configuration
 
 See the [API documentation](https://github.com/af-ryb/streamlit_sql_crud) for complete parameter documentation and advanced features.
