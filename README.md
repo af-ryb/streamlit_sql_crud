@@ -395,6 +395,73 @@ SqlUi(
 - Window functions for analytics
 - All calculated fields can be included in filters and formatting
 
+## Filtering with JOIN Statements
+
+When using JOIN statements, the filtering system automatically handles both direct table columns and joined columns efficiently.
+
+### How JOIN Filtering Works
+
+The filtering implementation uses a two-stage approach when `many_to_many_fields` are present:
+
+1. **Filter First**: Executes the joined query with all applied filters to get the correct filtered results
+2. **Load Relationships**: For entities that have many-to-many relationships, loads the relationship data separately for only the filtered entities
+3. **Merge Results**: Combines the filtered data with the relationship data
+
+### Example with Joined Table Filtering
+
+```python
+# JOIN statement with labeled columns for filtering
+read_stmt = (
+    select(
+        AlertConfiguration,
+        Template.app_name.label('app_name'),
+        Template.platform.label('platform'), 
+        Template.metric_name.label('metric_name')
+    )
+    .select_from(AlertConfiguration)
+    .join(Template, AlertConfiguration.template_id == Template.id)
+    .options(
+        selectinload(AlertConfiguration.rules),
+        selectinload(AlertConfiguration.template)
+    )
+)
+
+SqlUi(
+    conn=conn,
+    read_instance=read_stmt,
+    edit_create_model=AlertConfiguration,
+    many_to_many_fields={
+        'rules': {
+            'relationship': 'rules',
+            'display_field': 'name'
+        }
+    },
+    available_filter=['is_active', 'app_name', 'platform', 'metric_name'],
+)
+```
+
+### Key Benefits
+
+- **Correct Filtering**: Filters are applied to the base query, ensuring accurate results
+- **Performance Optimized**: Relationships loaded only for filtered entities, not all entities
+- **Seamless Integration**: Works transparently with existing SqlUi features
+- **Complex Queries Supported**: Handles multiple JOINs, subqueries, and CTEs
+
+### Technical Details
+
+The filtering process:
+
+1. **CTE Creation**: Your JOIN query becomes a Common Table Expression (CTE)
+2. **Filter Application**: User selections are applied as WHERE conditions to the CTE
+3. **Smart Execution**: When `many_to_many_fields` are configured:
+   - Executes filtered statement to get base results
+   - Extracts entity IDs from filtered results  
+   - Loads full entities with relationships for those IDs only
+   - Merges filtered data with relationship data
+4. **Result Display**: Shows filtered results with all relationship data intact
+
+This approach ensures that filtering works correctly while maintaining full relationship functionality and optimal performance.
+
 ## PydanticUi - Standalone Forms
 
 Create Streamlit forms from Pydantic models without database dependencies:

@@ -60,18 +60,10 @@ def get_existing_values(
         available_col_filter = []
 
     cols = list(cte.columns)
-    
-    # DEBUG: Log available CTE columns
-    cte_column_names = [col.description or col.name for col in cols]
-    logger.debug(f"get_existing_values: Available CTE columns: {cte_column_names}")
-    logger.debug(f"get_existing_values: Requested filter columns: {available_col_filter}")
 
     if len(available_col_filter) > 0:
         # Use col.name as fallback if description is None (common for joined columns)
-        matching_cols = [col for col in cte.columns if (col.description or col.name) in available_col_filter and get_existing_cond(col)]
-        matching_names = [col.description or col.name for col in matching_cols]
-        logger.debug(f"get_existing_values: Matching filter columns: {matching_names}")
-        cols = matching_cols
+        cols = [col for col in cte.columns if (col.description or col.name) in available_col_filter and get_existing_cond(col)]
     else:
         cols = [col for col in cte.columns if get_existing_cond(col)]
 
@@ -108,17 +100,10 @@ class ColFilter:
         self.available_col_filter = available_col_filter or []
         self.key_prefix = f"{key}_create"
 
-        # DEBUG: Log filter column discovery
-        cte_column_names = [col.description or col.name for col in self.cte.columns]
-        logger.debug(f"ColFilter.__init__: Available CTE columns: {cte_column_names}")
-        logger.debug(f"ColFilter.__init__: Requested filter columns: {self.available_col_filter}")
 
         self.dt_filters = self.get_dt_filters()
         self.no_dt_filters = self.get_no_dt_filters()
         
-        # DEBUG: Log what filters were actually created
-        logger.debug(f"ColFilter.__init__: Created dt_filters: {list(self.dt_filters.keys())}")
-        logger.debug(f"ColFilter.__init__: Created no_dt_filters: {list(self.no_dt_filters.keys())}")
 
     def __str__(self):
         dt_str = ", ".join(
@@ -247,10 +232,6 @@ class ColFilter:
 def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, str | None]):
     stmt = select(cte)
     
-    logger.debug(f"get_stmt_no_pag_dt: Applying filters: {no_dt_filters}")
-    cte_column_names = [col.description or col.name for col in cte.columns]
-    logger.debug(f"get_stmt_no_pag_dt: Available CTE columns: {cte_column_names}")
-    
     for colname, value in no_dt_filters.items():
         if value:
             # First try to get by description, then by name
@@ -261,12 +242,9 @@ def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, str | None]):
                     break
             
             if col is not None:
-                logger.debug(f"get_stmt_no_pag_dt: Found column '{colname}', applying filter: {colname} == {value}")
                 stmt = stmt.where(col == value)
             else:
-                logger.error(f"get_stmt_no_pag_dt: Column '{colname}' not found in CTE columns: {cte_column_names}")
-                # Don't assert here to see what happens, just log the error
-                # assert col is not None
+                assert col is not None, f"Column '{colname}' not found in CTE"
 
     return stmt
 
@@ -336,9 +314,6 @@ def get_stmt_pag(stmt_no_pag: Select, limit: int, page: int):
     offset = (page - 1) * limit
     stmt = stmt_no_pag.offset(offset).limit(limit)
     
-    # DEBUG: Log final paginated statement
-    logger.debug(f"get_stmt_pag: Final paginated statement: {stmt}")
-    logger.debug(f"get_stmt_pag: limit={limit}, page={page}, offset={offset}")
     
     return stmt
 

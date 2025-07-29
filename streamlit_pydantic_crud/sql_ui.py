@@ -451,12 +451,7 @@ class SqlUi:
         # Check if we have ORM options but explicit column selection (incompatible combination)
         has_orm_options = self._stmt_has_orm_options(stmt_pag)
         has_explicit_columns = self._stmt_has_explicit_columns(stmt_pag)
-        
-        # DEBUG: Log execution path decision
-        logger.debug(f"get_df: has_orm_options={has_orm_options}, has_explicit_columns={has_explicit_columns}")
-        logger.debug(f"get_df: read_schema={bool(self.read_schema)}, many_to_many_fields={bool(self.many_to_many_fields)}")
-        logger.debug(f"get_df: stmt_pag SQL: {stmt_pag}")
-        
+
         if has_orm_options and has_explicit_columns:
             logger.warning(
                 "selectinload() options detected with explicit column selection. "
@@ -471,13 +466,9 @@ class SqlUi:
             (has_orm_options and not has_explicit_columns)  # Only use ORM execution if compatible
         )
         
-        logger.debug(f"get_df: needs_orm_execution={needs_orm_execution}")
-        
         if needs_orm_execution:
-            logger.debug("get_df: Using _execute_with_pydantic_schema")
             df = self._execute_with_pydantic_schema(stmt_pag)
         else:
-            logger.debug("get_df: Using pd.read_sql")
             with self.conn.connect() as c:
                 df = pd.read_sql(stmt_pag, c)
             df = self.convert_arrow(df)
@@ -495,15 +486,9 @@ class SqlUi:
             has_orm_options = self._stmt_has_orm_options(stmt)
             has_explicit_columns = self._stmt_has_explicit_columns(stmt)
             
-            # DEBUG: Log what statement we received
-            logger.debug(f"_execute_with_pydantic_schema: Received stmt: {stmt}")
-            logger.debug(f"_execute_with_pydantic_schema: has_orm_options={has_orm_options}, has_explicit_columns={has_explicit_columns}")
-            logger.debug(f"_execute_with_pydantic_schema: many_to_many_fields={bool(self.many_to_many_fields)}")
-            
             # For many-to-many or selectinload, we need ORM objects, not Row objects
             if self.many_to_many_fields or (has_orm_options and not has_explicit_columns):
                 # Use the filtered statement first to get the correct data
-                logger.debug(f"_execute_with_pydantic_schema: Using filtered stmt to get base results")
                 filtered_result = s.execute(stmt).all()
                 
                 # If we have many-to-many fields and filtered results, load relationships separately
@@ -518,7 +503,6 @@ class SqlUi:
                         options.append(selectinload(relationship_attr))
                     
                     # Load entities with relationships for just the filtered IDs
-                    logger.debug(f"_execute_with_pydantic_schema: Loading relationships for {len(entity_ids)} filtered entities")
                     entities_with_relations = s.query(self.edit_create_model).filter(
                         self.edit_create_model.id.in_(entity_ids)
                     ).options(*options).all()
@@ -536,13 +520,10 @@ class SqlUi:
                         else:
                             # Fallback to row data if entity not found
                             result.append(row)
-                    
-                    logger.debug(f"_execute_with_pydantic_schema: Merged {len(result)} results with relationships")
                 else:
                     # No many-to-many fields or no results, use filtered results as-is
                     result = filtered_result
             else:
-                logger.debug(f"_execute_with_pydantic_schema: Using provided stmt: {stmt}")
                 result = s.execute(stmt).all()
 
             validated_rows = []
