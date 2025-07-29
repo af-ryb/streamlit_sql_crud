@@ -7,7 +7,7 @@ from loguru import logger
 
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select, select
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, selectinload
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
@@ -502,34 +502,45 @@ class SqlUi:
             
             # For many-to-many or selectinload, we need ORM objects, not Row objects
             if self.many_to_many_fields or (has_orm_options and not has_explicit_columns):
-                from sqlalchemy.orm import selectinload
+                # Use the filtered statement first to get the correct data
+                logger.debug(f"_execute_with_pydantic_schema: Using filtered stmt to get base results")
+                filtered_result = s.execute(stmt).all()
                 
-                # Build options for eager loading
-                options = []
-                
-                # Add selectinload options if original statement has them and is compatible
-                if has_orm_options and not has_explicit_columns:
-                    # Use the original statement with options - but we need to modify it
-                    # to be compatible with CTE pagination
-                    base_query = s.query(self.edit_create_model)
+                # If we have many-to-many fields and filtered results, load relationships separately
+                if self.many_to_many_fields and filtered_result:
+                    # Extract entity IDs from filtered results
+                    entity_ids = [row.id for row in filtered_result]
                     
-                    # Copy options from original statement if possible
-                    if hasattr(self.read_instance, '_with_options'):
-                        for option in self.read_instance._with_options:
-                            options.append(option)
-                    
-                    logger.debug(f"_execute_with_pydantic_schema: IGNORING filtered stmt, using base_query: {base_query}")
-                    result = base_query.options(*options).all()
-                else:
-                    # Add many_to_many options  
+                    # Build options for eager loading
+                    options = []
                     for field_name, config in self.many_to_many_fields.items():
                         relationship_attr = getattr(self.edit_create_model, config['relationship'])
                         options.append(selectinload(relationship_attr))
                     
-                    # Use ORM query instead of raw SQL
-                    new_query = s.query(self.edit_create_model).options(*options)
-                    logger.debug(f"_execute_with_pydantic_schema: IGNORING filtered stmt, using new_query: {new_query}")
-                    result = new_query.all()
+                    # Load entities with relationships for just the filtered IDs
+                    logger.debug(f"_execute_with_pydantic_schema: Loading relationships for {len(entity_ids)} filtered entities")
+                    entities_with_relations = s.query(self.edit_create_model).filter(
+                        self.edit_create_model.id.in_(entity_ids)
+                    ).options(*options).all()
+                    
+                    # Create a mapping of id -> entity with relationships
+                    entity_map = {entity.id: entity for entity in entities_with_relations}
+                    
+                    # Merge filtered data with relationship data
+                    result = []
+                    for row in filtered_result:
+                        entity = entity_map.get(row.id)
+                        if entity:
+                            # Use the entity with relationships loaded
+                            result.append(entity)
+                        else:
+                            # Fallback to row data if entity not found
+                            result.append(row)
+                    
+                    logger.debug(f"_execute_with_pydantic_schema: Merged {len(result)} results with relationships")
+                else:
+                    # No many-to-many fields or no results, use filtered results as-is
+                    result = filtered_result
             else:
                 logger.debug(f"_execute_with_pydantic_schema: Using provided stmt: {stmt}")
                 result = s.execute(stmt).all()
