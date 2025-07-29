@@ -335,6 +335,11 @@ def show_pagination(count: int, opts_items_page: tuple[int, ...], key: str = "")
 def get_stmt_pag(stmt_no_pag: Select, limit: int, page: int):
     offset = (page - 1) * limit
     stmt = stmt_no_pag.offset(offset).limit(limit)
+    
+    # DEBUG: Log final paginated statement
+    logger.debug(f"get_stmt_pag: Final paginated statement: {stmt}")
+    logger.debug(f"get_stmt_pag: limit={limit}, page={page}, offset={offset}")
+    
     return stmt
 
 
