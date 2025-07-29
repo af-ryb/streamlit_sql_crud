@@ -495,22 +495,24 @@ class SqlUi:
                 
                 # Add selectinload options if original statement has them and is compatible
                 if has_orm_options and not has_explicit_columns:
+                    # Use the original statement with options - but we need to modify it
+                    # to be compatible with CTE pagination
+                    base_query = s.query(self.edit_create_model)
+                    
                     # Copy options from original statement if possible
                     if hasattr(self.read_instance, '_with_options'):
                         for option in self.read_instance._with_options:
                             options.append(option)
-                
-                # Add many_to_many options  
-                if self.many_to_many_fields:
+                    
+                    result = base_query.options(*options).all()
+                else:
+                    # Add many_to_many options  
                     for field_name, config in self.many_to_many_fields.items():
                         relationship_attr = getattr(self.edit_create_model, config['relationship'])
                         options.append(selectinload(relationship_attr))
-                
-                # Apply options to the existing statement instead of creating a new query
-                if options:
-                    stmt = stmt.options(*options)
-                
-                result = s.execute(stmt).all()
+                    
+                    # Use ORM query instead of raw SQL
+                    result = s.query(self.edit_create_model).options(*options).all()
             else:
                 result = s.execute(stmt).all()
 
