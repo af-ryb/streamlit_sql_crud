@@ -61,6 +61,9 @@ class CreateRow:
                 many_to_many_fields=self.many_to_many_fields,
             )
             
+            # Set operation type to 'create' for proper empty value handling
+            self.pydantic_ui.set_operation_type('create')
+            
             # Load foreign key data for fields that need it
             self._load_foreign_key_data()
             self._load_many_to_many_data()

@@ -218,14 +218,15 @@ class PydanticSQLAlchemyConverter:
 class PydanticInputGenerator:
     """Generates Streamlit inputs based on Pydantic schema"""
     
-    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict = None, many_to_many_fields: dict = None):
+    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict = None, many_to_many_fields: dict = None, operation_type: str = "create"):
         self.schema = schema
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
+        self.operation_type = operation_type  # 'create' or 'update'
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
         
-        logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}")
+        logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}, operation_type: {operation_type}")
         logger.debug(f"Many-to-many fields configured: {list(self.many_to_many_fields.keys())}")
         
         # For foreign key fields with preloaded options (no database connection needed)
@@ -235,12 +236,15 @@ class PydanticInputGenerator:
     def _is_empty_value_for_optional_field(self, field_name: str, field_value: Any) -> bool:
         """Check if a field value should be considered empty for optional fields.
         
+        For create operations: empty values are excluded from form data
+        For update operations: empty values are converted to None and included in form data
+        
         Args:
             field_name: Name of the field
             field_value: Value to check
             
         Returns:
-            True if the value should be treated as empty for optional fields
+            True if the value should be excluded from form data (create operations only)
         """
         field_info = self.field_info.get(field_name, {})
         is_optional = field_info.get('is_optional', False) or not field_info.get('is_required', True)
@@ -249,7 +253,12 @@ class PydanticInputGenerator:
         if not is_optional:
             return False
         
-        # Check for various empty value types
+        # For update operations, we want to include empty values as None
+        # so they can be explicitly set to null in the database
+        if self.operation_type == "update":
+            return False  # Never exclude values in update operations
+        
+        # For create operations, exclude empty values (original behavior)
         if field_value == "":
             return True
         elif field_value == []:
@@ -294,9 +303,10 @@ class PydanticInputGenerator:
                                                    key=key
                                                    )
             
-            # Only include field in form data if it's not None (e.g., ID in create operations)
-            # and not an empty value for optional fields
-            if field_value is not None and not self._is_empty_value_for_optional_field(field_name, field_value):
+            # Handle field inclusion logic based on operation type
+            should_exclude = self._is_empty_value_for_optional_field(field_name, field_value)
+            
+            if field_value is not None and not should_exclude:
                 # For JSON text areas, attempt to parse the string back into a dict
                 input_type = PydanticSQLAlchemyConverter.get_streamlit_input_type(field_info)
                 if input_type == 'text_area_json' and isinstance(field_value, str):
@@ -305,12 +315,33 @@ class PydanticInputGenerator:
                         if field_value:
                             form_data[field_name] = json.loads(field_value)
                         else:
-                            # Handle case where field is optional - skip empty values
+                            # Handle case where field is optional - skip empty values for create, convert to None for update
+                            if self.operation_type == "update":
+                                form_data[field_name] = None
                             continue
                     except json.JSONDecodeError:
                         # If parsing fails, pass the original string to Pydantic for validation
                         form_data[field_name] = field_value
                 else:
+                    # For update operations, check if we need to convert empty values to None
+                    if self.operation_type == "update":
+                        field_info_local = self.field_info.get(field_name, {})
+                        is_optional = field_info_local.get('is_optional', False) or not field_info_local.get('is_required', True)
+                        if is_optional and (field_value == "" or field_value == []):
+                            form_data[field_name] = None
+                        else:
+                            form_data[field_name] = field_value
+                    else:
+                        form_data[field_name] = field_value
+            elif self.operation_type == "update" and field_value is not None:
+                # This branch handles cases where should_exclude is True but we're in update mode
+                # (This shouldn't happen anymore since we changed _is_empty_value_for_optional_field)
+                field_info_local = self.field_info.get(field_name, {})
+                is_optional = field_info_local.get('is_optional', False) or not field_info_local.get('is_required', True)
+                if is_optional and (field_value == "" or field_value == []):
+                    form_data[field_name] = None
+                elif not is_optional:
+                    # Include non-optional fields even if empty for validation
                     form_data[field_name] = field_value
         
         return form_data

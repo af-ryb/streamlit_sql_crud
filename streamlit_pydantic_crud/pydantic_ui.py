@@ -323,6 +323,15 @@ class PydanticCrudUi(PydanticUi[T]):
             key_prefix=key,
             foreign_key_options=self.foreign_key_options,
             many_to_many_fields=self.many_to_many_fields,
+            operation_type="create",  # Default to create, will be overridden by specific operations
         )
 
         self._init_session_state()
+    
+    def set_operation_type(self, operation_type: str):
+        """Update the operation type for the input generator.
+        
+        Args:
+            operation_type: 'create' or 'update'
+        """
+        self.input_generator.operation_type = operation_type
