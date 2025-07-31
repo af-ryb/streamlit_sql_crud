@@ -1,3 +1,4 @@
+
 import streamlit as st
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
@@ -27,6 +28,8 @@ class UpdateRow:
                  foreign_key_options: dict | None = None,
                  many_to_many_fields: dict | None = None,
                  key: str = "update",
+                 dt_filters: dict | None = None,
+                 no_dt_filters: dict | None = None,
                  ) -> None:
         self.conn = conn
         self.model = model
@@ -37,6 +40,8 @@ class UpdateRow:
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
         self.key_prefix = f"{key}_update"
+        self.dt_filters = dt_filters or {}
+        self.no_dt_filters = no_dt_filters or {}
 
         set_state("stsql_updated", 0)
 
@@ -60,7 +65,9 @@ class UpdateRow:
                 
             self.existing_data = ExistingData(s, model,
                                               default_values=self.default_values, row=self.row,
-                                              foreign_key_options=self.foreign_key_options)
+                                              foreign_key_options=self.foreign_key_options,
+                                              dt_filters=self.dt_filters,
+                                              no_dt_filters=self.no_dt_filters)
 
         self.input_fields = InputFields(
             model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
@@ -87,7 +94,6 @@ class UpdateRow:
                     current_objects = getattr(self.row, relationship_name)
                     # Convert to list of IDs for multiselect
                     self.current_values[field_name] = [obj.id for obj in current_objects]
-                    logger.debug(f"Set current values for m2m field {field_name}: {self.current_values[field_name]}")
                 else:
                     logger.warning(f"Row does not have relationship {relationship_name}")
             
@@ -145,12 +151,10 @@ class UpdateRow:
                 # Apply optional filter
                 if 'filter' in m2m_config:
                     query = m2m_config['filter'](query)
-                    logger.debug(f"Applied filter to query for field {field_name}")
-                
+
                 with self.conn.session as session:
                     rows = session.execute(query).scalars().all()
-                    logger.debug(f"Loaded {len(rows)} options for many-to-many field {field_name}")
-                    
+
                     # Set options in PydanticUi's input generator
                     self.pydantic_ui.input_generator.set_many_to_many_options(
                         field_name, rows, display_field
@@ -160,29 +164,44 @@ class UpdateRow:
                 logger.warning(f"Failed to load many-to-many data for {field_name}: {e}")
 
     def _load_foreign_key_data(self):
-        """Load foreign key data from database for form fields."""
+        """Load foreign key data from database for form fields using filtered options."""
         for field_name, fk_config in self.foreign_key_options.items():
             try:
-                query = fk_config['query']
                 display_field = fk_config['display_field']
                 value_field = fk_config['value_field']
                 
-                with self.conn.session as session:
-                    rows = session.execute(query).scalars().all()
+                # Use filtered foreign key options from ExistingData instead of raw query
+                if hasattr(self.existing_data, 'fk') and field_name in self.existing_data.fk:
+                    fk_opts = self.existing_data.fk[field_name]
                     
-                    # Convert to list of dicts for the input generator
+                    # Convert FkOpt objects to list of dicts for the input generator
                     options = []
-                    for row in rows:
+                    for fk_opt in fk_opts:
                         options.append({
-                            value_field: getattr(row, value_field),
-                            display_field: getattr(row, display_field)
+                            value_field: fk_opt.idx,
+                            display_field: fk_opt.name
                         })
                     
-                    # Set the options in the input generator
-                    self.pydantic_ui.input_generator.set_foreign_key_options(
-                        field_name, options, display_field, value_field
-                    )
+                else:
+                    # Fallback to original logic if filtered options not available
+                    query = fk_config['query']
                     
+                    with self.conn.session as session:
+                        rows = session.execute(query).scalars().all()
+                        
+                        # Convert to list of dicts for the input generator
+                        options = []
+                        for row in rows:
+                            options.append({
+                                value_field: getattr(row, value_field),
+                                display_field: getattr(row, display_field)
+                            })
+                
+                # Set the options in the input generator
+                self.pydantic_ui.input_generator.set_foreign_key_options(
+                    field_name, options, display_field, value_field
+                )
+
             except Exception as e:
                 # Log error but continue - field will fall back to text input
                 logger.warning(f"Failed to load foreign key data for {field_name}: {e}")

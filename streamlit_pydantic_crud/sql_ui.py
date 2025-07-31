@@ -223,15 +223,15 @@ class SqlUi:
         lib.set_logging(self.disable_log)
 
         # Create UI
-        col_filter = self.filter()
-        stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, col_filter)
+        self.col_filter = self.filter()
+        stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
         qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag)
-        items_per_page, page = self.pagination(qtty_rows, col_filter)
+        items_per_page, page = self.pagination(qtty_rows, self.col_filter)
         stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page)
         initial_balance = self.get_initial_balance(
             self.cte,
             stmt_pag,
-            col_filter.no_dt_filters,
+            self.col_filter.no_dt_filters,
             rolling_total_column,
             self.rolling_orderby_colsname,
         )
@@ -469,8 +469,8 @@ class SqlUi:
         if needs_orm_execution:
             df = self._execute_with_pydantic_schema(stmt_pag)
         else:
-            with self.conn.connect() as c:
-                df = pd.read_sql(stmt_pag, c)
+            with self.conn.session as s:
+                df = pd.read_sql(stmt_pag, s.connection())
             df = self.convert_arrow(df)
         if self.rolling_total_column is None:
             return df
@@ -632,6 +632,8 @@ class SqlUi:
                 foreign_key_options=self.foreign_key_options,
                 many_to_many_fields=self.many_to_many_fields,
                 key=self.key,
+                dt_filters=self.col_filter.dt_filters,
+                no_dt_filters=self.col_filter.no_dt_filters,
             )
             create_row.show_dialog()
         elif action == "copy":
@@ -646,6 +648,8 @@ class SqlUi:
                 many_to_many_fields=self.many_to_many_fields,
                 key=self.key,
                 initial_data=initial_data,
+                dt_filters=self.col_filter.dt_filters,
+                no_dt_filters=self.col_filter.no_dt_filters,
             )
             create_row.show_dialog()
         elif action == "edit":
@@ -660,7 +664,9 @@ class SqlUi:
                 update_schema=self.update_schema,
                 foreign_key_options=self.foreign_key_options,
                 many_to_many_fields=self.many_to_many_fields,
-                key=self.key
+                key=self.key,
+                dt_filters=self.col_filter.dt_filters,
+                no_dt_filters=self.col_filter.no_dt_filters,
             )
             update_row.show_dialog()
         elif action == "delete":
@@ -672,3 +678,72 @@ class SqlUi:
                 key=self.key,
             )
             delete_rows.show_dialog()
+
+
+if __name__ == "__main__":
+    import db
+
+    st.set_page_config(layout="wide")
+
+    def style_fn(row):
+        if row.amount > 0:
+            bg = "background-color: rgba(0, 255, 0, 0.1)"
+        else:
+            bg = "background-color: rgba(255, 0, 0, 0.2)"
+
+        result = [bg] * len(row)
+        return result
+
+    db_url = "sqlite:///data.db"
+    conn = st.connection("sql", db_url)
+    db.create_db_and_tables(conn)
+
+    stmt = (
+        select(
+            db.Invoice.id,
+            db.Invoice.date,
+            db.Invoice.amount,
+            db.Client.name,
+        )
+        .join(db.Client)
+        .where(db.Invoice.amount > 1000)
+        .order_by(db.Invoice.date)
+    )
+
+    # Recommended approach with new 'model' parameter
+    sql_ui = SqlUi(
+        conn=conn,
+        model=db.Invoice,  # Simplified: uses same model for read and write
+        available_filter=["name"],
+        rolling_total_column="amount",
+        rolling_orderby_colsname=["date", "id"],
+        df_style_formatter={"amount": "{:,.2f}"},
+        read_use_container_width=True,
+        key="my_sql_ui",
+        style_fn=style_fn,
+        update_show_many=True,
+        disable_log=False,
+        foreign_key_options={
+            'client_id': {
+                'query': select(db.Client),
+                'display_field': 'name',
+                'value_field': 'id'
+            }
+        },
+    )
+
+    # Legacy approach with separate read_instance and edit_create_model
+    # sql_ui_legacy = SqlUi(
+    #     conn=conn,
+    #     read_instance=stmt,
+    #     edit_create_model=db.Invoice,
+    #     available_filter=["name"],
+    #     rolling_total_column="amount",
+    #     rolling_orderby_colsname=["date", "id"],
+    #     df_style_formatter={"amount": "{:,.2f}"},
+    #     read_use_container_width=True,
+    #     key="my_sql_ui_legacy",
+    #     style_fn=style_fn,
+    #     update_show_many=True,
+    #     disable_log=False,
+    # )

@@ -1,3 +1,4 @@
+
 from typing import Optional, Type
 import streamlit as st
 from streamlit import session_state as ss
@@ -24,6 +25,8 @@ class CreateRow:
                  foreign_key_options: dict | None = None,
                  many_to_many_fields: dict | None = None,
                  initial_data: dict | None = None,
+                 dt_filters: dict | None = None,
+                 no_dt_filters: dict | None = None,
                  ) -> None:
         self.conn = conn
         self.model = model
@@ -31,6 +34,8 @@ class CreateRow:
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
         self.initial_data = initial_data or {}
+        self.dt_filters = dt_filters or {}
+        self.no_dt_filters = no_dt_filters or {}
 
         self.default_values = default_values or {}
         self.key_prefix = f"{key}_create"
@@ -38,7 +43,14 @@ class CreateRow:
         set_state("stsql_updated", 0)
 
         with conn.session as s:
-            self.existing_data = ExistingData(s, model, self.default_values, foreign_key_options=self.foreign_key_options)
+            self.existing_data = ExistingData(
+                s, 
+                model, 
+                self.default_values, 
+                foreign_key_options=self.foreign_key_options,
+                dt_filters=self.dt_filters,
+                no_dt_filters=self.no_dt_filters,
+            )
             self.input_fields = InputFields(
                 model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
             )
@@ -110,28 +122,49 @@ class CreateRow:
                 logger.warning(f"Failed to load many-to-many data for {field_name}: {e}")
 
     def _load_foreign_key_data(self):
-        """Load foreign key data from database for form fields."""
+        """Load foreign key data from database for form fields using filtered options."""
+        from loguru import logger
+        
         for field_name, fk_config in self.foreign_key_options.items():
             try:
-                query = fk_config['query']
                 display_field = fk_config['display_field']
                 value_field = fk_config['value_field']
                 
-                with self.conn.session as session:
-                    rows = session.execute(query).scalars().all()
+                # Use filtered foreign key options from ExistingData instead of raw query
+                if hasattr(self.existing_data, 'fk') and field_name in self.existing_data.fk:
+                    # logger.debug(f"Using filtered foreign key options for {field_name}")
+                    fk_opts = self.existing_data.fk[field_name]
                     
-                    # Convert to list of dicts for the input generator
+                    # Convert FkOpt objects to list of dicts for the input generator
                     options = []
-                    for row in rows:
+                    for fk_opt in fk_opts:
                         options.append({
-                            value_field: getattr(row, value_field),
-                            display_field: getattr(row, display_field)
+                            value_field: fk_opt.idx,
+                            display_field: fk_opt.name
                         })
                     
-                    # Set the options in the input generator
-                    self.pydantic_ui.input_generator.set_foreign_key_options(
-                        field_name, options, display_field, value_field
-                    )
+                    # logger.debug(f"Converted {len(options)} filtered options for {field_name}: {options}")
+                else:
+                    # Fallback to original logic if filtered options not available
+                    # logger.debug(f"No filtered options found for {field_name}, using original query")
+                    query = fk_config['query']
+                    
+                    with self.conn.session as session:
+                        rows = session.execute(query).scalars().all()
+                        
+                        # Convert to list of dicts for the input generator
+                        options = []
+                        for row in rows:
+                            options.append({
+                                value_field: getattr(row, value_field),
+                                display_field: getattr(row, display_field)
+                            })
+                
+                # Set the options in the input generator
+                self.pydantic_ui.input_generator.set_foreign_key_options(
+                    field_name, options, display_field, value_field
+                )
+                # logger.debug(f"Set foreign key options for {field_name} in input generator")
                     
             except Exception as e:
                 # Log error but continue - field will fall back to text input

@@ -226,8 +226,8 @@ class PydanticInputGenerator:
         self.operation_type = operation_type  # 'create' or 'update'
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
         
-        logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}, operation_type: {operation_type}")
-        logger.debug(f"Many-to-many fields configured: {list(self.many_to_many_fields.keys())}")
+        # logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}, operation_type: {operation_type}")
+        # logger.debug(f"Many-to-many fields configured: {list(self.many_to_many_fields.keys())}")
         
         # For foreign key fields with preloaded options (no database connection needed)
         self.foreign_key_data = {}
@@ -392,7 +392,7 @@ class PydanticInputGenerator:
         
         # Check for many-to-many fields
         elif field_name in self.many_to_many_fields:
-            logger.debug(f"Field {field_name} is a many-to-many field. Data loaded: {field_name in self.many_to_many_data}")
+            # logger.debug(f"Field {field_name} is a many-to-many field. Data loaded: {field_name in self.many_to_many_data}")
             if field_name in self.many_to_many_data:
                 return self._render_many_to_many_multiselect(label, field_name, existing_value, key)
             else:
@@ -1017,7 +1017,7 @@ class PydanticInputGenerator:
             'options': options,
             'display_field': display_field,
         }
-        logger.debug(f"Set many-to-many options for field {field_name}: {len(options)} options")
+        # logger.debug(f"Set many-to-many options for field {field_name}: {len(options)} options")
 
     def _render_many_to_many_multiselect(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
         """Render multiselect for many-to-many fields using preloaded data."""
@@ -1048,7 +1048,7 @@ class PydanticInputGenerator:
                         # List of display names (from copy mode) - need to convert to IDs
                         name_to_id = {v: k for k, v in id_to_display.items()}
                         current_selection_ids = [name_to_id.get(name) for name in existing_value if name in name_to_id]
-                        logger.debug(f"Converted display names to IDs for {field_name}: {existing_value} -> {current_selection_ids}")
+                        # logger.debug(f"Converted display names to IDs for {field_name}: {existing_value} -> {current_selection_ids}")
                 elif hasattr(first_item, 'id'):
                     # List of objects from relationship
                     current_selection_ids = [obj.id for obj in existing_value]
