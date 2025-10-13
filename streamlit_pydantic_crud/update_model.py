@@ -6,7 +6,7 @@ from streamlit.delta_generator import DeltaGenerator
 from typing import Optional, Type, Union
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, selectinload
 
 from streamlit_pydantic_crud import many
 from streamlit_pydantic_crud.filters import ExistingData
@@ -48,8 +48,6 @@ class UpdateRow:
         with conn.session as s:
             # Load row with many-to-many relationships if needed
             if self.many_to_many_fields:
-                from sqlalchemy.orm import selectinload
-                
                 # Build options for eager loading
                 options = []
                 for field_name, config in self.many_to_many_fields.items():
@@ -361,11 +359,16 @@ class UpdateRow:
         wrap_show_update()
 
 
-def action_btns(container: DeltaGenerator, qtty_selected: int, opened: bool, key: str):
+def action_btns(container: DeltaGenerator,
+                qtty_selected: int,
+                opened: bool,
+                show_create_btn: bool,
+                show_delete_btn: bool,
+                key: str):
     set_state("stsql_action", "")
-    disabled_add = qtty_selected > 1
+    disabled_add = (qtty_selected > 1) or not show_create_btn
     disabled_edit = qtty_selected != 1
-    disabled_delete = qtty_selected == 0
+    disabled_delete = (qtty_selected == 0) or not show_delete_btn
 
     if qtty_selected == 1:
         add_icon = ":material/content_copy:"

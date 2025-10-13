@@ -52,6 +52,9 @@ class SqlUi:
         read_schema: Optional[Type[BaseModel]] = None,
         foreign_key_options: dict | None = None,
         many_to_many_fields: dict | None = None,
+        show_delete_btn: bool = True,
+        show_create_btn: bool = True,
+
     ):
         """The CRUD interface will be displayes just by initializing the class
 
@@ -73,6 +76,8 @@ class SqlUi:
             read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, uses Pydantic model_validate for data processing and avoids pandas read_sql issues with JSON columns. Defaults to None
             foreign_key_options (dict, optional): Custom foreign key selectbox configuration. Dict with field names as keys and config dicts as values. Each config should have 'query' (SQLAlchemy select statement), 'display_field' (column name for display), and 'value_field' (column name for value). Defaults to None
             many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
+            show_delete_btn (bool, optional): Show delete button. Defaults to True
+            show_create_btn (bool, optional): Show create button. Defaults to True
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -161,7 +166,9 @@ class SqlUi:
         self.rolling_orderby_colsname = rolling_orderby_colsname or ["id"]
         self.df_style_formatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
-        # Handle key parameter compatibility - key takes precedence over base_key
+        self.show_delete_btn = show_delete_btn
+        self.show_create_btn = show_create_btn
+
         if key is not None and base_key is not None:
             import warnings
             warnings.warn(
@@ -618,8 +625,10 @@ class SqlUi:
         qtty_rows = len(rows_selected)
         action = update_model.action_btns(
             self.btns_container,
-            qtty_rows,
-            ss.stsql_opened,
+            qtty_selected=qtty_rows,
+            opened=ss.stsql_opened,
+            show_delete_btn=self.show_delete_btn,
+            show_create_btn=self.show_create_btn,
             key=self.key,
         )
 
@@ -678,72 +687,3 @@ class SqlUi:
                 key=self.key,
             )
             delete_rows.show_dialog()
-
-
-if __name__ == "__main__":
-    import db
-
-    st.set_page_config(layout="wide")
-
-    def style_fn(row):
-        if row.amount > 0:
-            bg = "background-color: rgba(0, 255, 0, 0.1)"
-        else:
-            bg = "background-color: rgba(255, 0, 0, 0.2)"
-
-        result = [bg] * len(row)
-        return result
-
-    db_url = "sqlite:///data.db"
-    conn = st.connection("sql", db_url)
-    db.create_db_and_tables(conn)
-
-    stmt = (
-        select(
-            db.Invoice.id,
-            db.Invoice.date,
-            db.Invoice.amount,
-            db.Client.name,
-        )
-        .join(db.Client)
-        .where(db.Invoice.amount > 1000)
-        .order_by(db.Invoice.date)
-    )
-
-    # Recommended approach with new 'model' parameter
-    sql_ui = SqlUi(
-        conn=conn,
-        model=db.Invoice,  # Simplified: uses same model for read and write
-        available_filter=["name"],
-        rolling_total_column="amount",
-        rolling_orderby_colsname=["date", "id"],
-        df_style_formatter={"amount": "{:,.2f}"},
-        read_use_container_width=True,
-        key="my_sql_ui",
-        style_fn=style_fn,
-        update_show_many=True,
-        disable_log=False,
-        foreign_key_options={
-            'client_id': {
-                'query': select(db.Client),
-                'display_field': 'name',
-                'value_field': 'id'
-            }
-        },
-    )
-
-    # Legacy approach with separate read_instance and edit_create_model
-    # sql_ui_legacy = SqlUi(
-    #     conn=conn,
-    #     read_instance=stmt,
-    #     edit_create_model=db.Invoice,
-    #     available_filter=["name"],
-    #     rolling_total_column="amount",
-    #     rolling_orderby_colsname=["date", "id"],
-    #     df_style_formatter={"amount": "{:,.2f}"},
-    #     read_use_container_width=True,
-    #     key="my_sql_ui_legacy",
-    #     style_fn=style_fn,
-    #     update_show_many=True,
-    #     disable_log=False,
-    # )
