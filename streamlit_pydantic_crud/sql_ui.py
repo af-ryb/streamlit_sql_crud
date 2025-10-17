@@ -66,7 +66,7 @@ class SqlUi:
             rolling_total_column (str, optional): A numeric column name of the read_instance. A new column will be displayed with the rolling sum of these column
             rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
             df_style_formatter (dict[str, str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
-            read_use_container_width (bool, optional): add use_container_width to st.dataframe args. Default to False
+            read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
@@ -598,7 +598,7 @@ class SqlUi:
 
         selection_state = self.data_container.dataframe(
             df_style,
-            use_container_width=self.read_use_container_width,
+            width='stretch' if self.read_use_container_width else None,
             height=650,
             hide_index=True,
             column_order=column_order,

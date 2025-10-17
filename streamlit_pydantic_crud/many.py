@@ -105,7 +105,7 @@ def show_rel(conn: SQLConnection, model, model_id: int, rel: RelationshipPropert
         selection_state = st.dataframe(
             df,
             hide_index=True,
-            use_container_width=True,
+            width='stretch',
             selection_mode="multi-row",
             on_select="rerun",
             key=f"stsql_many_df_{read_many_rel.suffix_key}",

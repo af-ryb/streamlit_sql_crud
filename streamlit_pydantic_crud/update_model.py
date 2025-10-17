@@ -386,7 +386,7 @@ def action_btns(container: DeltaGenerator,
             icon=add_icon,
             type="secondary",
             disabled=disabled_add,
-            use_container_width=True,
+            width='stretch',
             key=f'{key}_stsql_action_add',
         )
 
@@ -396,7 +396,7 @@ def action_btns(container: DeltaGenerator,
             icon=":material/edit:",
             type="secondary",
             disabled=disabled_edit,
-            use_container_width=True,
+            width='stretch',
             key=f'{key}_stsql_action_edit',
         )
 
@@ -406,7 +406,7 @@ def action_btns(container: DeltaGenerator,
             icon=":material/delete:",
             type="primary",
             disabled=disabled_delete,
-            use_container_width=True,
+            width='stretch',
             key=f'{key}_stsql_action_delete',
         )
 
