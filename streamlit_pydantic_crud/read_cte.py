@@ -285,14 +285,18 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
 
     # Convert options to strings, replacing None with "Show All"
     items_page_display = []
-    items_page_values = []
     for item in opts_items_page:
         if item is None:
             items_page_display.append("Show All")
-            items_page_values.append(None)
-        elif item <= count or len([x for x in opts_items_page if x is not None and x <= count]) == 0:
+        else:
             items_page_display.append(str(item))
-            items_page_values.append(item)
+
+    # Initialize session state for cascader if not exists
+    cascader_key = f"{key}_menu_cascader"
+    if cascader_key not in st.session_state and default_index is not None:
+        # Set initial value in session state based on default_index
+        if default_index < len(items_page_display):
+            st.session_state[cascader_key] = [items_page_display[default_index]]
 
     # Determine default value
     if default_index is not None and default_index < len(items_page_display):
@@ -305,7 +309,7 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
             items=items_page_display,  # pyright: ignore
             placeholder="Items per page",
             index=default_index if default_index is not None else 0,
-            key=f"{key}_menu_cascader",
+            key=cascader_key,
         )
 
     # Get selected value
