@@ -598,7 +598,7 @@ class SqlUi:
 
         selection_state = self.data_container.dataframe(
             df_style,
-            width='stretch' if self.read_use_container_width else None,
+            width='stretch' if self.read_use_container_width else 'content',  # pyright: ignore
             height=650,
             hide_index=True,
             column_order=column_order,
