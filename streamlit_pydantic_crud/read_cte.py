@@ -272,7 +272,7 @@ def get_stmt_no_pag(cte: CTE, col_filter: ColFilter):
 
 
 @st.cache_data(hash_funcs=hash_funcs)
-def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select):
+def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:
         qtty = s.execute(stmt).scalar_one()

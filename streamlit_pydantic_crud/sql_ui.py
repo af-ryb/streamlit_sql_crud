@@ -242,7 +242,7 @@ class SqlUi:
         # Create UI
         self.col_filter = self.filter()
         stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
-        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag)
+        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss.stsql_updated)
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
         stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page)
         initial_balance = self.get_initial_balance(
