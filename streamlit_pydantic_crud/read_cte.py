@@ -280,34 +280,53 @@ def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select):
     return qtty
 
 
-def show_pagination(count: int, opts_items_page: tuple[int, ...], key: str = ""):
+def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: str = "", default_index: int | None = None):
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
-    first_item_candidates = [item for item in opts_items_page if item > count]
-    last_item = (
-        first_item_candidates[0] if opts_items_page[-1] > count else opts_items_page[-1]
-    )
-    items_page_str = [str(item) for item in opts_items_page if item <= last_item]
+    # Convert options to strings, replacing None with "Show All"
+    items_page_display = []
+    items_page_values = []
+    for item in opts_items_page:
+        if item is None:
+            items_page_display.append("Show All")
+            items_page_values.append(None)
+        elif item <= count or len([x for x in opts_items_page if x is not None and x <= count]) == 0:
+            items_page_display.append(str(item))
+            items_page_values.append(item)
+
+    # Determine default value
+    if default_index is not None and default_index < len(items_page_display):
+        default_value = items_page_display[default_index]
+    else:
+        default_value = items_page_display[0] if items_page_display else "50"
 
     with pag_col1:
         menu_cas = sac.cascader(
-            items=items_page_str,  # pyright: ignore
+            items=items_page_display,  # pyright: ignore
             placeholder="Items per page",
+            index=default_index if default_index is not None else 0,
             key=f"{key}_menu_cascader",
         )
 
-    items_per_page = menu_cas[0] if menu_cas else items_page_str[0]
+    # Get selected value
+    selected_str = menu_cas[0] if menu_cas else default_value
+
+    # Map back to actual value (None for "Show All", otherwise int)
+    if selected_str == "Show All":
+        items_per_page = count  # Show all items
+    else:
+        items_per_page = int(selected_str)
 
     with pag_col2:
         page = sac.pagination(
             total=count,
-            page_size=int(items_per_page),
+            page_size=items_per_page,
             show_total=True,
             jump=True,
             key=f"{key}_pagination",
         )
 
-    return (int(items_per_page), int(page))
+    return (items_per_page, int(page))
 
 
 def get_stmt_pag(stmt_no_pag: Select, limit: int, page: int):

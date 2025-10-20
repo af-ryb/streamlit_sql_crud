@@ -17,7 +17,7 @@ from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_m
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_pydantic_crud.utils import convert_numpy_to_python, convert_numpy_list_to_python
 
-OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000)
+OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
 
 
 class SqlUi:
@@ -54,6 +54,7 @@ class SqlUi:
         many_to_many_fields: dict | None = None,
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
+        items_per_page_default: int | None = None,
 
     ):
         """The CRUD interface will be displayes just by initializing the class
@@ -78,6 +79,7 @@ class SqlUi:
             many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
+            items_per_page_default (int, optional): Index (0-5) for default items per page selection. Options are: 0=50, 1=100, 2=200, 3=500, 4=1000, 5=Show All. Defaults to None (uses first option: 50 items)
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -168,6 +170,14 @@ class SqlUi:
         self.read_use_container_width = read_use_container_width
         self.show_delete_btn = show_delete_btn
         self.show_create_btn = show_create_btn
+
+        # Validate items_per_page_default
+        if items_per_page_default is not None:
+            if not isinstance(items_per_page_default, int):
+                raise ValueError(f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE)-1}), got {type(items_per_page_default)}")
+            if items_per_page_default < 0 or items_per_page_default >= len(OPTS_ITEMS_PAGE):
+                raise ValueError(f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE)-1}, got {items_per_page_default}")
+        self.items_per_page_default = items_per_page_default
 
         if key is not None and base_key is not None:
             import warnings
@@ -378,6 +388,7 @@ class SqlUi:
                 qtty_rows,
                 OPTS_ITEMS_PAGE,
                 self.key,
+                self.items_per_page_default,
             )
 
         filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
