@@ -321,13 +321,27 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
     else:
         items_per_page = int(selected_str)
 
+    # Track previous page size to detect changes
+    page_size_key = f"{key}_page_size"
+    pagination_key = f"{key}_pagination"
+
+    # If page size changed, reset pagination widget state
+    if page_size_key in st.session_state:
+        if st.session_state[page_size_key] != items_per_page:
+            # Page size changed - reset pagination to page 1
+            if pagination_key in st.session_state:
+                del st.session_state[pagination_key]
+
+    # Store current page size
+    st.session_state[page_size_key] = items_per_page
+
     with pag_col2:
         page = sac.pagination(
             total=count,
             page_size=items_per_page,
             show_total=True,
             jump=True,
-            key=f"{key}_pagination",
+            key=pagination_key,
         )
 
     return (items_per_page, int(page))
