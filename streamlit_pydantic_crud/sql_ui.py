@@ -54,7 +54,7 @@ class SqlUi:
         many_to_many_fields: dict | None = None,
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
-        items_per_page_default: int | None = None,
+        items_per_page_default: int = 0,
 
     ):
         """The CRUD interface will be displayes just by initializing the class
@@ -79,7 +79,7 @@ class SqlUi:
             many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
-            items_per_page_default (int, optional): Index (0-5) for default items per page selection. Options are: 0=50, 1=100, 2=200, 3=500, 4=1000, 5=Show All. Defaults to None (uses first option: 50 items)
+            items_per_page_default (int, optional): Index (0-5) for default items per page selection. Options are: 0=50, 1=100, 2=200, 3=500, 4=1000, 5=Show All. Defaults to 0 (50 items per page)
 
         Attributes:
             df (pd.Dataframe): The Dataframe displayed in the screen
@@ -172,11 +172,10 @@ class SqlUi:
         self.show_create_btn = show_create_btn
 
         # Validate items_per_page_default
-        if items_per_page_default is not None:
-            if not isinstance(items_per_page_default, int):
-                raise ValueError(f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE)-1}), got {type(items_per_page_default)}")
-            if items_per_page_default < 0 or items_per_page_default >= len(OPTS_ITEMS_PAGE):
-                raise ValueError(f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE)-1}, got {items_per_page_default}")
+        if not isinstance(items_per_page_default, int):
+            raise ValueError(f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE)-1}), got {type(items_per_page_default)}")
+        if items_per_page_default < 0 or items_per_page_default >= len(OPTS_ITEMS_PAGE):
+            raise ValueError(f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE)-1}, got {items_per_page_default}")
         self.items_per_page_default = items_per_page_default
 
         if key is not None and base_key is not None:

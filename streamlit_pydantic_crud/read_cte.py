@@ -280,7 +280,7 @@ def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
     return qtty
 
 
-def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: str = "", default_index: int | None = None):
+def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: str = "", default_index: int = 0):
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
     # Convert options to strings, replacing None with "Show All"
@@ -293,13 +293,13 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
 
     # Initialize session state for cascader if not exists
     cascader_key = f"{key}_menu_cascader"
-    if cascader_key not in st.session_state and default_index is not None:
+    if cascader_key not in st.session_state:
         # Set initial value in session state based on default_index
         if default_index < len(items_page_display):
             st.session_state[cascader_key] = [items_page_display[default_index]]
 
     # Determine default value
-    if default_index is not None and default_index < len(items_page_display):
+    if default_index < len(items_page_display):
         default_value = items_page_display[default_index]
     else:
         default_value = items_page_display[0] if items_page_display else "50"
@@ -308,7 +308,7 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
         menu_cas = sac.cascader(
             items=items_page_display,  # pyright: ignore
             placeholder="Items per page",
-            index=default_index if default_index is not None else 0,
+            index=default_index,
             key=cascader_key,
         )
 
