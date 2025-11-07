@@ -613,7 +613,7 @@ class SqlUi:
             hide_index=True,
             column_order=column_order,
             on_select="rerun",
-            selection_mode="multi-row",
+            selection_mode="multi-row" if self.show_delete_btn else "single-row",
             key=f"{self.key}_df_sql_ui",
         )
         return selection_state
