@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple, List
+from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple, List, Callable
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
@@ -212,22 +212,54 @@ class PydanticUi(Generic[T]):
         """
         return st.session_state.get(self.session_state_key, {})
     
-    def render_with_submit(self, submit_label: str = "Submit") -> Tuple[Optional[T], bool]:
+    def collect_widget_data(self) -> Optional[T]:
+        """Read committed widget values from session state.
+
+        Useful in on_click callbacks where widget values are
+        already committed but render() hasn't been called yet.
+        """
+        data = {}
+        for field_name in self.schema.model_fields:
+            widget_key = f"{self.key}_{field_name}"
+            if widget_key in st.session_state:
+                data[field_name] = st.session_state[widget_key]
+        try:
+            return self.schema(**data)
+        except ValidationError:
+            return None
+
+    def render_with_submit(
+        self,
+        submit_label: str = "Submit",
+        on_submit: Optional[Callable] = None,
+        on_submit_args: tuple = (),
+        on_submit_kwargs: Optional[dict] = None,
+    ) -> Tuple[Optional[T], bool]:
         """Render form with submit button and return validated data with submit status.
-        
+
         Args:
             submit_label: Label for the submit button
-            
+            on_submit: Optional callback invoked on form submit
+                (runs before rerun via form_submit_button on_click)
+            on_submit_args: Positional args for on_submit callback
+            on_submit_kwargs: Keyword args for on_submit callback
+
         Returns:
             Tuple of (validated Pydantic model instance or None, submit button pressed status)
         """
         with st.form(key=f"{self.key}_form"):
             # Render form fields
             model_instance = self.render()
-            
+
+            btn_kwargs: Dict[str, Any] = {}
+            if on_submit is not None:
+                btn_kwargs["on_click"] = on_submit
+                btn_kwargs["args"] = on_submit_args
+                btn_kwargs["kwargs"] = on_submit_kwargs or {}
+
             # Submit button
-            submitted = st.form_submit_button(submit_label)
-            
+            submitted = st.form_submit_button(submit_label, **btn_kwargs)
+
             return model_instance, submitted
     
     def render_with_columns(self, columns: int = 2) -> Optional[T]:
