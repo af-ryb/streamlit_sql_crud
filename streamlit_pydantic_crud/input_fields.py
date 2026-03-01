@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import streamlit as st
@@ -244,6 +244,8 @@ class InputFields:
         elif isinstance(col.type, Numeric):
             scale = col.type.scale
             input_value = self.input_numeric(pretty_name, scale, col_value)
+        elif col.type.python_type is datetime:
+            input_value = st.datetime_input(pretty_name, value=col_value)
         elif col.type.python_type is date:
             input_value = st.date_input(pretty_name, value=col_value)
         elif col.type.python_type is bool:

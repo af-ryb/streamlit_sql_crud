@@ -477,17 +477,98 @@ class ProjectSchema(BaseModel):
     budget: float = Field(..., gt=0)
     priority: int = Field(default=5, ge=1, le=10)
 
-# Create form
-ui = PydanticUi(schema=ProjectSchema, key="project_form")
+# Create form (session_state_key defaults to key if omitted)
+ui = PydanticUi(
+    schema=ProjectSchema,
+    key="project_form",
+    session_state_key="my_project",  # optional, custom session state key
+)
 
-# Render with submit button
-data = ui.render_with_submit("Create Project")
-if data:
-    st.success(f"Project '{data.name}' created!")
+# Option 1: Render with submit button (wraps in st.form)
+model, submitted = ui.render_with_submit("Create Project")
+if submitted and model:
+    st.success(f"Project '{model.name}' created!")
     ui.clear_session_data()
+
+# Option 2: Render without st.form (standalone widgets)
+model = ui.render()
+if model:
+    st.write(model.model_dump())
 ```
 
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `render()` | `Optional[T]` | Render form fields as standalone widgets (no `st.form` wrapper) |
+| `render_with_submit(label, on_submit, on_submit_args, on_submit_kwargs)` | `Tuple[Optional[T], bool]` | Render inside `st.form` with a submit button |
+| `render_with_columns(columns)` | `Optional[T]` | Render form fields distributed across multiple columns |
+| `update_session_data(data)` | `None` | Pre-populate form with a dict or Pydantic model (edit/update mode) |
+| `get_session_data()` | `Optional[T]` | Get validated model instance from session state |
+| `get_form_data()` | `Dict[str, Any]` | Get raw form data as a dictionary |
+| `collect_widget_data()` | `Optional[T]` | Read committed widget values from session state (useful in callbacks) |
+| `clear_session_data()` | `None` | Reset form by clearing session state |
+
+### on_submit Callback
+
+The `render_with_submit` method accepts an `on_submit` callback that runs when the form is submitted (via `st.form_submit_button`'s `on_click`). Use `collect_widget_data()` inside the callback to access validated form data:
+
+```python
+def handle_submit(db_session, table_name):
+    model = ui.collect_widget_data()
+    if model:
+        db_session.add(model)
+        db_session.commit()
+
+model, submitted = ui.render_with_submit(
+    "Save",
+    on_submit=handle_submit,
+    on_submit_args=(session,),
+    on_submit_kwargs={"table_name": "projects"},
+)
+```
+
+### Pre-populating Forms
+
+Use `update_session_data()` to fill form fields for edit/update workflows. Accepts a dict or a Pydantic model instance:
+
+```python
+# Load existing record
+existing = ProjectSchema(name="Alpha", description="Desc", budget=1000.0, priority=3)
+ui.update_session_data(existing)
+
+# Or from a dictionary
+ui.update_session_data({"name": "Alpha", "budget": 1000.0})
+```
+
+### Multi-column Layout
+
+```python
+ui = PydanticUi(schema=ProjectSchema, key="col_form")
+model = ui.render_with_columns(columns=3)
+```
+
+### Type Auto-detection
+
+PydanticUi automatically selects the appropriate Streamlit widget based on the Python type annotation:
+
+| Python Type | Widget | Notes |
+|-------------|--------|-------|
+| `str` | `st.text_input` | Use `description="(text_area)"` for multiline |
+| `int` | `st.number_input` | `step=1` |
+| `float` | `st.number_input` | `step=0.1` |
+| `bool` | `st.checkbox` | |
+| `date` | `st.date_input` | |
+| `datetime` | `st.datetime_input` | |
+| `Decimal` | `st.number_input` | `step=0.01` |
+| `Enum` | `st.selectbox` | Options from enum members |
+| `list` / `List[str]` | `st.multiselect` | |
+| `List[Enum]` | `st.multiselect` | Options from enum members |
+| `dict` | `st.text_area` | JSON input with validation |
+
 ### Widget Customization
+
+Override auto-detected widgets using `json_schema_extra` with `"widget"` and `"kw"` keys:
 
 ```python
 class AdvancedSchema(BaseModel):
@@ -499,7 +580,7 @@ class AdvancedSchema(BaseModel):
             "kw": {"height": 150}
         }
     )
-    
+
     # Selectbox
     category: str = Field(
         ...,
@@ -508,7 +589,7 @@ class AdvancedSchema(BaseModel):
             "kw": {"options": ["Sales", "Marketing", "Tech"]}
         }
     )
-    
+
     # Slider
     rating: int = Field(
         default=5,
@@ -517,7 +598,40 @@ class AdvancedSchema(BaseModel):
             "kw": {"min_value": 1, "max_value": 10}
         }
     )
+
+    # Radio buttons
+    status: str = Field(
+        ...,
+        json_schema_extra={
+            "widget": "radio",
+            "kw": {"options": ["Draft", "Published", "Archived"]}
+        }
+    )
+
+    # Datetime input
+    scheduled_at: datetime = Field(
+        ...,
+        json_schema_extra={
+            "widget": "datetime_input",
+            "kw": {}
+        }
+    )
 ```
+
+All available widget types for `json_schema_extra`:
+
+| Widget | Key kwargs |
+|--------|-----------|
+| `text_input` | `disabled`, `max_chars`, `placeholder` |
+| `text_area` | `height`, `max_chars`, `placeholder` |
+| `number_input` | `min_value`, `max_value`, `step` |
+| `selectbox` | `options` |
+| `multiselect` | `options`, `max_selections` |
+| `checkbox` | |
+| `date_input` | `min_value`, `max_value` |
+| `datetime_input` | |
+| `slider` | `min_value`, `max_value`, `step` |
+| `radio` | `options` |
 
 ### Dynamic Schema Creation
 
@@ -594,14 +708,14 @@ def create_task_form(task_type: str):
     # Get schema from API
     api_response = requests.get(f"/api/schemas/{task_type}")
     schema_data = api_response.json()
-    
+
     # Create form directly
     ui = PydanticUi.from_json_schema(
         json_schema=schema_data["py_schema"],
         field_options=schema_data["field_options"],
         key=f"task_form_{task_type}"
     )
-    
+
     return ui.render_with_submit("Create Task")
 ```
 

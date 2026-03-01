@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import re
 from typing import Type, Dict, Any, Optional, Union, get_origin, get_args
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -203,6 +203,8 @@ class PydanticSQLAlchemyConverter:
             return 'number_input_float'
         elif inner_type is bool:
             return 'checkbox'
+        elif inner_type is datetime:
+            return 'datetime_input'
         elif inner_type is date:
             return 'date_input'
         elif inner_type is Decimal:
@@ -677,6 +679,8 @@ class PydanticInputGenerator:
             return self._render_checkbox_widget(label, {}, existing_value, key)
         elif input_type == 'date_input':
             return self._render_date_input_widget(label, {}, existing_value, key)
+        elif input_type == 'datetime_input':
+            return self._render_datetime_input_widget(label, {}, existing_value, key)
         elif input_type == 'number_input_decimal':
             return self._render_number_input_widget(label, {"step": 0.01}, existing_value, key, use_int=False)
         elif input_type == 'text_area_json':
@@ -711,8 +715,12 @@ class PydanticInputGenerator:
             return self._render_checkbox_widget(label, widget_kwargs, existing_value, key)
         elif widget_type == 'date_input':
             return self._render_date_input_widget(label, widget_kwargs, existing_value, key)
+        elif widget_type == 'datetime_input':
+            return self._render_datetime_input_widget(label, widget_kwargs, existing_value, key)
         elif widget_type == 'slider':
             return self._render_slider_widget(label, widget_kwargs, existing_value, key)
+        elif widget_type == 'radio':
+            return self._render_radio_widget(label, widget_kwargs, existing_value, key)
         else:
             # Fallback: use default rendering
             return self._render_basic_input(label, field_info, existing_value, key)
@@ -810,6 +818,18 @@ class PydanticInputGenerator:
         )
 
     @staticmethod
+    def _render_datetime_input_widget(
+        label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str
+    ) -> Any:
+        """Render datetime input widget."""
+        return st.datetime_input(
+            label,
+            value=existing_value,
+            key=key,
+            **widget_kwargs,
+        )
+
+    @staticmethod
     def _render_selectbox_widget(label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str) -> Any:
         """Render selectbox widget"""
         options = widget_kwargs.get('options', [])
@@ -822,6 +842,23 @@ class PydanticInputGenerator:
             index=index,
             key=key,
             **{k: v for k, v in widget_kwargs.items() if k != 'options'}
+        )
+
+    @staticmethod
+    def _render_radio_widget(
+        label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str
+    ) -> Any:
+        """Render radio widget."""
+        options = widget_kwargs.get('options', [])
+        index = 0
+        if existing_value and existing_value in options:
+            index = options.index(existing_value)
+        return st.radio(
+            label,
+            options=options,
+            index=index,
+            key=key,
+            **{k: v for k, v in widget_kwargs.items() if k != 'options'},
         )
 
     def _render_number_input_widget(self, label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str,

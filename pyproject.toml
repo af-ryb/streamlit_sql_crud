@@ -51,7 +51,7 @@ author_email = ""
 
 [project]
 name = "streamlit_pydantic_crud"
-version = "0.4.2"
+version = "0.4.3"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
 # readme= "docs/README.md"
@@ -61,7 +61,7 @@ dependencies = [
     "python-dateutil",
     "pandas",
     "sqlalchemy",
-    "streamlit",
+    "streamlit>=1.52.0",
     "streamlit_datalist",
     "streamlit_antd_components",
     "loguru>=0.7.3",
