@@ -351,22 +351,21 @@ class PydanticInputGenerator:
     def _render_field_input(self, field_name: str, field_info: Dict[str, Any], annotation: Any, existing_value: Any,
                             key: str) -> Any:
         """Render the appropriate Streamlit input for a field based on its type"""
-        
-        # Use default value if no existing value is provided
-        if existing_value is None:
-            default_value = field_info.get('default')
-            # Check if default is not PydanticUndefined
-            if default_value is not None and repr(default_value) != 'PydanticUndefined':
-                existing_value = default_value
-        
+
+        # Resolve the Pydantic field default (None when unset / PydanticUndefined).
+        field_default = field_info.get('default')
+        if field_default is not None and repr(field_default) == 'PydanticUndefined':
+            field_default = None
+
         # Ensure label is always a string
         description = field_info.get('description')
         if description is None or description == '':
             label = field_name.replace('_', ' ').title()
         else:
             label = str(description)
-        
-        # Check for json_schema_extra customization first
+
+        # Custom widgets resolve session/kw/default precedence themselves, so
+        # pass the raw session value (not pre-filled with the default).
         if hasattr(self.schema, 'model_fields') and field_name in self.schema.model_fields:
             field = self.schema.model_fields[field_name]
             json_schema_extra = getattr(field, 'json_schema_extra', None)
@@ -379,43 +378,46 @@ class PydanticInputGenerator:
                                                  key=key,
                                                  json_schema_extra=json_schema_extra
                                                  )
-        
+
+        # Non-custom paths fall back to the field default when no session value.
+        value = existing_value if existing_value is not None else field_default
+
         # Handle ID field specially
         if field_name == 'id':
-            return self._render_id_field(label, existing_value, key)
-        
+            return self._render_id_field(label, value, key)
+
         # Check for custom foreign key fields first
         elif field_name in self.foreign_key_options:
             # Check if we have preloaded data for this field
             if field_name in self.foreign_key_data:
-                return self._render_foreign_key_selectbox(label, field_name, existing_value, key)
+                return self._render_foreign_key_selectbox(label, field_name, value, key)
             else:
-                return self._render_foreign_key_input(label, field_name, existing_value, key=key)
-        
+                return self._render_foreign_key_input(label, field_name, value, key=key)
+
         # Check for many-to-many fields
         elif field_name in self.many_to_many_fields:
             # logger.debug(f"Field {field_name} is a many-to-many field. Data loaded: {field_name in self.many_to_many_data}")
             if field_name in self.many_to_many_data:
-                return self._render_many_to_many_multiselect(label, field_name, existing_value, key)
+                return self._render_many_to_many_multiselect(label, field_name, value, key)
             else:
                 logger.warning(f"Many-to-many field {field_name} has no loaded data, falling back to foreign key input")
-                return self._render_foreign_key_input(label, field_name, existing_value, key=key)
+                return self._render_foreign_key_input(label, field_name, value, key=key)
 
         # Check for enum types - simplified detection based on streamlit-pydantic approach
         elif self._is_enum_field(annotation):
-            return self._render_enum_input(label, annotation, existing_value, key=key)
-        
+            return self._render_enum_input(label, annotation, value, key=key)
+
         # Check for a list of enums
         elif self._is_enum_list_field(annotation):
-            return self._render_enum_list_input(label, annotation, existing_value, key=key)
-            
+            return self._render_enum_list_input(label, annotation, value, key=key)
+
         # Check for regular lists
         elif self._is_list_field(annotation):
-            return self._render_list_input(label, annotation, existing_value, key=key)
-            
+            return self._render_list_input(label, annotation, value, key=key)
+
         # Fall back to basic type detection
         else:
-            return self._render_basic_input(label, field_info, existing_value, key=key)
+            return self._render_basic_input(label, field_info, value, key=key)
     
     def _is_enum_field(self, annotation: Any) -> bool:
         """Check if field is a single enum"""
@@ -660,32 +662,40 @@ class PydanticInputGenerator:
         widget_type = json_schema_extra.get('widget', None)
         widget_kwargs = json_schema_extra.get('kw', {})
         layout = json_schema_extra.get('layout', None)  # For future use
-        
+
+        # Resolve the Pydantic field default (None when unset / PydanticUndefined).
+        field_default = field_info.get('default')
+        if field_default is not None and repr(field_default) == 'PydanticUndefined':
+            field_default = None
+        # Value widgets fall back to the default; selection widgets resolve
+        # precedence themselves (session > explicit kw > default).
+        value = existing_value if existing_value is not None else field_default
+
         # Route to the appropriate widget handler based on widget_type
         if widget_type == 'text_area':
-            return self._render_text_area_widget(label, widget_kwargs, existing_value, key)
+            return self._render_text_area_widget(label, widget_kwargs, value, key)
         elif widget_type == 'text_input':
-            return self._render_text_input_widget(label, widget_kwargs, existing_value, key)
+            return self._render_text_input_widget(label, widget_kwargs, value, key)
         elif widget_type == 'number_input':
             use_int = not self._should_use_float_for_number_input(widget_kwargs)
-            return self._render_number_input_widget(label, widget_kwargs, existing_value, key, use_int)
+            return self._render_number_input_widget(label, widget_kwargs, value, key, use_int)
         elif widget_type == 'selectbox':
-            return self._render_selectbox_widget(label, widget_kwargs, existing_value, key)
+            return self._render_selectbox_widget(label, widget_kwargs, existing_value, key, field_default)
         elif widget_type == 'multiselect':
-            return self._render_multiselect_widget(label, widget_kwargs, existing_value, key)
+            return self._render_multiselect_widget(label, widget_kwargs, existing_value, key, field_default)
         elif widget_type == 'checkbox':
-            return self._render_checkbox_widget(label, widget_kwargs, existing_value, key)
+            return self._render_checkbox_widget(label, widget_kwargs, value, key)
         elif widget_type == 'date_input':
-            return self._render_date_input_widget(label, widget_kwargs, existing_value, key)
+            return self._render_date_input_widget(label, widget_kwargs, value, key)
         elif widget_type == 'datetime_input':
-            return self._render_datetime_input_widget(label, widget_kwargs, existing_value, key)
+            return self._render_datetime_input_widget(label, widget_kwargs, value, key)
         elif widget_type == 'slider':
-            return self._render_slider_widget(label, widget_kwargs, existing_value, key)
+            return self._render_slider_widget(label, widget_kwargs, value, key)
         elif widget_type == 'radio':
-            return self._render_radio_widget(label, widget_kwargs, existing_value, key)
+            return self._render_radio_widget(label, widget_kwargs, existing_value, key, field_default)
         else:
             # Fallback: use default rendering
-            return self._render_basic_input(label, field_info, existing_value, key)
+            return self._render_basic_input(label, field_info, value, key)
     
     def _render_slider_widget(self, label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str) -> Any:
         """Render slider widget with proper type handling"""
@@ -792,36 +802,101 @@ class PydanticInputGenerator:
         )
 
     @staticmethod
-    def _render_selectbox_widget(label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str) -> Any:
-        """Render selectbox widget"""
-        options = widget_kwargs.get('options', [])
-        index = None
-        if existing_value and existing_value in options:
-            index = options.index(existing_value)
-        return st.selectbox(
-            label,
-            options=options,
-            index=index,
-            key=key,
-            **{k: v for k, v in widget_kwargs.items() if k != 'options'}
+    def match_option(value: Any, options: list) -> Optional[int]:
+        """Return the index of value in options, matching enum member or value.
+
+        Uses identity-free equality first, then compares by enum .value so a
+        member and its value form match interchangeably. Falsy-but-valid
+        values (0, False, "") are handled.
+        """
+        if value is None:
+            return None
+        for i, opt in enumerate(options):
+            if opt == value:
+                return i
+        target = value.value if hasattr(value, "value") else value
+        for i, opt in enumerate(options):
+            opt_val = opt.value if hasattr(opt, "value") else opt
+            if opt_val == target:
+                return i
+        return None
+
+    @staticmethod
+    def _resolve_select_index(
+        session_value: Any, explicit_index: Optional[int], field_default: Any, options: list
+    ) -> Optional[int]:
+        """Resolve a selectbox/radio index: session > explicit kw > default > 0."""
+        if session_value is not None:
+            idx = PydanticInputGenerator.match_option(session_value, options)
+            if idx is not None:
+                return idx
+        if explicit_index is not None:
+            return explicit_index
+        if field_default is not None:
+            idx = PydanticInputGenerator.match_option(field_default, options)
+            if idx is not None:
+                return idx
+        return 0 if options else None
+
+    @staticmethod
+    def _to_list(value: Any) -> list:
+        """Coerce a value into a list for multiselect defaults."""
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        if isinstance(value, str):
+            return PydanticInputGenerator._parse_array_string(value)
+        return [value]
+
+    @staticmethod
+    def _resolve_multiselect_default(
+        session_value: Any, explicit_default: Any, field_default: Any
+    ) -> list:
+        """Resolve a multiselect default list: session > explicit kw > default > []."""
+        if session_value is not None:
+            return PydanticInputGenerator._to_list(session_value)
+        if explicit_default is not None:
+            return PydanticInputGenerator._to_list(explicit_default)
+        if field_default is not None:
+            return PydanticInputGenerator._to_list(field_default)
+        return []
+
+    @staticmethod
+    def _render_selectbox_widget(
+        label: str,
+        widget_kwargs: Dict[str, Any],
+        existing_value: Any,
+        key: str,
+        field_default: Any = None,
+    ) -> Any:
+        """Render selectbox widget with default resolution."""
+        kwargs = dict(widget_kwargs)
+        options = kwargs.pop("options", [])
+        explicit_index = kwargs.pop("index", None)
+        index = PydanticInputGenerator._resolve_select_index(
+            existing_value, explicit_index, field_default, options
         )
+        return st.selectbox(label, options=options, index=index, key=key, **kwargs)
 
     @staticmethod
     def _render_radio_widget(
-        label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str
+        label: str,
+        widget_kwargs: Dict[str, Any],
+        existing_value: Any,
+        key: str,
+        field_default: Any = None,
     ) -> Any:
-        """Render radio widget."""
-        options = widget_kwargs.get('options', [])
-        index = 0
-        if existing_value and existing_value in options:
-            index = options.index(existing_value)
-        return st.radio(
-            label,
-            options=options,
-            index=index,
-            key=key,
-            **{k: v for k, v in widget_kwargs.items() if k != 'options'},
+        """Render radio widget with default resolution."""
+        kwargs = dict(widget_kwargs)
+        options = kwargs.pop("options", [])
+        explicit_index = kwargs.pop("index", None)
+        index = PydanticInputGenerator._resolve_select_index(
+            existing_value, explicit_index, field_default, options
         )
+        if index is None:
+            index = 0
+        return st.radio(label, options=options, index=index, key=key, **kwargs)
 
     def _render_number_input_widget(self, label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str,
                                     use_int: bool = False) -> Any:
@@ -894,21 +969,23 @@ class PydanticInputGenerator:
             **updated_kwargs
         )
 
-    def _render_multiselect_widget(self, label: str, widget_kwargs: Dict[str, Any], existing_value: Any, key: str) -> Any:
-        """Render multiselect widget"""
-        options = widget_kwargs.get('options', [])
-        default_vals = []
-        if existing_value:
-            if isinstance(existing_value, (list, tuple)):
-                default_vals = list(existing_value)
-            elif isinstance(existing_value, str):
-                default_vals = self._parse_array_string(existing_value)
+    @staticmethod
+    def _render_multiselect_widget(
+        label: str,
+        widget_kwargs: Dict[str, Any],
+        existing_value: Any,
+        key: str,
+        field_default: Any = None,
+    ) -> Any:
+        """Render multiselect widget with default resolution."""
+        kwargs = dict(widget_kwargs)
+        options = kwargs.pop("options", [])
+        explicit_default = kwargs.pop("default", None)
+        default_vals = PydanticInputGenerator._resolve_multiselect_default(
+            existing_value, explicit_default, field_default
+        )
         return st.multiselect(
-            label,
-            options=options,
-            default=default_vals,
-            key=key,
-            **{k: v for k, v in widget_kwargs.items() if k != 'options'}
+            label, options=options, default=default_vals, key=key, **kwargs
         )
     
     @staticmethod
