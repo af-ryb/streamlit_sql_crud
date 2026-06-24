@@ -497,57 +497,19 @@ class PydanticInputGenerator:
         return st.selectbox(label, enum_values, index=current_index, key=key)
     
     def _render_foreign_key_input(self, label: str, field_name: str, existing_value: Any, key: str) -> Any:
-        """Render selectbox for foreign key fields using custom configuration"""
+        """Render a text input fallback for foreign key fields.
+
+        Options are preloaded via set_foreign_key_options; reaching here means
+        they were not loaded, so there is nothing to populate a selectbox with.
+        """
         if field_name not in self.foreign_key_options:
             logger.warning(f"Field {field_name} not found in foreign_key_options")
-            return st.text_input(
-                label,
-                value=str(existing_value) if existing_value is not None else "",
-                key=key,
-                help="Configuration not available"
-            )
-        
-        fk_config = self.foreign_key_options[field_name]
-        query = fk_config['query']
-        display_field = fk_config['display_field']
-        value_field = fk_config['value_field']
-        
-        # Execute query to get options
-        if hasattr(self, 'conn') and self.conn:
-            with self.conn.session as session:
-                rows = session.execute(query).scalars().all()
-                
-                # Build options
-                options = []
-                option_map = {}
-                for row in rows:
-                    value = getattr(row, value_field)
-                    display = getattr(row, display_field)
-                    options.append(value)
-                    option_map[value] = display
-                
-                # Find current index
-                current_index = None
-                if existing_value in options:
-                    current_index = options.index(existing_value)
-                
-                # Render selectbox with format_func
-                return st.selectbox(
-                    label,
-                    options=options,
-                    index=current_index,
-                    format_func=lambda x: option_map.get(x, str(x)),
-                    key=key,
-                    help=f"Select from {len(options)} available options"
-                )
-        else:
-            # Fallback to text input if no connection available
-            return st.text_input(
-                label,
-                value=str(existing_value) if existing_value is not None else "",
-                key=key,
-                help="Database connection not available for foreign key options"
-            )
+        return st.text_input(
+            label,
+            value=str(existing_value) if existing_value is not None else "",
+            key=key,
+            help="Foreign key options not loaded",
+        )
     
     def _render_id_field(self, label: str, existing_value: Any, key: str) -> Any:
         """Render ID field specially based on operation type"""

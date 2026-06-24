@@ -283,6 +283,10 @@ class SqlUi:
             self.header_container.error(
                 ss.stsql_update_message, icon=":material/thumb_down:"
             )
+        # Clear so the banner shows once, not on every following rerun.
+        if ss.stsql_update_ok is not None:
+            ss.stsql_update_ok = None
+            ss.stsql_update_message = None
 
     def get_cte(self):
         if isinstance(self.read_instance, Select):

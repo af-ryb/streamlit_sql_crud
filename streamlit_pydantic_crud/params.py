@@ -33,7 +33,9 @@ def get_no_dt_param(col: KeyedColumnElement, existing: list):
         return None
 
     if col.type.python_type is str:
-        return existing.index(param)
+        if param in existing:
+            return existing.index(param)
+        return None
 
     if col.type.python_type is not int:
         return None
