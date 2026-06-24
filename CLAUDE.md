@@ -2,53 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Core Development Rules
+## Conventions
 
-### Code Quality
-Type hints required for all code  
-Public APIs must have docstrings  
-Functions must be focused and small  
-Follow existing patterns exactly  
-Line length: 88 chars maximum  
-Comments: two lines maximum, always use triple quotes, written in english  
-
-### Code Style
-PEP 8 naming (snake_case for functions/variables)  
-Class names in PascalCase  
-Constants in UPPER_SNAKE_CASE  
-Document with docstrings  
-Use f-strings for formatting  
-
-### Testing Requirements
-New features require tests  
-Tests must be written in pytest  
-Keep test files in separate directory, with name `tests` 
-
-## Development Philosophy
-- **Simplicity**: Write simple, straightforward code
-- **Readability**: Make code easy to understand
-- **Performance**: Consider performance without sacrificing readability
-- **Maintainability**: Write code that's easy to update
-- **Testability**: Ensure code is testable
-- **Reusability**: Create reusable components and functions
-- **Less Code = Less Debt**: Minimize code footprint
-
-## Coding Best Practices
-- **Make import on the top** of the file, never make import inside the function
-- **Use comments**: Use comments to explain your code
-- **Early Returns**: Use to avoid nested conditions
-- **Descriptive Names**: Use clear variable/function names (prefix handlers with "handle")
-- **Constants Over Functions**: Use constants where possible
-- **DRY Code**: Don't repeat yourself
-- **Functional Style**: Prefer functional, immutable approaches when not verbose
-- **Minimal Changes**: Only modify code related to the task at hand
-- **Function Ordering**: Define composing functions before their components
-- **Simplicity**: Prioritize simplicity and readability over clever solutions
-- **Build Iteratively** Start with minimal functionality and verify it works before adding complexity
-- **Run Tests**: Test your code frequently with realistic inputs and validate outputs
-- **Functional Code**: Use functional and stateless approaches where they improve clarity
-- **Clean logic**: Keep core logic clean and push implementation details to the edges
-- **File Organisation**: Balance file organization with simplicity - use an appropriate number of files for the project scale
+Project-specific rules (the rest is enforced by ruff/pyright — see config):
+- **Type hints on all code**; public APIs need docstrings.
+- **Line length: 88 chars** (ruff).
+- **Comments**: triple-quoted, English, two lines maximum.
+- **Imports at the top of the file** — never inside a function.
+- **Function ordering**: define composing functions before the helpers they call.
+- **Naming**: handler functions are prefixed with `handle`; `snake_case` functions,
+  `PascalCase` classes, `UPPER_SNAKE_CASE` constants; f-strings for formatting.
+- **Tests** live in `tests/` and use pytest; new features require tests.
 
 ## Common Development Commands
 
@@ -61,6 +25,21 @@ task fix
 # OR directly with uv
 uv run -- pyright && uv run -- ruff check --fix && uv run -- ruff format
 ```
+
+### Running Tests
+```bash
+# Run the full suite (pytest testpaths = ["tests"], quiet mode via addopts)
+uv run -- pytest
+# Run a single test file
+uv run -- pytest tests/test_pk_helpers.py
+# Run a single test by name
+uv run -- pytest -k pagination
+```
+Tests run against in-memory/temp SQLite (no PostgreSQL or Docker needed).
+Most tests drive the real Streamlit runtime through `streamlit.testing.v1.AppTest`:
+`tests/conftest.py` provides `engine`/`session` fixtures (seeded Department/Employee
+models) and a `run_app` fixture that renders apps from `tests/_apps/` and clears
+`st.cache_data` between runs to prevent memoized queries leaking across tests.
 
 ### Building and Publishing
 ```bash
@@ -82,12 +61,10 @@ task deploy-docs
 
 ### Development Server
 ```bash
-# Run Streamlit app locally (if app/webapp.py exists)
+# NOTE: this repo has no app/ directory; `make st`/`task st` target app/webapp.py
+# and only work where that file exists. To run a live UI, use the example project
+# below (./run.sh) instead.
 make st
-# OR
-task st
-# OR directly
-uv run -- streamlit run app/webapp.py
 ```
 
 ## Architecture Overview
@@ -102,10 +79,11 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    - Handles JOIN queries and filtering
    - Manages many-to-many relationships
 
-2. **PydanticUi** (`pydantic_ui.py`) - Standalone form generator
+2. **PydanticUi** / **PydanticCrudUi** (`pydantic_ui.py`) - Standalone form generators
    - Creates forms from Pydantic schemas
    - Database-agnostic form component
    - Session state management for form persistence
+   - These three classes are the public API (`streamlit_pydantic_crud.__init__`)
 
 3. **Core Modules**:
    - `filters.py` - Advanced filtering for JOIN queries and complex conditions
@@ -134,7 +112,7 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
 
 ## Package Management
 
-This project uses **uv** as the package manager. Key files:
+This project uses **uv** as the package manager and requires **Python >=3.12**. Key files:
 - `pyproject.toml` - Project configuration, dependencies, and tool settings
 - `uv.lock` - Lock file with exact dependency versions
 
@@ -156,8 +134,8 @@ This project uses **uv** as the package manager. Key files:
 
 ## Important File Patterns
 
-- Main package: `streamlit_pydantic_crud/`
-- Test files: `test_*.py` in root (should be moved to `tests/` directory)
+- Main package: `streamlit_pydantic_crud/` (import name differs from repo/PyPI name `streamlit_sql_crud`)
+- Tests: `tests/test_*.py` with shared fixtures in `tests/conftest.py` and harness apps in `tests/_apps/`
 - Documentation: `docs/` with MkDocs configuration
 - Config files: `pyproject.toml`, `Makefile`, `Taskfile.yml`
 
@@ -172,18 +150,18 @@ This project uses **uv** as the package manager. Key files:
 ## Testing with Example Project
 
 **ALL new functionality MUST be verified** using the companion test project at:
-`/home/miniserver/repo/streamlit_sql_crud_example`
+`~/repo/streamlit_sql_crud_example`
 
 ### Quick Test Setup
 ```bash
-cd /home/miniserver/repo/streamlit_sql_crud_example
+cd ~/repo/streamlit_sql_crud_example
 ./run.sh  # Automated setup and launch
 ```
 
 ### Key Test Resources
-- **Setup Guide**: `/home/miniserver/repo/streamlit_sql_crud_example/GETTING_STARTED.md`
-- **Launch Script**: `/home/miniserver/repo/streamlit_sql_crud_example/run.sh`
-- **Manual Setup**: `/home/miniserver/repo/streamlit_sql_crud_example/setup_test.sh`
+- **Setup Guide**: `~/repo/streamlit_sql_crud_example/GETTING_STARTED.md`
+- **Launch Script**: `~/repo/streamlit_sql_crud_example/run.sh`
+- **Manual Setup**: `~/repo/streamlit_sql_crud_example/setup_test.sh`
 
 ### Test Coverage
 The example project tests all major features:
@@ -195,7 +173,7 @@ The example project tests all major features:
 
 ### Testing Workflow
 1. Make changes to main library code
-2. Run `cd /home/miniserver/repo/streamlit_sql_crud_example && ./run.sh`
+2. Run `cd ~/repo/streamlit_sql_crud_example && ./run.sh`
 3. Test affected functionality in the web interface at http://localhost:8501
 4. Verify CRUD operations work correctly
 5. Check validation and error handling
@@ -209,8 +187,3 @@ The example project tests all major features:
 - **loguru** - Logging
 - **streamlit_datalist** - Enhanced UI components
 - **streamlit_antd_components** - Additional UI widgets
-
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
