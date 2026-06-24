@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple, List, Callable
+from typing import Type, Dict, Any, Optional, Union, TypeVar, Generic, Tuple, List, Callable, cast
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
@@ -19,19 +19,24 @@ class PydanticUi(Generic[T]):
         schema: Type[T],
         key: str,
         session_state_key: Optional[str] = None,
+        pk_name: str = "id",
     ):
         """Initialize PydanticUi.
-        
+
         Args:
             schema: Pydantic model class to generate form from
             key: Unique key for the form (used for widget keys)
             session_state_key: Key for session state persistence (defaults to key)
+            pk_name: Name of the primary-key field in the schema
         """
         self.schema = schema
         self.key = key
         self.session_state_key = session_state_key or key
+        self.pk_name = pk_name
 
-        self.input_generator = PydanticInputGenerator(schema=schema, key_prefix=key)
+        self.input_generator = PydanticInputGenerator(
+            schema=schema, key_prefix=key, pk_name=pk_name
+        )
         self._init_session_state()
     
     @classmethod
@@ -84,7 +89,7 @@ class PydanticUi(Generic[T]):
         
         # Create and return PydanticUi instance
         return cls(
-            schema=dynamic_schema,
+            schema=cast(Any, dynamic_schema),
             key=key,
             session_state_key=session_state_key
         )
@@ -122,10 +127,10 @@ class PydanticUi(Generic[T]):
             return None
             
         except Exception as e:
-            logger.error(f"Error rendering PydanticUi form: {e}")
+            logger.exception("Error rendering PydanticUi form")
             st.error(f"Form rendering error: {str(e)}")
             return None
-    
+
     def _has_required_fields(self, form_data: Dict[str, Any]) -> bool:
         """Check if all required fields have values."""
         for field_name, field_info in self.schema.model_fields.items():
@@ -159,8 +164,8 @@ class PydanticUi(Generic[T]):
             
         except ValidationError:
             return None
-        except Exception as e:
-            logger.error(f"Error getting session data: {e}")
+        except Exception:
+            logger.exception("Error getting session data")
             return None
     
     def clear_session_data(self):
@@ -201,8 +206,8 @@ class PydanticUi(Generic[T]):
             # Note: Individual widget keys will be populated on next render
             # We cannot set them here as widgets may already be instantiated
             
-        except Exception as e:
-            logger.error(f"Error updating session data: {e}")
+        except Exception:
+            logger.exception("Error updating session data")
     
     def get_form_data(self) -> Dict[str, Any]:
         """Get current form data as dictionary.
@@ -314,7 +319,7 @@ class PydanticUi(Generic[T]):
             return None
             
         except Exception as e:
-            logger.error(f"Error rendering PydanticUi form with columns: {e}")
+            logger.exception("Error rendering PydanticUi form with columns")
             st.error(f"Form rendering error: {str(e)}")
             return None
 
@@ -332,23 +337,30 @@ class PydanticCrudUi(PydanticUi[T]):
         session_state_key: Optional[str] = None,
         foreign_key_options: Optional[Dict] = None,
         many_to_many_fields: Optional[Dict] = None,
+        pk_name: str = "id",
     ):
         """Initialize PydanticCrudUi for CRUD operations.
-        
+
         Args:
             schema: Pydantic model class to generate form from
             key: Unique key for the form (used for widget keys)
             session_state_key: Key for session state persistence (defaults to key)
             foreign_key_options: Configuration for foreign key fields
             many_to_many_fields: Configuration for many-to-many fields
+            pk_name: Name of the primary-key field in the schema
         """
         # Initialize parent without input generator
-        super().__init__(schema=schema, key=key, session_state_key=session_state_key)
-        
+        super().__init__(
+            schema=schema,
+            key=key,
+            session_state_key=session_state_key,
+            pk_name=pk_name,
+        )
+
         # Store foreign key options
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
-        
+
         # Reinitialize input generator with foreign key support
         self.input_generator = PydanticInputGenerator(
             schema=schema,
@@ -356,6 +368,7 @@ class PydanticCrudUi(PydanticUi[T]):
             foreign_key_options=self.foreign_key_options,
             many_to_many_fields=self.many_to_many_fields,
             operation_type="create",  # Default to create, will be overridden by specific operations
+            pk_name=pk_name,
         )
 
         self._init_session_state()

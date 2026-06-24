@@ -90,6 +90,7 @@ dev = [
     "vulture",
     "pdbpp",
     "pyright",
+    "ruff",
     "mkdocs",
     "mkdocs-material>=9.6.1",
     "mkdocstrings-python>=1.13.0",

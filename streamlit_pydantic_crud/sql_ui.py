@@ -16,7 +16,12 @@ from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
-from streamlit_pydantic_crud.utils import convert_numpy_to_python, convert_numpy_list_to_python
+from streamlit_pydantic_crud.utils import (
+    convert_numpy_to_python,
+    convert_numpy_list_to_python,
+    pk_attr,
+    pk_name,
+)
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
 
@@ -34,7 +39,7 @@ class SqlUi:
     def __init__(
         self,
         conn: SQLConnection,
-        read_instance = None,
+        read_instance: Select | CTE | type[DeclarativeBase] | None = None,
         edit_create_model: type[DeclarativeBase] | None = None,
         model: type[DeclarativeBase] | None = None,
         available_filter: list[str] | None = None,
@@ -232,7 +237,7 @@ class SqlUi:
         stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
         qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss.stsql_updated)
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
-        order_col = self.cte.columns.get("id")
+        order_col = self.cte.columns.get(pk_name(self.edit_create_model))
         stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
         df = self.get_df(stmt_pag)
         selection_state = self.show_df(df)
@@ -436,27 +441,28 @@ class SqlUi:
                 
                 # If we have many-to-many fields and filtered results, load relationships separately
                 if self.many_to_many_fields and filtered_result:
-                    # Extract entity IDs from filtered results
-                    entity_ids = [row.id for row in filtered_result]
-                    
+                    pk = pk_name(self.edit_create_model)
+                    # Extract entity PKs from filtered results
+                    entity_ids = [getattr(row, pk) for row in filtered_result]
+
                     # Build options for eager loading
                     options = []
                     for field_name, config in self.many_to_many_fields.items():
                         relationship_attr = getattr(self.edit_create_model, config['relationship'])
                         options.append(selectinload(relationship_attr))
-                    
-                    # Load entities with relationships for just the filtered IDs
+
+                    # Load entities with relationships for just the filtered PKs
                     entities_with_relations = s.query(self.edit_create_model).filter(
-                        self.edit_create_model.id.in_(entity_ids)
+                        pk_attr(self.edit_create_model).in_(entity_ids)
                     ).options(*options).all()
-                    
-                    # Create a mapping of id -> entity with relationships
-                    entity_map = {entity.id: entity for entity in entities_with_relations}
-                    
+
+                    # Create a mapping of pk -> entity with relationships
+                    entity_map = {getattr(entity, pk): entity for entity in entities_with_relations}
+
                     # Merge filtered data with relationship data
                     result = []
                     for row in filtered_result:
-                        entity = entity_map.get(row.id)
+                        entity = entity_map.get(getattr(row, pk))
                         if entity:
                             # Use the entity with relationships loaded
                             result.append(entity)
@@ -484,9 +490,10 @@ class SqlUi:
                         # Row object  
                         validated_data = row._asdict()
 
-                # Ensure 'id' is always present for CRUD operations
-                if 'id' not in validated_data and hasattr(row, 'id'):
-                    validated_data['id'] = row.id
+                # Ensure the primary key is always present for CRUD operations
+                pk = pk_name(self.edit_create_model)
+                if pk not in validated_data and hasattr(row, pk):
+                    validated_data[pk] = getattr(row, pk)
 
                 # Convert enum objects to strings for PyArrow compatibility
                 for key, value in validated_data.items():
@@ -588,7 +595,8 @@ class SqlUi:
             create_row.show_dialog()
         elif action == "edit":
             selected_pos = rows_selected[0]
-            row_id = convert_numpy_to_python(df.iloc[selected_pos]["id"], self.edit_create_model)
+            pk = pk_name(self.edit_create_model)
+            row_id = convert_numpy_to_python(df.iloc[selected_pos][pk], self.edit_create_model)
             update_row = update_model.UpdateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -604,7 +612,8 @@ class SqlUi:
             )
             update_row.show_dialog()
         elif action == "delete":
-            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected].id.to_list(), self.edit_create_model)
+            pk = pk_name(self.edit_create_model)
+            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected][pk].to_list(), self.edit_create_model)
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
                 model=self.edit_create_model,

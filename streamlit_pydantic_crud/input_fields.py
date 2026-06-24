@@ -9,7 +9,7 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit_datalist import stDatalist
 
-from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.filters import ExistingData, FkOpt
 from streamlit_pydantic_crud.lib import get_pretty_name
 
 
@@ -62,6 +62,7 @@ class InputFields:
         )
         if not input_value:
             return None
+        assert isinstance(input_value, FkOpt)
         return input_value.idx
 
     def get_col_str_opts(self, col_name: str, value: str | None):

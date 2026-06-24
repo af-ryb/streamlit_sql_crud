@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 from loguru import logger
 
+from streamlit_pydantic_crud.utils import pk_name as get_pk_name
+
 
 class PydanticSQLAlchemyConverter:
     """Handles conversion between Pydantic models and SQLAlchemy models"""
@@ -59,9 +61,10 @@ class PydanticSQLAlchemyConverter:
                     
                 # Type compatibility check could be added here
                 
-            # For update operations, ensure the 'id' field is present
-            if operation == 'update' and 'id' not in schema_fields:
-                logger.warning(f"Update schema {schema.__name__} must include 'id' field")
+            # For update operations, ensure the primary-key field is present
+            pk = get_pk_name(model)
+            if operation == 'update' and pk not in schema_fields:
+                logger.warning(f"Update schema {schema.__name__} must include '{pk}' field")
                 return False
             
             # For read operations, no specific requirements
@@ -69,10 +72,11 @@ class PydanticSQLAlchemyConverter:
                 pass  # Read schemas can have any subset of fields
                 
             return True
-            
-        except Exception as e:
-            logger.error(f"Error validating schema compatibility: {e}")
-            return False
+
+        except Exception:
+            # Surface the real cause instead of a misleading "not compatible".
+            logger.exception("Error validating schema compatibility")
+            raise
     
     @staticmethod
     def pydantic_to_sqlalchemy(
@@ -94,9 +98,9 @@ class PydanticSQLAlchemyConverter:
             
             # Create the SQLAlchemy instance
             return sqlalchemy_model(**data_dict)
-            
-        except Exception as e:
-            logger.error(f"Error converting Pydantic to SQLAlchemy: {e}")
+
+        except Exception:
+            logger.exception("Error converting Pydantic to SQLAlchemy")
             raise
     
     @staticmethod
@@ -116,9 +120,9 @@ class PydanticSQLAlchemyConverter:
         try:
             # Use from_attributes=True configuration to create from SQLAlchemy instance
             return pydantic_schema.model_validate(sqlalchemy_instance)
-            
-        except Exception as e:
-            logger.error(f"Error converting SQLAlchemy to Pydantic: {e}")
+
+        except Exception:
+            logger.exception("Error converting SQLAlchemy to Pydantic")
             raise
     
     @staticmethod
@@ -144,8 +148,9 @@ class PydanticSQLAlchemyConverter:
                 }
                 
                 # Extract validation constraints
-                if hasattr(field, 'constraints'):
-                    for constraint in field.constraints:
+                constraints = getattr(field, 'constraints', None)
+                if constraints:
+                    for constraint in constraints:
                         constraint_type = type(constraint).__name__
                         info['constraints'][constraint_type] = constraint
                 
@@ -168,10 +173,10 @@ class PydanticSQLAlchemyConverter:
                 field_info[field_name] = info
             
             return field_info
-            
-        except Exception as e:
-            logger.error(f"Error extracting Pydantic field info: {e}")
-            return {}
+
+        except Exception:
+            logger.exception("Error extracting Pydantic field info")
+            raise
 
     @staticmethod
     def get_streamlit_input_type(pydantic_field_info: Dict[str, Any]) -> str:
@@ -220,12 +225,13 @@ class PydanticSQLAlchemyConverter:
 class PydanticInputGenerator:
     """Generates Streamlit inputs based on Pydantic schema"""
     
-    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict | None = None, many_to_many_fields: dict | None = None, operation_type: str = "create"):
+    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict | None = None, many_to_many_fields: dict | None = None, operation_type: str = "create", pk_name: str = "id"):
         self.schema = schema
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
         self.operation_type = operation_type  # 'create' or 'update'
+        self.pk_name = pk_name
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
         
         # logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}, operation_type: {operation_type}")
@@ -289,7 +295,7 @@ class PydanticInputGenerator:
             existing_value = existing_values.get(field_name)
             
             # Skip primary key fields to create operations
-            if field_name == 'id' and existing_value is None:
+            if field_name == self.pk_name and existing_value is None:
                 continue
             
             # logger.debug(f"Processing field: {field_name}, is_m2m: {field_name in self.many_to_many_fields}")
@@ -382,8 +388,8 @@ class PydanticInputGenerator:
         # Non-custom paths fall back to the field default when no session value.
         value = existing_value if existing_value is not None else field_default
 
-        # Handle ID field specially
-        if field_name == 'id':
+        # Handle primary-key field specially
+        if field_name == self.pk_name:
             return self._render_id_field(label, value, key)
 
         # Check for custom foreign key fields first
@@ -959,8 +965,8 @@ class PydanticInputGenerator:
             updated_kwargs['min_value'] = min_val
         if max_val is not None:
             updated_kwargs['max_value'] = max_val
-        if step is not None:
-            updated_kwargs['step'] = step
+        # step is always assigned a non-None value above.
+        updated_kwargs['step'] = step
 
         return st.number_input(
             label,
@@ -1015,8 +1021,8 @@ class PydanticInputGenerator:
         max_val = widget_kwargs.get('max_value')
         step = widget_kwargs.get('step')
         
-        return (isinstance(step, float) or isinstance(min_val, float) or 
-                isinstance(max_val, float) or (step and '.' in str(step)))
+        return bool(isinstance(step, float) or isinstance(min_val, float) or
+                    isinstance(max_val, float) or (step and '.' in str(step)))
     
     def set_foreign_key_options(self, field_name: str, options: list, display_field: str | None = None, value_field: str | None = None):
         """Set foreign key options for a field with preloaded data.
@@ -1087,11 +1093,12 @@ class PydanticInputGenerator:
                 help=f"Select from {len(options)} available options"
             )
 
-    def set_many_to_many_options(self, field_name: str, options: list, display_field: str):
+    def set_many_to_many_options(self, field_name: str, options: list, display_field: str, pk_name: str = "id"):
         """Set many-to-many options for a field with preloaded data."""
         self.many_to_many_data[field_name] = {
             'options': options,
             'display_field': display_field,
+            'pk_name': pk_name,
         }
         # logger.debug(f"Set many-to-many options for field {field_name}: {len(options)} options")
 
@@ -1104,33 +1111,34 @@ class PydanticInputGenerator:
         m2m_data = self.many_to_many_data[field_name]
         options = m2m_data['options']
         display_field = m2m_data['display_field']
+        pk = m2m_data.get('pk_name', 'id')
 
-        # Create mappings for display and ID retrieval
-        id_to_display = {option.id: getattr(option, display_field) for option in options}
-        id_to_object = {option.id: option for option in options}
+        # Create mappings for display and PK retrieval
+        id_to_display = {getattr(option, pk): getattr(option, display_field) for option in options}
+        id_to_object = {getattr(option, pk): option for option in options}
 
-        # Get the currently selected IDs
+        # Get the currently selected PKs
         current_selection_ids = []
         if existing_value is not None:
             if isinstance(existing_value, list) and existing_value:
-                # Check if it's a list of IDs, objects, or names
+                # Check if it's a list of PKs, objects, or names
                 first_item = existing_value[0]
                 if isinstance(first_item, (int, str)):
-                    # Check if these are valid IDs or display names
+                    # Check if these are valid PKs or display names
                     if first_item in id_to_display:
-                        # List of IDs from session state
+                        # List of PKs from session state
                         current_selection_ids = existing_value
                     else:
-                        # List of display names (from copy mode) - need to convert to IDs
+                        # List of display names (from copy mode) - need to convert to PKs
                         name_to_id = {v: k for k, v in id_to_display.items()}
                         current_selection_ids = [name_to_id.get(name) for name in existing_value if name in name_to_id]
-                        # logger.debug(f"Converted display names to IDs for {field_name}: {existing_value} -> {current_selection_ids}")
-                elif hasattr(first_item, 'id'):
+                        # logger.debug(f"Converted display names to PKs for {field_name}: {existing_value} -> {current_selection_ids}")
+                elif hasattr(first_item, pk):
                     # List of objects from relationship
-                    current_selection_ids = [obj.id for obj in existing_value]
+                    current_selection_ids = [getattr(obj, pk) for obj in existing_value]
             elif hasattr(existing_value, '__iter__') and not isinstance(existing_value, str):
-                # Relationship collection - extract IDs
-                current_selection_ids = [obj.id for obj in existing_value if hasattr(obj, 'id')]
+                # Relationship collection - extract PKs
+                current_selection_ids = [getattr(obj, pk) for obj in existing_value if hasattr(obj, pk)]
 
         # Use IDs in the multiselect
         selected_ids = st.multiselect(

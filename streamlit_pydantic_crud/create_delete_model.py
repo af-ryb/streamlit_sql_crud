@@ -18,6 +18,7 @@ from streamlit_pydantic_crud.lib import (
 )
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
+from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name
 from loguru import logger
 
 
@@ -67,16 +68,17 @@ class CreateRow:
             
             # Pre-populate form with initial_data if provided (for "copy" action)
             if self.initial_data:
-                # Remove 'id' to avoid conflicts, as it's a new record
-                self.initial_data.pop('id', None)
+                # Remove the primary key to avoid conflicts, as it's a new record
+                self.initial_data.pop(pk_name(self.model), None)
                 set_state(session_key, self.initial_data)
 
             self.pydantic_ui = PydanticCrudUi(
-                schema=self.create_schema, 
+                schema=self.create_schema,
                 key=self.key_prefix,
                 session_state_key=session_key,
                 foreign_key_options=self.foreign_key_options,
                 many_to_many_fields=self.many_to_many_fields,
+                pk_name=pk_name(self.model),
             )
             
             # Set operation type to 'create' for proper empty value handling
@@ -118,14 +120,14 @@ class CreateRow:
                 
                 with self.conn.session as session:
                     rows = session.execute(query).scalars().all()
-                    
+
                     # Set options in PydanticUi's input generator
                     self.pydantic_ui.input_generator.set_many_to_many_options(
-                        field_name, rows, display_field
+                        field_name, list(rows), display_field, pk_name(related_model)
                     )
-                    
-            except Exception as e:
-                logger.warning(f"Failed to load many-to-many data for {field_name}: {e}")
+
+            except Exception:
+                logger.exception(f"Failed to load many-to-many data for {field_name}")
 
     def _load_foreign_key_data(self):
         """Load foreign key data from database for form fields using filtered options."""
@@ -170,9 +172,9 @@ class CreateRow:
                 )
                 # logger.debug(f"Set foreign key options for {field_name} in input generator")
                     
-            except Exception as e:
-                # Log error but continue - field will fall back to text input
-                logger.warning(f"Failed to load foreign key data for {field_name}: {e}")
+            except Exception:
+                # Log full traceback but continue - field falls back to text input
+                logger.exception(f"Failed to load foreign key data for {field_name}")
     
     def get_sqlalchemy_fields(self):
         """Original SQLAlchemy field generation logic"""
@@ -239,8 +241,8 @@ class CreateRow:
                     related_model = getattr(self.model, relationship_name).property.mapper.class_
                     
                     # Get the related objects from the database
-                    related_objects = s.query(related_model).filter(related_model.id.in_(selected_options)).all()
-                    
+                    related_objects = s.query(related_model).filter(pk_attr(related_model).in_(selected_options)).all()
+
                     # Append the related objects to the relationship
                     getattr(row, relationship_name).extend(related_objects)
 
@@ -260,7 +262,8 @@ class CreateRow:
             ss.stsql_updated += 1
             table_name = getattr(self.model, '__tablename__', self.model.__name__)
             log("CREATE", table_name, validated_data.model_dump(), success=False)
-            
+            logger.exception(f"Create failed for {table_name}")
+
             # Handle specific SQLAlchemy errors with user-friendly messages
             error_msg = format_database_error(e)
             return False, error_msg
@@ -280,7 +283,8 @@ class CreateRow:
             ss.stsql_updated += 1
             table_name = getattr(self.model, '__tablename__', self.model.__name__)
             log("CREATE", table_name, created, success=False)
-            
+            logger.exception(f"Create failed for {table_name}")
+
             # Handle specific SQLAlchemy errors with user-friendly messages
             error_msg = format_database_error(e)
             return False, error_msg
@@ -318,8 +322,7 @@ class DeleteRows:
 
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_rows_str(_self, rows_id: list[int]):
-        id_col = _self.model.__table__.columns.get("id")
-        assert id_col is not None
+        id_col = pk_column(_self.model)
         stmt = select(_self.model).where(id_col.in_(rows_id))
 
         with _self.conn.session as s:
@@ -336,8 +339,6 @@ class DeleteRows:
 
         btn = st.button("Delete", key=f"{self.key_prefix}_del_btn")
         if btn:
-            id_col = self.model.__table__.columns.get("id")
-            assert id_col is not None
             lancs = []
             with self.conn.session as s:
                 try:
@@ -357,6 +358,7 @@ class DeleteRows:
                     ss.stsql_updated += 1
                     table_name = getattr(self.model, '__tablename__', self.model.__name__)
                     log("DELETE", table_name, "")
+                    logger.exception(f"Delete failed for {table_name}")
                     return False, format_database_error(e)
         else:
             return None, None

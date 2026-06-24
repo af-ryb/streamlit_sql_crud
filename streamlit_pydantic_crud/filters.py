@@ -210,6 +210,10 @@ class ExistingData:
                                 current_display = getattr(current_row, display_field)
                                 opts.append(FkOpt(current_value, current_display))
                     except Exception:
+                        # Could not load the display row; fall back to the raw value.
+                        logger.exception(
+                            f"Failed to load display for current FK value of {col_name}"
+                        )
                         opts.append(FkOpt(current_value, str(current_value)))
 
         return opts

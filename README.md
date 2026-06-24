@@ -103,7 +103,7 @@ class AlertReadSchema(BaseModel):
 1. Python 3.12+
 2. Core dependencies: streamlit, sqlalchemy, pandas, pydantic (≥2.0)
 3. SQLAlchemy models require a `__str__` method
-4. Primary key column must be named "id"
+4. A single-column primary key (any name); composite primary keys are not supported
 5. Foreign key relationships must be defined
 
 ## Installation
@@ -143,7 +143,7 @@ SqlUi(
 )
 ```
 
-> **Note**: Always include the primary key column (id) in your select statement
+> **Note**: Always include the primary key column in your select statement
 
 ### Interface Controls
 - **Filter**: Open the "Filter" expander

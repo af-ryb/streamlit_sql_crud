@@ -1,12 +1,14 @@
+from functools import cached_property
+
 import pandas as pd
 import streamlit as st
-from streamlit.connections.sql_connection import SQLConnection
 from sqlalchemy import func, select
 from sqlalchemy.orm import RelationshipProperty, Session
-from functools import cached_property
+from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud import lib, read_cte
 from streamlit_pydantic_crud.create_delete_model import CreateRow, DeleteRows
+from streamlit_pydantic_crud.utils import pk_attr, pk_name
 
 
 class ReadManyRel:
@@ -15,7 +17,7 @@ class ReadManyRel:
     def __init__(
         self,
         model,
-        model_id: int,
+        model_id: int | str,
         rel: RelationshipProperty,
     ) -> None:
         self.model = model
@@ -51,17 +53,17 @@ class ReadManyRel:
 
     @property
     def base_stmt(self):
-        stmt = select(self.other_model.id, self.other_model)
+        stmt = select(pk_attr(self.other_model), self.other_model)
 
         if self.model != self.other_model:
-            stmt = stmt.join(self.model, self.model.id == self.other_col)
+            stmt = stmt.join(self.model, pk_attr(self.model) == self.other_col)
 
         stmt = stmt.where(self.other_col == self.model_id)
         return stmt
 
     def get_qtty_rows(self, session: Session):
         subq = self.base_stmt.subquery()
-        stmt = select(func.count(subq.c.id))
+        stmt = select(func.count(subq.c[pk_name(self.other_model)]))
         qtty = session.execute(stmt).scalar_one()
         return qtty
 
@@ -79,7 +81,7 @@ class ReadManyRel:
 
 
 @st.fragment
-def show_rel(conn: SQLConnection, model, model_id: int, rel: RelationshipProperty):
+def show_rel(conn: SQLConnection, model, model_id: int | str, rel: RelationshipProperty):
     read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
@@ -139,7 +141,7 @@ def show_rel(conn: SQLConnection, model, model_id: int, rel: RelationshipPropert
                 delete_rows.show(pretty_name)
 
 
-def show_rels(conn: SQLConnection, model, model_id: int):
+def show_rels(conn: SQLConnection, model, model_id: int | str):
     rels = [rel for rel in model.__mapper__.relationships if rel.direction.value == 1]
 
     for rel in rels:
