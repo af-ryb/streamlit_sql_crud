@@ -129,8 +129,6 @@ class CreateRow:
 
     def _load_foreign_key_data(self):
         """Load foreign key data from database for form fields using filtered options."""
-        from loguru import logger
-        
         for field_name, fk_config in self.foreign_key_options.items():
             try:
                 display_field = fk_config['display_field']

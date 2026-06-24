@@ -50,8 +50,6 @@ class ExistingData:
         self.fk = self.get_fk(table_name, ss.stsql_updated)
 
     def apply_active_filters(self, stmt, model: type[DeclarativeBase]):
-        from loguru import logger
-        
         # logger.debug(f"apply_active_filters called for model: {model.__name__}")
         # logger.debug(f"dt_filters: {self.dt_filters}")
         # logger.debug(f"no_dt_filters: {self.no_dt_filters}")

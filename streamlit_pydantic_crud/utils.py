@@ -1,5 +1,6 @@
 """Utility functions for streamlit_sql package"""
 
+import numpy as np
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -13,8 +14,6 @@ def convert_numpy_to_python(value, model: type[DeclarativeBase]):
     Returns:
         The value converted to appropriate Python native type
     """
-    import numpy as np
-    
     if not isinstance(value, (np.integer, np.floating, np.str_)):
         return value
     

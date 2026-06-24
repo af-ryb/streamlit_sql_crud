@@ -220,7 +220,7 @@ class PydanticSQLAlchemyConverter:
 class PydanticInputGenerator:
     """Generates Streamlit inputs based on Pydantic schema"""
     
-    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict = None, many_to_many_fields: dict = None, operation_type: str = "create"):
+    def __init__(self, schema: Type[BaseModel], key_prefix: str = "", foreign_key_options: dict | None = None, many_to_many_fields: dict | None = None, operation_type: str = "create"):
         self.schema = schema
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
@@ -941,7 +941,7 @@ class PydanticInputGenerator:
         return (isinstance(step, float) or isinstance(min_val, float) or 
                 isinstance(max_val, float) or (step and '.' in str(step)))
     
-    def set_foreign_key_options(self, field_name: str, options: list, display_field: str = None, value_field: str = None):
+    def set_foreign_key_options(self, field_name: str, options: list, display_field: str | None = None, value_field: str | None = None):
         """Set foreign key options for a field with preloaded data.
         
         Args:

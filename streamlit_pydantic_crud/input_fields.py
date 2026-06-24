@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -181,7 +182,6 @@ class InputFields:
                     
                 # Handle quoted values and unquoted values
                 if value_str:
-                    import re
                     # Split by comma, but handle quoted strings
                     parts = re.findall(r'"([^"]*)"|\b([^,]+)\b', value_str)
                     for quoted, unquoted in parts:

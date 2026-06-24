@@ -37,8 +37,8 @@ class PydanticUi(Generic[T]):
     @classmethod
     def from_json_schema(
         cls, 
-        json_schema: Dict[str, Any], 
-        field_options: Dict[str, List[str]] = None,
+        json_schema: Dict[str, Any],
+        field_options: Optional[Dict[str, List[str]]] = None,
         key: str = "form",
         model_name: str = "DynamicModel",
         session_state_key: Optional[str] = None

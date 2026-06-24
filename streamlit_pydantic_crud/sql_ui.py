@@ -1,4 +1,5 @@
 import json
+import warnings
 import pandas as pd
 import streamlit as st
 from collections.abc import Callable
@@ -34,8 +35,8 @@ class SqlUi:
         self,
         conn: SQLConnection,
         read_instance = None,
-        edit_create_model: type[DeclarativeBase] = None,
-        model: type[DeclarativeBase] = None,
+        edit_create_model: type[DeclarativeBase] | None = None,
+        model: type[DeclarativeBase] | None = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
         df_style_formatter: dict[str, str] | None = None,
@@ -135,7 +136,6 @@ class SqlUi:
         # Handle model parameter consolidation
         if model is not None:
             if read_instance is not None or edit_create_model is not None:
-                import warnings
                 warnings.warn(
                     "When 'model' parameter is provided, 'read_instance' and 'edit_create_model' are ignored. "
                     "Use either 'model' (recommended) or the legacy 'read_instance'+'edit_create_model' combination.",
@@ -171,7 +171,6 @@ class SqlUi:
         self.items_per_page_default = items_per_page_default
 
         if key is not None and base_key is not None:
-            import warnings
             warnings.warn(
                 "Both 'key' and 'base_key' specified. 'base_key' is deprecated, using 'key' instead. "
                 "Remove 'base_key' parameter in future versions.",
@@ -180,7 +179,6 @@ class SqlUi:
             )
             self.key = key
         elif base_key is not None:
-            import warnings
             warnings.warn(
                 "'base_key' parameter is deprecated and will be removed in v1.0.0. "
                 "Use 'key' parameter instead for Streamlit compatibility.",
@@ -312,7 +310,7 @@ class SqlUi:
         """Check if the statement has ORM options like selectinload"""
         # Check if the original read_instance has options applied
         if isinstance(self.read_instance, Select):
-            return hasattr(self.read_instance, '_with_options') and self.read_instance._with_options
+            return bool(getattr(self.read_instance, '_with_options', None))
         return False
     
     def _stmt_has_explicit_columns(self, stmt: Select) -> bool:
@@ -322,8 +320,6 @@ class SqlUi:
             selected_columns = self.read_instance.selected_columns
             if selected_columns:
                 # If any selected item is not a full table/entity, it's expression-based
-                from sqlalchemy import Table
-                from sqlalchemy.orm import DeclarativeBase
                 for col in selected_columns:
                     # If it's a column attribute rather than a full table/entity
                     if hasattr(col, 'table') or hasattr(col, 'element'):

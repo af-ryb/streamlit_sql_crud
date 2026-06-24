@@ -365,7 +365,6 @@ def action_btns(container: DeltaGenerator,
                 show_create_btn: bool,
                 show_delete_btn: bool,
                 key: str):
-    set_state("stsql_action", "")
     disabled_add = (qtty_selected > 1) or not show_create_btn
     disabled_edit = qtty_selected != 1
     disabled_delete = (qtty_selected == 0) or not show_delete_btn
