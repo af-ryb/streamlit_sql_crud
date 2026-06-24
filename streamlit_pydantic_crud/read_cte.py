@@ -350,30 +350,4 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
 def get_stmt_pag(stmt_no_pag: Select, limit: int, page: int):
     offset = (page - 1) * limit
     stmt = stmt_no_pag.offset(offset).limit(limit)
-    
-    
     return stmt
-
-
-# @st.cache_data(hash_funcs=hash_funcs)
-def initial_balance(
-    _session: Session,
-    stmt_no_pag_dt: Select,
-    stmt_pag: Select,
-    rolling_total_column: str,
-    orderby_cols: list,
-) -> float:
-    stmt_pag_ordered = stmt_pag.order_by(*orderby_cols)
-    first_pag = _session.execute(stmt_pag_ordered).first()
-    if not first_pag:
-        return 0
-
-    stmt_no_pag_dt_ordered = stmt_no_pag_dt.order_by(*orderby_cols)
-    for col in orderby_cols:
-        stmt_no_pag_dt_ordered = stmt_no_pag_dt_ordered.where(
-            col < getattr(first_pag, col.name)
-        )
-
-    stmt_bal = select(func.sum(stmt_no_pag_dt_ordered.c.get(rolling_total_column)))
-    bal = _session.execute(stmt_bal).scalar_one() or 0
-    return bal

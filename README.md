@@ -20,7 +20,6 @@ Key enhancements over the original streamlit_sql package:
 - Display as a standard st.dataframe with pagination
 - Configure using SQLAlchemy select statements (JOIN, ORDER BY, WHERE, etc.)
 - **Display fields from joined tables efficiently**
-- Add rolling sum columns for numeric data
 - Conditional row styling based on values
 - Custom number formatting
 - Multiple CRUD interfaces per page using unique keys
@@ -141,7 +140,6 @@ SqlUi(
     conn=conn,
     model=db.Invoice,  # Single model for both read and write
     available_filter=["name"],
-    rolling_total_column="amount",
 )
 ```
 
