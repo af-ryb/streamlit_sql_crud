@@ -131,25 +131,30 @@ class InputFields:
         result = str(input_value)
         return result
 
+    @staticmethod
+    def coerce_decimal(
+        value: float | int | None, step: float | None
+    ) -> Decimal | None:
+        """Convert a numeric input to Decimal, preserving 0 and quantizing.
+
+        Returns None only when value is None, so a literal 0 is kept.
+        """
+        if value is None:
+            return None
+        value_dec = Decimal(str(value))
+        if step:
+            value_dec = value_dec.quantize(Decimal(str(step)))
+        return value_dec
+
     def input_numeric(self, col_name, scale: int | None, value=None):
         step = None
         if scale:
             step = 10 ** (scale * -1)
 
-        value_float = None
-        if value:
-            value_float = float(value)
-
+        value_float = float(value) if value is not None else None
         input_value = st.number_input(col_name, value=value_float, step=step)
 
-        if not input_value:
-            return None
-
-        value_dec = Decimal(str(input_value))
-        if step:
-            value_dec = value_dec.quantize(Decimal(str(step)))
-
-        return value_dec
+        return self.coerce_decimal(input_value, step)
 
     def input_array(self, col_name: str, col_type, col_value=None):
         """Handle ARRAY column input with multiselect"""

@@ -42,6 +42,15 @@ select = ["UP","YTT", "A", "EM", "ICN","I", "SIM", "E", "F", "C90", "B", "C4", "
 ignore-names = ["_self"]
 
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore:.*ScriptRunContext.*:UserWarning",
+]
+
+
 [metadata]
 description = "Streamlit Pydantic CRUD"
 keyword = []
@@ -83,7 +92,8 @@ dev = [
     "pyright",
     "mkdocs",
     "mkdocs-material>=9.6.1",
-	"mkdocstrings-python>=1.13.0",
+    "mkdocstrings-python>=1.13.0",
+    "pytest>=9.1.1",
 ]
 
 [project.urls]
