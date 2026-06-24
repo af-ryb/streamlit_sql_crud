@@ -13,6 +13,9 @@ from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 from loguru import logger
 
+from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
+
+
 @dataclass
 class FkOpt:
     idx: int
@@ -105,7 +108,7 @@ class ExistingData:
 
         return opts
 
-    @st.cache_data
+    @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_text(_self, table_name: str, updated: int) -> dict[str, Sequence[str]]:
         opts = {
             col.name: _self._get_str_opts(col)
@@ -120,7 +123,7 @@ class ExistingData:
         max_dt: date = self.session.query(func.max(column)).scalar() or date.today()
         return min_dt, max_dt
 
-    @st.cache_data
+    @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_dt(_self, table_name: str, updated: int) -> dict[str, tuple[date, date]]:
         opts = {
             col.name: _self._get_dt_col(col)

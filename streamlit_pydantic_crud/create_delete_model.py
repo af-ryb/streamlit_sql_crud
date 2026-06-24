@@ -9,7 +9,13 @@ from sqlalchemy.orm import DeclarativeBase
 
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.input_fields import InputFields
-from streamlit_pydantic_crud.lib import get_pretty_name, log, set_state, format_database_error
+from streamlit_pydantic_crud.lib import (
+    CACHE_TTL_SECONDS,
+    format_database_error,
+    get_pretty_name,
+    log,
+    set_state,
+)
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from loguru import logger
@@ -312,7 +318,7 @@ class DeleteRows:
         self.rows_id = rows_id
         self.key_prefix = f"{key}_delete"
 
-    @st.cache_data
+    @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_rows_str(_self, rows_id: list[int]):
         id_col = _self.model.__table__.columns.get("id")
         assert id_col is not None

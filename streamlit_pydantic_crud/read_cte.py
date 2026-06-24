@@ -13,7 +13,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
-from streamlit_pydantic_crud.lib import get_pretty_name
+from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
 from loguru import logger
 
 
@@ -49,7 +49,7 @@ def get_existing_cond(col: KeyedColumnElement):
     return cond
 
 
-@st.cache_data(hash_funcs=hash_funcs)
+@st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)
 def get_existing_values(
     _session: Session,
     cte: CTE,
@@ -271,7 +271,7 @@ def get_stmt_no_pag(cte: CTE, col_filter: ColFilter):
     return stmt
 
 
-@st.cache_data(hash_funcs=hash_funcs)
+@st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)
 def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:
