@@ -280,6 +280,15 @@ def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
     return qtty
 
 
+def pagination_widget_key(key: str, items_per_page: int, count: int) -> str:
+    """Build a pagination widget key that encodes page size and total.
+
+    sac.pagination caches these in frontend state on mount, so changing the
+    key forces a remount that picks up the new page size and total.
+    """
+    return f"{key}_pagination_{items_per_page}_{count}"
+
+
 def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: str = "", default_index: int = 0):
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
@@ -321,19 +330,9 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
     else:
         items_per_page = int(selected_str)
 
-    # Track previous page size to detect changes
-    page_size_key = f"{key}_page_size"
-    pagination_key = f"{key}_pagination"
-
-    # If page size changed, reset pagination widget state
-    if page_size_key in st.session_state:
-        if st.session_state[page_size_key] != items_per_page:
-            # Page size changed - reset pagination to page 1
-            if pagination_key in st.session_state:
-                del st.session_state[pagination_key]
-
-    # Store current page size
-    st.session_state[page_size_key] = items_per_page
+    # Key encodes page size and total so the widget remounts (and resets to
+    # page 1) when either changes, picking up the new page-count display.
+    pagination_key = pagination_widget_key(key, items_per_page, count)
 
     with pag_col2:
         page = sac.pagination(
