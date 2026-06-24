@@ -8,7 +8,7 @@ markdown for assertions.
 import os
 
 import streamlit as st
-from sqlalchemy import Numeric, create_engine
+from sqlalchemy import Numeric, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud import SqlUi
@@ -41,6 +41,9 @@ with Session(eng) as s:
         s.commit()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
-ui = SqlUi(conn=conn, model=Account, key="acc")
+# Read statement orders id DESC; correct pagination must override it to id ASC.
+read_stmt = select(Account).order_by(Account.id.desc())
+ui = SqlUi(conn=conn, read_instance=read_stmt, edit_create_model=Account, key="acc")
 st.write(f"QTTY={ui.qtty_rows}")
 st.write("COLS=" + ",".join(str(c) for c in ui.df.columns))
+st.write("IDS=" + ",".join(str(v) for v in ui.df["id"].tolist()))

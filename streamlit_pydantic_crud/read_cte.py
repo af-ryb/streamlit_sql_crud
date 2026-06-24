@@ -347,7 +347,16 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
     return (items_per_page, int(page))
 
 
-def get_stmt_pag(stmt_no_pag: Select, limit: int, page: int):
+def get_stmt_pag(
+    stmt_no_pag: Select,
+    limit: int,
+    page: int,
+    order_by: KeyedColumnElement | None = None,
+):
     offset = (page - 1) * limit
-    stmt = stmt_no_pag.offset(offset).limit(limit)
+    stmt = stmt_no_pag
+    # A deterministic ORDER BY keeps rows from jumping between pages.
+    if order_by is not None:
+        stmt = stmt.order_by(order_by)
+    stmt = stmt.offset(offset).limit(limit)
     return stmt
