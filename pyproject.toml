@@ -42,6 +42,15 @@ select = ["UP","YTT", "A", "EM", "ICN","I", "SIM", "E", "F", "C90", "B", "C4", "
 ignore-names = ["_self"]
 
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore:.*ScriptRunContext.*:UserWarning",
+]
+
+
 [metadata]
 description = "Streamlit Pydantic CRUD"
 keyword = []
@@ -51,7 +60,7 @@ author_email = ""
 
 [project]
 name = "streamlit_pydantic_crud"
-version = "0.4.3"
+version = "0.4.4"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
 # readme= "docs/README.md"
@@ -81,9 +90,11 @@ dev = [
     "vulture",
     "pdbpp",
     "pyright",
+    "ruff",
     "mkdocs",
     "mkdocs-material>=9.6.1",
-	"mkdocstrings-python>=1.13.0",
+    "mkdocstrings-python>=1.13.0",
+    "pytest>=9.1.1",
 ]
 
 [project.urls]

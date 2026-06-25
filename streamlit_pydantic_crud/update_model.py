@@ -13,7 +13,12 @@ from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.input_fields import InputFields
 from streamlit_pydantic_crud.lib import get_pretty_name, log, set_state, format_database_error
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.utils import convert_numpy_to_python
+from streamlit_pydantic_crud.utils import (
+    convert_numpy_to_python,
+    pk_attr,
+    pk_column,
+    pk_name,
+)
 from loguru import logger
 
 
@@ -56,7 +61,7 @@ class UpdateRow:
                 
                 # Use query with selectinload to get the row with relationships
                 self.row = s.query(self.model).options(*options).filter(
-                    self.model.id == row_id
+                    pk_attr(self.model) == row_id
                 ).one()
             else:
                 self.row = s.get_one(model, row_id)
@@ -84,14 +89,18 @@ class UpdateRow:
                         value = convert_numpy_to_python(value, self.model)
                     self.current_values[col_name] = value
             
-            # Add many-to-many field values 
+            # Add many-to-many field values
             for field_name, config in self.many_to_many_fields.items():
                 relationship_name = config['relationship']
                 if hasattr(self.row, relationship_name):
                     # Get currently selected objects
                     current_objects = getattr(self.row, relationship_name)
-                    # Convert to list of IDs for multiselect
-                    self.current_values[field_name] = [obj.id for obj in current_objects]
+                    related_model = getattr(self.model, relationship_name).property.mapper.class_
+                    related_pk = pk_name(related_model)
+                    # Convert to list of PKs for multiselect
+                    self.current_values[field_name] = [
+                        getattr(obj, related_pk) for obj in current_objects
+                    ]
                 else:
                     logger.warning(f"Row does not have relationship {relationship_name}")
             
@@ -102,11 +111,12 @@ class UpdateRow:
             set_state(self.get_session_key, self.current_values)
             
             self.pydantic_ui = PydanticCrudUi(
-                schema=self.update_schema, 
+                schema=self.update_schema,
                 key=self.key_prefix,
                 session_state_key=self.get_session_key,
                 foreign_key_options=self.foreign_key_options,
                 many_to_many_fields=self.many_to_many_fields,
+                pk_name=pk_name(self.model),
             )
             
             # Set operation type to 'update' for proper null value handling
@@ -155,11 +165,11 @@ class UpdateRow:
 
                     # Set options in PydanticUi's input generator
                     self.pydantic_ui.input_generator.set_many_to_many_options(
-                        field_name, rows, display_field
+                        field_name, list(rows), display_field, pk_name(related_model)
                     )
-                    
-            except Exception as e:
-                logger.warning(f"Failed to load many-to-many data for {field_name}: {e}")
+
+            except Exception:
+                logger.exception(f"Failed to load many-to-many data for {field_name}")
 
     def _load_foreign_key_data(self):
         """Load foreign key data from database for form fields using filtered options."""
@@ -200,9 +210,9 @@ class UpdateRow:
                     field_name, options, display_field, value_field
                 )
 
-            except Exception as e:
-                # Log error but continue - field will fall back to text input
-                logger.warning(f"Failed to load foreign key data for {field_name}: {e}")
+            except Exception:
+                # Log full traceback but continue - field falls back to text input
+                logger.exception(f"Failed to load foreign key data for {field_name}")
     
     def get_sqlalchemy_updates(self):
         """Original SQLAlchemy update logic"""
@@ -238,9 +248,9 @@ class UpdateRow:
         """Save using pre-validated Pydantic data from PydanticUi"""
         try:
             with self.conn.session as s:
-                id_col = self.model.__table__.columns.get('id')
+                id_col = pk_column(self.model)
                 stmt = select(self.model).where(
-                    id_col == validated_data.id
+                    id_col == getattr(validated_data, pk_name(self.model))
                 )
                 row = s.execute(stmt).scalar_one()
                 
@@ -263,26 +273,29 @@ class UpdateRow:
                     related_model = getattr(self.model, relationship_name).property.mapper.class_
                     
                     # Get the related objects from the database
-                    related_objects = s.query(related_model).filter(related_model.id.in_(selected_options)).all()
-                    
+                    related_objects = s.query(related_model).filter(pk_attr(related_model).in_(selected_options)).all()
+
                     # Update the relationship
                     getattr(row, relationship_name)[:] = related_objects
 
                 s.add(row)
                 s.commit()
+                ss.stsql_updated += 1
                 table_name = getattr(self.model, '__tablename__', self.model.__name__)
                 log("UPDATE", table_name, row)
-                
+
                 # Clear the form data after successful save
                 if self.get_session_key in st.session_state:
                     del st.session_state[self.get_session_key]
-                    
+
                 return True, f"Updated successfully {row}"
-                
+
         except Exception as e:
+            ss.stsql_updated += 1
             table_name = getattr(self.model, '__tablename__', self.model.__name__)
             log("UPDATE", table_name, validated_data.model_dump(), success=False)
-            
+            logger.exception(f"Update failed for {table_name}")
+
             # Handle specific SQLAlchemy errors with user-friendly messages
             error_msg = format_database_error(e)
             return False, error_msg
@@ -292,9 +305,9 @@ class UpdateRow:
         """Original SQLAlchemy save logic"""
         with self.conn.session as s:
             try:
-                id_col = self.model.__table__.columns.get('id')
+                id_col = pk_column(self.model)
                 stmt = select(self.model).where(
-                    id_col == updated["id"]
+                    id_col == updated[pk_name(self.model)]
                 )
                 row = s.execute(stmt).scalar_one()
                 for k, v in updated.items():
@@ -302,15 +315,18 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
+                ss.stsql_updated += 1
                 table_name = getattr(self.model, '__tablename__', self.model.__name__)
                 log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"
             except Exception as e:
+                ss.stsql_updated += 1
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
                 table_name = getattr(self.model, '__tablename__', self.model.__name__)
                 log("UPDATE", table_name, updated_str, success=False)
-                
+                logger.exception(f"Update failed for {table_name}")
+
                 # Handle specific SQLAlchemy errors with user-friendly messages
                 error_msg = format_database_error(e)
                 return False, error_msg
@@ -323,7 +339,6 @@ class UpdateRow:
             # Use PydanticUi which handles forms internally
             updated = self.get_pydantic_updates()
             if updated:
-                ss.stsql_updated += 1
                 return self.save_pydantic(updated)
         else:
             # Use traditional form for SQLAlchemy-only mode
@@ -332,7 +347,6 @@ class UpdateRow:
                 update_btn = st.form_submit_button("Save")
 
             if update_btn:
-                ss.stsql_updated += 1
                 return self.save_sqlalchemy(updated)
         
         if self.update_show_many:
@@ -365,7 +379,6 @@ def action_btns(container: DeltaGenerator,
                 show_create_btn: bool,
                 show_delete_btn: bool,
                 key: str):
-    set_state("stsql_action", "")
     disabled_add = (qtty_selected > 1) or not show_create_btn
     disabled_edit = qtty_selected != 1
     disabled_delete = (qtty_selected == 0) or not show_delete_btn

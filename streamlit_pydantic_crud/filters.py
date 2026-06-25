@@ -13,6 +13,9 @@ from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 from loguru import logger
 
+from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
+
+
 @dataclass
 class FkOpt:
     idx: int
@@ -47,8 +50,6 @@ class ExistingData:
         self.fk = self.get_fk(table_name, ss.stsql_updated)
 
     def apply_active_filters(self, stmt, model: type[DeclarativeBase]):
-        from loguru import logger
-        
         # logger.debug(f"apply_active_filters called for model: {model.__name__}")
         # logger.debug(f"dt_filters: {self.dt_filters}")
         # logger.debug(f"no_dt_filters: {self.no_dt_filters}")
@@ -105,7 +106,7 @@ class ExistingData:
 
         return opts
 
-    @st.cache_data
+    @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_text(_self, table_name: str, updated: int) -> dict[str, Sequence[str]]:
         opts = {
             col.name: _self._get_str_opts(col)
@@ -120,7 +121,7 @@ class ExistingData:
         max_dt: date = self.session.query(func.max(column)).scalar() or date.today()
         return min_dt, max_dt
 
-    @st.cache_data
+    @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_dt(_self, table_name: str, updated: int) -> dict[str, tuple[date, date]]:
         opts = {
             col.name: _self._get_dt_col(col)
@@ -209,6 +210,10 @@ class ExistingData:
                                 current_display = getattr(current_row, display_field)
                                 opts.append(FkOpt(current_value, current_display))
                     except Exception:
+                        # Could not load the display row; fall back to the raw value.
+                        logger.exception(
+                            f"Failed to load display for current FK value of {col_name}"
+                        )
                         opts.append(FkOpt(current_value, str(current_value)))
 
         return opts

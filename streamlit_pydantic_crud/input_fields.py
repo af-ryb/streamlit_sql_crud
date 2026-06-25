@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -8,7 +9,7 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit_datalist import stDatalist
 
-from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.filters import ExistingData, FkOpt
 from streamlit_pydantic_crud.lib import get_pretty_name
 
 
@@ -61,6 +62,7 @@ class InputFields:
         )
         if not input_value:
             return None
+        assert isinstance(input_value, FkOpt)
         return input_value.idx
 
     def get_col_str_opts(self, col_name: str, value: str | None):
@@ -131,25 +133,30 @@ class InputFields:
         result = str(input_value)
         return result
 
+    @staticmethod
+    def coerce_decimal(
+        value: float | int | None, step: float | None
+    ) -> Decimal | None:
+        """Convert a numeric input to Decimal, preserving 0 and quantizing.
+
+        Returns None only when value is None, so a literal 0 is kept.
+        """
+        if value is None:
+            return None
+        value_dec = Decimal(str(value))
+        if step:
+            value_dec = value_dec.quantize(Decimal(str(step)))
+        return value_dec
+
     def input_numeric(self, col_name, scale: int | None, value=None):
         step = None
         if scale:
             step = 10 ** (scale * -1)
 
-        value_float = None
-        if value:
-            value_float = float(value)
-
+        value_float = float(value) if value is not None else None
         input_value = st.number_input(col_name, value=value_float, step=step)
 
-        if not input_value:
-            return None
-
-        value_dec = Decimal(str(input_value))
-        if step:
-            value_dec = value_dec.quantize(Decimal(str(step)))
-
-        return value_dec
+        return self.coerce_decimal(input_value, step)
 
     def input_array(self, col_name: str, col_type, col_value=None):
         """Handle ARRAY column input with multiselect"""
@@ -176,7 +183,6 @@ class InputFields:
                     
                 # Handle quoted values and unquoted values
                 if value_str:
-                    import re
                     # Split by comma, but handle quoted strings
                     parts = re.findall(r'"([^"]*)"|\b([^,]+)\b', value_str)
                     for quoted, unquoted in parts:

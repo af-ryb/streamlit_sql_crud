@@ -6,8 +6,8 @@ from datetime import date, datetime
 
 
 def create_pydantic_model_from_json_schema(
-    json_schema: Dict[str, Any], 
-    field_options: Dict[str, List[str]] = None,
+    json_schema: Dict[str, Any],
+    field_options: Optional[Dict[str, List[str]]] = None,
     model_name: str = "DynamicModel"
 ) -> Type[BaseModel]:
     """Create a Pydantic model from JSON schema with field options and widget configurations.

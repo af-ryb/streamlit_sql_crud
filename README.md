@@ -20,7 +20,6 @@ Key enhancements over the original streamlit_sql package:
 - Display as a standard st.dataframe with pagination
 - Configure using SQLAlchemy select statements (JOIN, ORDER BY, WHERE, etc.)
 - **Display fields from joined tables efficiently**
-- Add rolling sum columns for numeric data
 - Conditional row styling based on values
 - Custom number formatting
 - Multiple CRUD interfaces per page using unique keys
@@ -104,7 +103,7 @@ class AlertReadSchema(BaseModel):
 1. Python 3.12+
 2. Core dependencies: streamlit, sqlalchemy, pandas, pydantic (≥2.0)
 3. SQLAlchemy models require a `__str__` method
-4. Primary key column must be named "id"
+4. A single-column primary key (any name); composite primary keys are not supported
 5. Foreign key relationships must be defined
 
 ## Installation
@@ -141,11 +140,10 @@ SqlUi(
     conn=conn,
     model=db.Invoice,  # Single model for both read and write
     available_filter=["name"],
-    rolling_total_column="amount",
 )
 ```
 
-> **Note**: Always include the primary key column (id) in your select statement
+> **Note**: Always include the primary key column in your select statement
 
 ### Interface Controls
 - **Filter**: Open the "Filter" expander

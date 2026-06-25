@@ -151,3 +151,7 @@ cython_debug/
 /.pdbrc
 /docker/bin/hledger-linux-x64.zip
 /.task/
+
+
+# Ignore IntelliJ files.
+.idea/

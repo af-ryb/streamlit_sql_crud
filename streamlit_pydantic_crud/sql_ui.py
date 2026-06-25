@@ -1,4 +1,5 @@
 import json
+import warnings
 import pandas as pd
 import streamlit as st
 from collections.abc import Callable
@@ -15,7 +16,12 @@ from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
-from streamlit_pydantic_crud.utils import convert_numpy_to_python, convert_numpy_list_to_python
+from streamlit_pydantic_crud.utils import (
+    convert_numpy_to_python,
+    convert_numpy_list_to_python,
+    pk_attr,
+    pk_name,
+)
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
 
@@ -33,13 +39,11 @@ class SqlUi:
     def __init__(
         self,
         conn: SQLConnection,
-        read_instance = None,
-        edit_create_model: type[DeclarativeBase] = None,
-        model: type[DeclarativeBase] = None,
+        read_instance: Select | CTE | type[DeclarativeBase] | None = None,
+        edit_create_model: type[DeclarativeBase] | None = None,
+        model: type[DeclarativeBase] | None = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
-        rolling_total_column: str | None = None,
-        rolling_orderby_colsname: list[str] | None = None,
         df_style_formatter: dict[str, str] | None = None,
         read_use_container_width: bool = False,
         key: str | None = None,
@@ -64,8 +68,6 @@ class SqlUi:
             model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
-            rolling_total_column (str, optional): A numeric column name of the read_instance. A new column will be displayed with the rolling sum of these column
-            rolling_orderby_colsname (list[str], optional): A list of columns name of the read_instance. It should contain a group of columns that ensures uniqueness of the rows and the order to calculate rolling sum. Usually, it should a date and id column. If not informed, rows will be sorted by id only. Defaults to None
             df_style_formatter (dict[str, str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
@@ -119,8 +121,6 @@ class SqlUi:
                 conn=conn,
                 model=db.Invoice,  # Simplified: uses same model for read and write
                 available_filter=["name"],
-                rolling_total_column="amount",
-                rolling_orderby_colsname=["date", "id"],
                 df_style_formatter={"amount": "{:,.2f}"},
                 read_use_container_width=True,
                 key="my_sql_ui",
@@ -141,7 +141,6 @@ class SqlUi:
         # Handle model parameter consolidation
         if model is not None:
             if read_instance is not None or edit_create_model is not None:
-                import warnings
                 warnings.warn(
                     "When 'model' parameter is provided, 'read_instance' and 'edit_create_model' are ignored. "
                     "Use either 'model' (recommended) or the legacy 'read_instance'+'edit_create_model' combination.",
@@ -164,8 +163,6 @@ class SqlUi:
         self.conn = conn
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
-        self.rolling_total_column = rolling_total_column
-        self.rolling_orderby_colsname = rolling_orderby_colsname or ["id"]
         self.df_style_formatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
         self.show_delete_btn = show_delete_btn
@@ -179,7 +176,6 @@ class SqlUi:
         self.items_per_page_default = items_per_page_default
 
         if key is not None and base_key is not None:
-            import warnings
             warnings.warn(
                 "Both 'key' and 'base_key' specified. 'base_key' is deprecated, using 'key' instead. "
                 "Remove 'base_key' parameter in future versions.",
@@ -188,7 +184,6 @@ class SqlUi:
             )
             self.key = key
         elif base_key is not None:
-            import warnings
             warnings.warn(
                 "'base_key' parameter is deprecated and will be removed in v1.0.0. "
                 "Use 'key' parameter instead for Streamlit compatibility.",
@@ -230,7 +225,6 @@ class SqlUi:
                 raise ValueError(f"Read schema {self.read_schema.__name__} is not compatible with {table_name}")
 
         self.cte = self.get_cte()
-        self.rolling_pretty_name = lib.get_pretty_name(self.rolling_total_column or "")
 
         # Bootstrap
         self.set_initial_state()
@@ -243,15 +237,9 @@ class SqlUi:
         stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
         qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss.stsql_updated)
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
-        stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page)
-        initial_balance = self.get_initial_balance(
-            self.cte,
-            stmt_pag,
-            self.col_filter.no_dt_filters,
-            rolling_total_column,
-            self.rolling_orderby_colsname,
-        )
-        df = self.get_df(stmt_pag, initial_balance)
+        order_col = self.cte.columns.get(pk_name(self.edit_create_model))
+        stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
+        df = self.get_df(stmt_pag)
         selection_state = self.show_df(df)
         rows_selected = self.get_rows_selected(selection_state)
 
@@ -287,11 +275,6 @@ class SqlUi:
 
         self.filter_container = self.header_container.container()
 
-        if self.rolling_total_column:
-            self.saldo_toggle_col, self.saldo_value_col = self.header_container.columns(
-                2
-            )
-
         self.btns_container = self.header_container.container()
 
     def notification(self):
@@ -303,6 +286,10 @@ class SqlUi:
             self.header_container.error(
                 ss.stsql_update_message, icon=":material/thumb_down:"
             )
+        # Clear so the banner shows once, not on every following rerun.
+        if ss.stsql_update_ok is not None:
+            ss.stsql_update_ok = None
+            ss.stsql_update_message = None
 
     def get_cte(self):
         if isinstance(self.read_instance, Select):
@@ -311,13 +298,6 @@ class SqlUi:
             cte = self.read_instance
         else:
             cte = select(self.read_instance).cte()
-
-        if self.rolling_total_column:
-            orderby_cols = [
-                cte.columns.get(colname) for colname in self.rolling_orderby_colsname
-            ]
-            orderby_cols = [col for col in orderby_cols if col is not None]
-            cte = select(cte).order_by(*orderby_cols).cte()
 
         return cte
 
@@ -335,7 +315,7 @@ class SqlUi:
         """Check if the statement has ORM options like selectinload"""
         # Check if the original read_instance has options applied
         if isinstance(self.read_instance, Select):
-            return hasattr(self.read_instance, '_with_options') and self.read_instance._with_options
+            return bool(getattr(self.read_instance, '_with_options', None))
         return False
     
     def _stmt_has_explicit_columns(self, stmt: Select) -> bool:
@@ -345,8 +325,6 @@ class SqlUi:
             selected_columns = self.read_instance.selected_columns
             if selected_columns:
                 # If any selected item is not a full table/entity, it's expression-based
-                from sqlalchemy import Table
-                from sqlalchemy.orm import DeclarativeBase
                 for col in selected_columns:
                     # If it's a column attribute rather than a full table/entity
                     if hasattr(col, 'table') or hasattr(col, 'element'):
@@ -397,47 +375,6 @@ class SqlUi:
 
         return items_per_page, page
 
-    def get_initial_balance(
-        self,
-        base_cte: CTE,
-        stmt_pag: Select,
-        no_dt_filters: dict,
-        rolling_total_column: str | None,
-        rolling_orderby_colsname: list[str],
-    ):
-        if rolling_total_column is None:
-            return 0
-
-        saldo_toggle = self.saldo_toggle_col.toggle(
-            f"Add Previous Balance in {self.rolling_pretty_name}",
-            value=True,
-            key=f"{self.key}_saldo_toggle_sql_ui",
-        )
-
-        if not saldo_toggle:
-            return 0
-
-        stmt_no_pag_dt = read_cte.get_stmt_no_pag_dt(base_cte, no_dt_filters)
-
-        orderby_cols = [
-            base_cte.columns.get(col_name) for col_name in rolling_orderby_colsname
-        ]
-        orderby_cols = [col for col in orderby_cols if col is not None]
-        with self.conn.session as s:
-            initial_balance = read_cte.initial_balance(
-                _session=s,
-                stmt_no_pag_dt=stmt_no_pag_dt,
-                stmt_pag=stmt_pag,
-                rolling_total_column=rolling_total_column,
-                orderby_cols=orderby_cols,
-            )
-
-        self.saldo_value_col.subheader(
-            f"Previous Balance {self.rolling_pretty_name}: {initial_balance:,.2f}"
-        )
-
-        return initial_balance
-
     def convert_arrow(self, df: pd.DataFrame):
         cols = self.cte.columns
         for col in cols:
@@ -463,7 +400,6 @@ class SqlUi:
     def get_df(
         self,
         stmt_pag: Select,
-        initial_balance: float,
     ):
         # Check if we have ORM options but explicit column selection (incompatible combination)
         has_orm_options = self._stmt_has_orm_options(stmt_pag)
@@ -489,11 +425,6 @@ class SqlUi:
             with self.conn.session as s:
                 df = pd.read_sql(stmt_pag, s.connection())
             df = self.convert_arrow(df)
-        if self.rolling_total_column is None:
-            return df
-
-        rolling_col_name = f"Balance {self.rolling_pretty_name}"
-        df[rolling_col_name] = df[self.rolling_total_column].cumsum() + initial_balance
 
         return df
 
@@ -510,27 +441,28 @@ class SqlUi:
                 
                 # If we have many-to-many fields and filtered results, load relationships separately
                 if self.many_to_many_fields and filtered_result:
-                    # Extract entity IDs from filtered results
-                    entity_ids = [row.id for row in filtered_result]
-                    
+                    pk = pk_name(self.edit_create_model)
+                    # Extract entity PKs from filtered results
+                    entity_ids = [getattr(row, pk) for row in filtered_result]
+
                     # Build options for eager loading
                     options = []
                     for field_name, config in self.many_to_many_fields.items():
                         relationship_attr = getattr(self.edit_create_model, config['relationship'])
                         options.append(selectinload(relationship_attr))
-                    
-                    # Load entities with relationships for just the filtered IDs
+
+                    # Load entities with relationships for just the filtered PKs
                     entities_with_relations = s.query(self.edit_create_model).filter(
-                        self.edit_create_model.id.in_(entity_ids)
+                        pk_attr(self.edit_create_model).in_(entity_ids)
                     ).options(*options).all()
-                    
-                    # Create a mapping of id -> entity with relationships
-                    entity_map = {entity.id: entity for entity in entities_with_relations}
-                    
+
+                    # Create a mapping of pk -> entity with relationships
+                    entity_map = {getattr(entity, pk): entity for entity in entities_with_relations}
+
                     # Merge filtered data with relationship data
                     result = []
                     for row in filtered_result:
-                        entity = entity_map.get(row.id)
+                        entity = entity_map.get(getattr(row, pk))
                         if entity:
                             # Use the entity with relationships loaded
                             result.append(entity)
@@ -558,9 +490,10 @@ class SqlUi:
                         # Row object  
                         validated_data = row._asdict()
 
-                # Ensure 'id' is always present for CRUD operations
-                if 'id' not in validated_data and hasattr(row, 'id'):
-                    validated_data['id'] = row.id
+                # Ensure the primary key is always present for CRUD operations
+                pk = pk_name(self.edit_create_model)
+                if pk not in validated_data and hasattr(row, pk):
+                    validated_data[pk] = getattr(row, pk)
 
                 # Convert enum objects to strings for PyArrow compatibility
                 for key, value in validated_data.items():
@@ -580,16 +513,6 @@ class SqlUi:
             df = pd.DataFrame(validated_rows)
             return df
 
-    def add_balance_formatter(self, df_style_formatter: dict[str, str]):
-        formatter = {}
-        for k, v in df_style_formatter.items():
-            formatter[k] = v
-            if k == self.rolling_total_column:
-                rolling_col_name = f"Balance {self.rolling_pretty_name}"
-                formatter[rolling_col_name] = v
-
-        return formatter
-
     def show_df(self, df: pd.DataFrame):
         if df.empty:
             st.header(":red[Table is Empty]")
@@ -601,8 +524,7 @@ class SqlUi:
             column_order = list(self.read_schema.model_fields.keys())
 
         df_style = df.style
-        formatter = self.add_balance_formatter(self.df_style_formatter)
-        df_style = df_style.format(formatter)  # pyright: ignore
+        df_style = df_style.format(self.df_style_formatter)  # pyright: ignore
         if self.style_fn is not None:
             df_style = df_style.apply(self.style_fn, axis=1)
 
@@ -673,7 +595,8 @@ class SqlUi:
             create_row.show_dialog()
         elif action == "edit":
             selected_pos = rows_selected[0]
-            row_id = convert_numpy_to_python(df.iloc[selected_pos]["id"], self.edit_create_model)
+            pk = pk_name(self.edit_create_model)
+            row_id = convert_numpy_to_python(df.iloc[selected_pos][pk], self.edit_create_model)
             update_row = update_model.UpdateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -689,7 +612,8 @@ class SqlUi:
             )
             update_row.show_dialog()
         elif action == "delete":
-            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected].id.to_list(), self.edit_create_model)
+            pk = pk_name(self.edit_create_model)
+            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected][pk].to_list(), self.edit_create_model)
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
                 model=self.edit_create_model,

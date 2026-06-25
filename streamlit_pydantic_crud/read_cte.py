@@ -13,7 +13,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
-from streamlit_pydantic_crud.lib import get_pretty_name
+from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
 from loguru import logger
 
 
@@ -49,7 +49,7 @@ def get_existing_cond(col: KeyedColumnElement):
     return cond
 
 
-@st.cache_data(hash_funcs=hash_funcs)
+@st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)
 def get_existing_values(
     _session: Session,
     cte: CTE,
@@ -271,13 +271,22 @@ def get_stmt_no_pag(cte: CTE, col_filter: ColFilter):
     return stmt
 
 
-@st.cache_data(hash_funcs=hash_funcs)
+@st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)
 def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:
         qtty = s.execute(stmt).scalar_one()
 
     return qtty
+
+
+def pagination_widget_key(key: str, items_per_page: int, count: int) -> str:
+    """Build a pagination widget key that encodes page size and total.
+
+    sac.pagination caches these in frontend state on mount, so changing the
+    key forces a remount that picks up the new page size and total.
+    """
+    return f"{key}_pagination_{items_per_page}_{count}"
 
 
 def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: str = "", default_index: int = 0):
@@ -321,19 +330,9 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
     else:
         items_per_page = int(selected_str)
 
-    # Track previous page size to detect changes
-    page_size_key = f"{key}_page_size"
-    pagination_key = f"{key}_pagination"
-
-    # If page size changed, reset pagination widget state
-    if page_size_key in st.session_state:
-        if st.session_state[page_size_key] != items_per_page:
-            # Page size changed - reset pagination to page 1
-            if pagination_key in st.session_state:
-                del st.session_state[pagination_key]
-
-    # Store current page size
-    st.session_state[page_size_key] = items_per_page
+    # Key encodes page size and total so the widget remounts (and resets to
+    # page 1) when either changes, picking up the new page-count display.
+    pagination_key = pagination_widget_key(key, items_per_page, count)
 
     with pag_col2:
         page = sac.pagination(
@@ -347,33 +346,16 @@ def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: st
     return (items_per_page, int(page))
 
 
-def get_stmt_pag(stmt_no_pag: Select, limit: int, page: int):
+def get_stmt_pag(
+    stmt_no_pag: Select,
+    limit: int,
+    page: int,
+    order_by: KeyedColumnElement | None = None,
+):
     offset = (page - 1) * limit
-    stmt = stmt_no_pag.offset(offset).limit(limit)
-    
-    
+    stmt = stmt_no_pag
+    # A deterministic ORDER BY keeps rows from jumping between pages.
+    if order_by is not None:
+        stmt = stmt.order_by(order_by)
+    stmt = stmt.offset(offset).limit(limit)
     return stmt
-
-
-# @st.cache_data(hash_funcs=hash_funcs)
-def initial_balance(
-    _session: Session,
-    stmt_no_pag_dt: Select,
-    stmt_pag: Select,
-    rolling_total_column: str,
-    orderby_cols: list,
-) -> float:
-    stmt_pag_ordered = stmt_pag.order_by(*orderby_cols)
-    first_pag = _session.execute(stmt_pag_ordered).first()
-    if not first_pag:
-        return 0
-
-    stmt_no_pag_dt_ordered = stmt_no_pag_dt.order_by(*orderby_cols)
-    for col in orderby_cols:
-        stmt_no_pag_dt_ordered = stmt_no_pag_dt_ordered.where(
-            col < getattr(first_pag, col.name)
-        )
-
-    stmt_bal = select(func.sum(stmt_no_pag_dt_ordered.c.get(rolling_total_column)))
-    bal = _session.execute(stmt_bal).scalar_one() or 0
-    return bal

@@ -5,6 +5,10 @@ import streamlit as st
 from loguru import logger
 from streamlit import session_state as ss
 
+# Default ttl for cached option/count queries so values added outside the
+# library (ETL, agents, direct writes) appear without an app restart.
+CACHE_TTL_SECONDS = 60
+
 
 def log(
     action: Literal["CREATE", "UPDATE", "DELETE"],
