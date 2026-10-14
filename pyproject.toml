@@ -60,7 +60,7 @@ author_email = ""
 
 [project]
 name = "streamlit_pydantic_crud"
-version = "0.4.4"
+version = "0.5.0"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
 # readme= "docs/README.md"
