@@ -973,6 +973,13 @@ class PydanticInputGenerator:
         # step is always assigned a non-None value above.
         updated_kwargs["step"] = step
 
+        if optional:
+            """A non-None value makes the browser refill a cleared input on
+            blur; seed the state instead so the field can be emptied (NULL)."""
+            if key not in st.session_state:
+                st.session_state[key] = default_val
+            default_val = None
+
         return st.number_input(label, value=default_val, key=key, **updated_kwargs)
 
     @staticmethod

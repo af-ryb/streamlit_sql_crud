@@ -48,3 +48,37 @@ def test_optional_numbers_empty_stay_none() -> None:
     assert "'count': 3" in lines["EXISTING"]
     assert "'limit': 5" in lines["EXISTING"]
     assert "'ratio': None" in lines["EXISTING"]
+
+
+def _edit_app() -> None:
+    from decimal import Decimal  # noqa: PLC0415 - AppTest serialises the function
+
+    import streamlit as st  # noqa: PLC0415
+
+    from streamlit_pydantic_crud.pydantic_utils import (  # noqa: PLC0415
+        PydanticInputGenerator,
+    )
+    from tests.test_optional_number import Nums  # noqa: PLC0415
+
+    gen = PydanticInputGenerator(Nums, key_prefix="e", operation_type="update")
+    existing = {"count": 3, "ratio": 0.5, "amount": Decimal("2.50")}
+    st.write(f"EXISTING={gen.generate_form_data(existing)!r}")
+
+
+def test_optional_numbers_can_be_cleared_on_edit() -> None:
+    """A widget started with a value reverted on blur, so NULL was unsavable."""
+    at = AppTest.from_function(_edit_app).run()
+    assert not at.exception
+    for name in ("count", "ratio", "amount"):
+        widget = at.number_input(key=f"e_{name}")
+        assert not widget.proto.HasField("default"), name
+    assert "'count': 3" in _lines(at)["EXISTING"]
+    assert "'ratio': 0.5" in _lines(at)["EXISTING"]
+
+    for name in ("count", "ratio", "amount"):
+        at.number_input(key=f"e_{name}").set_value(None)
+    at.run()
+    lines = _lines(at)
+    assert "'count': None" in lines["EXISTING"]
+    assert "'ratio': None" in lines["EXISTING"]
+    assert "'amount': None" in lines["EXISTING"]
