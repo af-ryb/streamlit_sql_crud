@@ -329,7 +329,11 @@ class DeleteRows:
         self.key_prefix = f"{key}_delete"
 
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
-    def get_rows_str(_self, rows_id: list[int]):
+    def get_rows_str(_self, table_name: str, rows_id: list[int], updated: int):
+        """Return the string form of the rows to delete.
+
+        `table_name` and the `updated` counter are cache-key inputs only.
+        """
         id_col = pk_column(_self.model)
         stmt = select(_self.model).where(id_col.in_(rows_id))
 
@@ -342,7 +346,9 @@ class DeleteRows:
     def show(self, pretty_name):
         st.subheader("Delete selected items?")
 
-        rows_str = self.get_rows_str(self.rows_id)
+        table_name = getattr(self.model, "__tablename__", self.model.__name__)
+        updated = ss.get("stsql_updated", 0)
+        rows_str = self.get_rows_str(table_name, self.rows_id, updated)
         st.dataframe({pretty_name: rows_str}, hide_index=True)
 
         btn = st.button("Delete", key=f"{self.key_prefix}_del_btn")
