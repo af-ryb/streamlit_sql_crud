@@ -240,7 +240,8 @@ class PydanticInputGenerator:
         form_data = {}
         existing_values = existing_values or {}
 
-        for index, (field_name, field_info) in enumerate(self.field_info.items()):
+        rendered = 0
+        for field_name, field_info in self.field_info.items():
             key = f"{self.key_prefix}_{field_name}" if self.key_prefix else field_name
             existing_value = existing_values.get(field_name)
 
@@ -252,8 +253,9 @@ class PydanticInputGenerator:
             annotation = field_info.get("annotation")
 
             container: AbstractContextManager[Any] = (
-                containers[index % len(containers)] if containers else nullcontext()
+                containers[rendered % len(containers)] if containers else nullcontext()
             )
+            rendered += 1
             with container:
                 field_value = self.render_field(
                     field_name,
@@ -1168,7 +1170,7 @@ def model_fields(schema: type[BaseModel] | BaseModel) -> dict[str, FieldInfo]:
 
 
 def is_optional_field(field_info: dict[str, Any]) -> bool:
-    """Return True when extracted field info marks the field optional or not required."""
+    """Return True when extracted field info marks the field optional."""
     return bool(field_info.get("is_optional")) or not field_info.get(
         "is_required", True
     )
