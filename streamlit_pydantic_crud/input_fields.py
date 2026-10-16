@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 import streamlit as st
-from sqlalchemy import Numeric, ARRAY
+from sqlalchemy import ARRAY, Numeric
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
@@ -15,7 +15,7 @@ from streamlit_pydantic_crud.lib import get_pretty_name
 
 class InputFields:
     """Generate Streamlit input widgets for SQLAlchemy model fields.
-    
+
     Automatically detects field types and creates appropriate inputs:
     - Enum fields: selectbox
     - String fields with few unique values: selectbox (String(Enum) style)
@@ -24,7 +24,7 @@ class InputFields:
     - Foreign keys: selectbox with related records
     - Numbers, dates, booleans: appropriate input widgets
     """
-    
+
     def __init__(
         self,
         model: type[DeclarativeBase],
@@ -34,7 +34,7 @@ class InputFields:
         string_enum_threshold: int = 10,
     ) -> None:
         """Initialize InputFields.
-        
+
         Args:
             model: SQLAlchemy model class
             key_prefix: Prefix for widget keys to avoid conflicts
@@ -54,7 +54,7 @@ class InputFields:
 
         index = next((i for i, opt in enumerate(opts) if opt.idx == value), None)
         input_value = st.selectbox(
-            col_name,
+            get_pretty_name(col_name),
             options=opts,
             format_func=lambda opt: opt.name,
             index=index,
@@ -78,25 +78,37 @@ class InputFields:
             val_index = len(opts) - 1
             return val_index, opts
 
-    def input_enum(self, col_enum: SQLEnum, col_value=None):
-        col_name = col_enum.name
-        assert col_name is not None
-        opts = col_enum.enums
-        if col_value:
-            index = opts.index(col_value)
-        else:
-            index = None
-        input_value = st.selectbox(col_name, opts, index=index)
-        return input_value
+    def input_enum(
+        self, col_name: str, col_enum: SQLEnum, col_value: object = None
+    ) -> object:
+        """Render a selectbox for an Enum column and return the chosen option.
+
+        `Enum(PyEnum)` columns offer (and return) members; string enums offer
+        their literal values. A stored member name is mapped back to its member.
+        """
+        enum_class = col_enum.enum_class
+        opts: list = list(enum_class) if enum_class else list(col_enum.enums)
+
+        if enum_class and isinstance(col_value, str):
+            col_value = enum_class.__members__.get(col_value, col_value)
+        index = opts.index(col_value) if col_value in opts else None
+
+        return st.selectbox(
+            get_pretty_name(col_name),
+            opts,
+            index=index,
+            format_func=lambda opt: opt.name if enum_class else str(opt),
+            key=f"{self.key_prefix}_{col_name}",
+        )
 
     def input_str_enum(self, col_name: str, value=None):
         """Handle string columns that should be treated as enums using selectbox."""
         key = f"{self.key_prefix}_{col_name}"
         pretty_name = get_pretty_name(col_name)
-        
+
         # Get available options from existing data
         opts = list(self.existing_data.text[col_name])
-        
+
         # Find current value index
         index = None
         if value and value in opts:
@@ -105,13 +117,13 @@ class InputFields:
             # If current value is not in options, add it
             opts.append(value)
             index = len(opts) - 1
-        
+
         input_value = st.selectbox(
             pretty_name,
             options=opts,
             index=index,
             key=key,
-            help=f"Select from {len(opts)} available options"
+            help=f"Select from {len(opts)} available options",
         )
         return input_value
 
@@ -121,22 +133,22 @@ class InputFields:
         # Treat as enum if there are threshold or fewer unique values
         return len(opts) <= self.string_enum_threshold and len(opts) > 0
 
-    def input_str(self, col_name: str, value=None):
+    def input_str(self, col_name: str, value: str | None = None) -> str | None:
+        """Render a free-text datalist input; return None when left empty."""
         key = f"{self.key_prefix}_{col_name}"
         val_index, opts = self.get_col_str_opts(col_name, value)
         input_value = stDatalist(
             col_name,
             list(opts),
-            index=val_index,  # pyright: ignore
+            index=val_index,
             key=key,
         )
-        result = str(input_value)
-        return result
+        if input_value is None or input_value == "":
+            return None
+        return str(input_value)
 
     @staticmethod
-    def coerce_decimal(
-        value: float | int | None, step: float | None
-    ) -> Decimal | None:
+    def coerce_decimal(value: float | int | None, step: float | None) -> Decimal | None:
         """Convert a numeric input to Decimal, preserving 0 and quantizing.
 
         Returns None only when value is None, so a literal 0 is kept.
@@ -148,26 +160,28 @@ class InputFields:
             value_dec = value_dec.quantize(Decimal(str(step)))
         return value_dec
 
-    def input_numeric(self, col_name, scale: int | None, value=None):
+    def input_numeric(
+        self, col_name: str, scale: int | None, value: object = None
+    ) -> Decimal | None:
+        """Render a number input for a Numeric column and return a Decimal."""
         step = None
         if scale:
             step = 10 ** (scale * -1)
 
-        value_float = float(value) if value is not None else None
-        input_value = st.number_input(col_name, value=value_float, step=step)
+        value_float = float(str(value)) if value is not None else None
+        input_value = st.number_input(
+            get_pretty_name(col_name),
+            value=value_float,
+            step=step,
+            key=f"{self.key_prefix}_{col_name}",
+        )
 
         return self.coerce_decimal(input_value, step)
 
     def input_array(self, col_name: str, col_type, col_value=None):
         """Handle ARRAY column input with multiselect"""
         pretty_name = get_pretty_name(col_name)
-        
-        # Get array element type
-        if hasattr(col_type, 'item_type'):
-            item_type = col_type.item_type
-        else:
-            item_type = str  # fallback
-        
+
         # Convert current value to list
         current_values = []
         if col_value is not None:
@@ -176,67 +190,72 @@ class InputFields:
             elif isinstance(col_value, str):
                 # Handle various string representations
                 value_str = col_value.strip()
-                
+
                 # PostgreSQL array format: {val1,val2} or {"val1","val2"}
-                if value_str.startswith('{') and value_str.endswith('}'):
+                if value_str.startswith("{") and value_str.endswith("}"):
                     value_str = value_str[1:-1]  # Remove braces
-                    
+
                 # Handle quoted values and unquoted values
                 if value_str:
                     # Split by comma, but handle quoted strings
                     parts = re.findall(r'"([^"]*)"|\b([^,]+)\b', value_str)
                     for quoted, unquoted in parts:
-                        val = quoted if quoted else unquoted
+                        val = quoted or unquoted
                         if val.strip():
                             current_values.append(val.strip())
-                
+
                 # Fallback: simple comma split
                 if not current_values and value_str:
-                    current_values = [v.strip() for v in value_str.split(',') if v.strip()]
-        
+                    current_values = [
+                        v.strip() for v in value_str.split(",") if v.strip()
+                    ]
+
         # Get existing values for options (if available)
         existing_values = self.existing_data.text.get(col_name, set())
         options = list(existing_values) if existing_values else []
-        
+
         # Add current values to options if not already present
         for val in current_values:
             if val not in options:
                 options.append(val)
-        
+
         # Check if this is an ARRAY of ENUM type
         enum_options = []
-        if hasattr(col_type, 'item_type') and isinstance(col_type.item_type, SQLEnum):
+        if hasattr(col_type, "item_type") and isinstance(col_type.item_type, SQLEnum):
             enum_options = list(col_type.item_type.enums)
             options.extend([opt for opt in enum_options if opt not in options])
-        
+
         # Multiselect input with accept_new_options for flexibility
         selected_values = st.multiselect(
             pretty_name,
             options=options,
             default=current_values,
             accept_new_options=True,
-            key=f"{col_name}_multiselect",
-            help="Select existing options or type new ones" if not enum_options else f"Select from: {', '.join(enum_options)}"
+            key=f"{self.key_prefix}_{col_name}",
+            help="Select existing options or type new ones"
+            if not enum_options
+            else f"Select from: {', '.join(enum_options)}",
         )
-        
+
         return selected_values
 
     def get_input_value(self, col: KeyedColumnElement, col_value):
         col_name = col.description
         assert col_name is not None
         pretty_name = get_pretty_name(col_name)
+        key = f"{self.key_prefix}_{col_name}"
 
         if col.primary_key:
             input_value = col_value
         elif len(col.foreign_keys) > 0:
             input_value = self.input_fk(col_name, col_value)
-        elif ARRAY and isinstance(col.type, ARRAY):
+        elif isinstance(col.type, ARRAY):
             input_value = self.input_array(col_name, col.type, col_value)
-        elif 'ARRAY' in str(col.type).upper():
+        elif "ARRAY" in str(col.type).upper():
             # Fallback for ARRAY types that don't match isinstance check
             input_value = self.input_array(col_name, col.type, col_value)
         elif isinstance(col.type, SQLEnum):
-            input_value = self.input_enum(col.type, col_value)
+            input_value = self.input_enum(col_name, col.type, col_value)
         elif col.type.python_type is str:
             # Check if string column should be treated as enum
             if self.is_string_enum_candidate(col_name):
@@ -244,18 +263,20 @@ class InputFields:
             else:
                 input_value = self.input_str(col_name, col_value)
         elif col.type.python_type is int:
-            input_value = st.number_input(pretty_name, value=col_value, step=1)
+            input_value = st.number_input(pretty_name, value=col_value, step=1, key=key)
         elif col.type.python_type is float:
-            input_value = st.number_input(pretty_name, value=col_value, step=0.1)
+            input_value = st.number_input(
+                pretty_name, value=col_value, step=0.1, key=key
+            )
         elif isinstance(col.type, Numeric):
             scale = col.type.scale
-            input_value = self.input_numeric(pretty_name, scale, col_value)
+            input_value = self.input_numeric(col_name, scale, col_value)
         elif col.type.python_type is datetime:
-            input_value = st.datetime_input(pretty_name, value=col_value)
+            input_value = st.datetime_input(pretty_name, value=col_value, key=key)
         elif col.type.python_type is date:
-            input_value = st.date_input(pretty_name, value=col_value)
+            input_value = st.date_input(pretty_name, value=col_value, key=key)
         elif col.type.python_type is bool:
-            input_value = st.checkbox(pretty_name, value=col_value)
+            input_value = st.checkbox(pretty_name, value=col_value, key=key)
         else:
             input_value = None
 

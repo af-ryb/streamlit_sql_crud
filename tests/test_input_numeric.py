@@ -10,7 +10,7 @@ from streamlit_pydantic_crud.input_fields import InputFields
 
 def test_zero_is_preserved() -> None:
     """A literal 0 must stay 0, not become None."""
-    assert InputFields.coerce_decimal(0, None) == Decimal("0")
+    assert InputFields.coerce_decimal(0, None) == Decimal(0)
 
 
 def test_none_stays_none() -> None:

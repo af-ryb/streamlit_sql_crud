@@ -8,10 +8,12 @@ their .value form match interchangeably.
 from enum import Enum
 from unittest.mock import MagicMock, patch
 
+from pydantic import BaseModel, Field
+
 from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator as G
 
 
-class StrColor(str, Enum):
+class StrColor(str, Enum):  # noqa: UP042 - exercises the str-mixin Enum case
     RED = "red"
     BLUE = "blue"
 
@@ -95,8 +97,12 @@ def test_multiselect_session_empty_respected() -> None:
 
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
 def test_selectbox_uses_field_default(mock_st: MagicMock) -> None:
-    G._render_selectbox_widget("L", {"options": ["red", "blue"]}, None, "k", field_default="blue")
-    mock_st.selectbox.assert_called_once_with("L", options=["red", "blue"], index=1, key="k")
+    G._render_selectbox_widget(
+        "L", {"options": ["red", "blue"]}, None, "k", field_default="blue"
+    )
+    mock_st.selectbox.assert_called_once_with(
+        "L", options=["red", "blue"], index=1, key="k"
+    )
 
 
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
@@ -104,24 +110,32 @@ def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) ->
     G._render_selectbox_widget(
         "L", {"options": ["red", "blue"], "index": 0}, None, "k", field_default="blue"
     )
-    mock_st.selectbox.assert_called_once_with("L", options=["red", "blue"], index=0, key="k")
+    mock_st.selectbox.assert_called_once_with(
+        "L", options=["red", "blue"], index=0, key="k"
+    )
 
 
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
 def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
-    G._render_multiselect_widget("L", {"options": ["a", "b", "c"]}, None, "k", field_default=["b"])
-    mock_st.multiselect.assert_called_once_with("L", options=["a", "b", "c"], default=["b"], key="k")
+    G._render_multiselect_widget(
+        "L", {"options": ["a", "b", "c"]}, None, "k", field_default=["b"]
+    )
+    mock_st.multiselect.assert_called_once_with(
+        "L", options=["a", "b", "c"], default=["b"], key="k"
+    )
 
 
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
 def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) -> None:
     """End to end: a selectbox field with no session value selects its default."""
-    from pydantic import BaseModel, Field
 
     class Schema(BaseModel):
         color: str = Field(
             default="blue",
-            json_schema_extra={"widget": "selectbox", "kw": {"options": ["red", "blue"]}},
+            json_schema_extra={
+                "widget": "selectbox",
+                "kw": {"options": ["red", "blue"]},
+            },
         )
 
     gen = G(schema=Schema, key_prefix="t")

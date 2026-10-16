@@ -73,7 +73,9 @@ def test_pk_helpers_drive_a_real_query() -> None:
     Base.metadata.create_all(engine)
 
     with Session(engine) as s:
-        s.add_all([Product(code="A1", name="Widget"), Product(code="B2", name="Gadget")])
+        s.add_all(
+            [Product(code="A1", name="Widget"), Product(code="B2", name="Gadget")]
+        )
         s.commit()
 
         stmt = select(Product).where(pk_attr(Product) == "B2")

@@ -1,17 +1,5 @@
-[tool.pyright]
-venvPath = ".venv"
-venv = "."
-verboseOutput = false
-reportConstantRedefinition = "warning"
-reportUnnecessaryComparison = "warning"
-reportAssertAlwaysTrue = "warning"
-reportUnusedExpression = false
-include = ["streamlit_pydantic_crud"]
-exclude = ["**/node_modules",
-    "**/__pycache__",
-    "build/*",
-    "dist/*",
-    ".venv/*"]
+[tool.ty.src]
+include = ["streamlit_pydantic_crud", "tests"]
 
 [build-system]
 requires = ["setuptools", "wheel"]
@@ -31,11 +19,11 @@ sort_by_size = true
 verbose = false
 
 [tool.ruff]
-exclude = [".venv", "whitelist.py", "alembic", "alembic_dev"]
+exclude = [".venv", ".claude", "whitelist.py", "alembic", "alembic_dev"]
 line-length = 88
 
 [tool.ruff.lint]
-ignore = ["SIM108", "E501","PD901", "RET504", "PLR", "PTH123", "ISC001","ARG001","ARG002", "C901"]
+ignore = ["SIM108", "E501", "RET504", "PLR", "PTH123", "ISC001","ARG001","ARG002", "C901"]
 select = ["UP","YTT", "A", "EM", "ICN","I", "SIM", "E", "F", "C90", "B", "C4", "FA", "ISC", "INP", "PIE", "RET", "TID", "ARG", "PTH", "ERA", "PD", "PL", "FLY", "NPY", "PERF", "FURB", "RUF"]
 
 [tool.ruff.lint.pep8-naming]
@@ -51,19 +39,11 @@ filterwarnings = [
 ]
 
 
-[metadata]
-description = "Streamlit Pydantic CRUD"
-keyword = []
-classifiers = [""]
-author = "Anonymous"
-author_email = ""
-
 [project]
 name = "streamlit_pydantic_crud"
 version = "0.5.0"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
-# readme= "docs/README.md"
 requires-python = ">=3.12"
 license = {text = "MIT License"}
 dependencies = [
@@ -84,21 +64,15 @@ dev = [
     "ipython",
     "build",
     "rich",
-    "isort",
-    "vermin",
     "pandas-stubs",
     "vulture",
     "pdbpp",
-    "pyright",
     "ruff",
-    "mkdocs",
-    "mkdocs-material>=9.6.1",
-    "mkdocstrings-python>=1.13.0",
     "pytest>=9.1.1",
+    "ty>=0.0.88",
 ]
 
 [project.urls]
 homepage = "https://github.com/af-ryb/streamlit_sql_crud"
-documentation = "https://github.com/af-ryb/streamlit_sql_crud"
 repository = "https://github.com/af-ryb/streamlit_sql_crud"
 original = "https://github.com/edkedk99/streamlit_sql"

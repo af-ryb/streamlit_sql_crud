@@ -1,13 +1,16 @@
 import json
+import math
 import warnings
+from collections.abc import Callable, Iterable
+from decimal import Decimal
+from functools import partial
+from typing import Any
+
 import pandas as pd
 import streamlit as st
-from collections.abc import Callable
-from typing import Optional, Type
 from loguru import logger
-
 from pydantic import BaseModel
-from sqlalchemy import CTE, Select, select
+from sqlalchemy import CTE, Numeric, Select, select
 from sqlalchemy.orm import DeclarativeBase, selectinload
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit import session_state as ss
@@ -16,14 +19,19 @@ from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
 from streamlit_pydantic_crud.utils import (
-    convert_numpy_to_python,
     convert_numpy_list_to_python,
+    convert_numpy_to_python,
     pk_attr,
     pk_name,
+    row_to_python,
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
+
+"""Per-column formatter accepted by pandas ``Styler.format``."""
+DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
 
 
 class SqlUi:
@@ -44,22 +52,21 @@ class SqlUi:
         model: type[DeclarativeBase] | None = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
-        df_style_formatter: dict[str, str] | None = None,
+        df_style_formatter: DfStyleFormatter | None = None,
         read_use_container_width: bool = False,
         key: str | None = None,
         base_key: str | None = None,
         style_fn: Callable[[pd.Series], list[str]] | None = None,
         update_show_many: bool = False,
         disable_log: bool = False,
-        create_schema: Optional[Type[BaseModel]] = None,
-        update_schema: Optional[Type[BaseModel]] = None,
-        read_schema: Optional[Type[BaseModel]] = None,
+        create_schema: type[BaseModel] | None = None,
+        update_schema: type[BaseModel] | None = None,
+        read_schema: type[BaseModel] | None = None,
         foreign_key_options: dict | None = None,
         many_to_many_fields: dict | None = None,
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
         items_per_page_default: int = 0,
-
     ):
         """The CRUD interface will be displayes just by initializing the class
 
@@ -67,8 +74,8 @@ class SqlUi:
             conn (SQLConnection): A sqlalchemy connection created with st.connection("sql", url="<sqlalchemy url>")
             model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
-            available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
-            df_style_formatter (dict[str, str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
+            available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
+            df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
@@ -145,7 +152,7 @@ class SqlUi:
                     "When 'model' parameter is provided, 'read_instance' and 'edit_create_model' are ignored. "
                     "Use either 'model' (recommended) or the legacy 'read_instance'+'edit_create_model' combination.",
                     DeprecationWarning,
-                    stacklevel=2
+                    stacklevel=2,
                 )
             # Use model for both read and write operations
             self.read_instance = model
@@ -153,26 +160,29 @@ class SqlUi:
         else:
             # Legacy mode - require both parameters
             if read_instance is None or edit_create_model is None:
-                raise ValueError(
+                msg = (
                     "Either provide 'model' parameter (recommended) or both 'read_instance' and 'edit_create_model' parameters. "
                     "The 'model' parameter simplifies the API when using the same model for read and write operations."
                 )
+                raise ValueError(msg)
             self.read_instance = read_instance
             self.edit_create_model = edit_create_model
-        
+
         self.conn = conn
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
-        self.df_style_formatter = df_style_formatter or {}
+        self.df_style_formatter: DfStyleFormatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
         self.show_delete_btn = show_delete_btn
         self.show_create_btn = show_create_btn
 
         # Validate items_per_page_default
         if not isinstance(items_per_page_default, int):
-            raise ValueError(f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE)-1}), got {type(items_per_page_default)}")
+            msg = f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE) - 1}), got {type(items_per_page_default)}"
+            raise ValueError(msg)
         if items_per_page_default < 0 or items_per_page_default >= len(OPTS_ITEMS_PAGE):
-            raise ValueError(f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE)-1}, got {items_per_page_default}")
+            msg = f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE) - 1}, got {items_per_page_default}"
+            raise ValueError(msg)
         self.items_per_page_default = items_per_page_default
 
         if key is not None and base_key is not None:
@@ -180,7 +190,7 @@ class SqlUi:
                 "Both 'key' and 'base_key' specified. 'base_key' is deprecated, using 'key' instead. "
                 "Remove 'base_key' parameter in future versions.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             self.key = key
         elif base_key is not None:
@@ -188,7 +198,7 @@ class SqlUi:
                 "'base_key' parameter is deprecated and will be removed in v1.0.0. "
                 "Use 'key' parameter instead for Streamlit compatibility.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             self.key = base_key
         else:
@@ -203,30 +213,49 @@ class SqlUi:
         self.many_to_many_fields = many_to_many_fields or {}
 
         # Validate schema compatibility if provided
-        if self.create_schema:
-            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.create_schema, self.edit_create_model, 'create'
-            ):
-                table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
-                raise ValueError(f"Create schema {self.create_schema.__name__} is not compatible with {table_name}")
-        
-        if self.update_schema:
-            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.update_schema, self.edit_create_model, 'update'
-            ):
-                table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
-                raise ValueError(f"Update schema {self.update_schema.__name__} is not compatible with {table_name}")
-        
-        if self.read_schema:
-            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.read_schema, self.edit_create_model, 'read'
-            ):
-                table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
-                raise ValueError(f"Read schema {self.read_schema.__name__} is not compatible with {table_name}")
+        if self.create_schema and not (
+            PydanticSQLAlchemyConverter.validate_schema_compatibility(
+                self.create_schema, self.edit_create_model, "create"
+            )
+        ):
+            table_name = getattr(
+                self.edit_create_model,
+                "__tablename__",
+                self.edit_create_model.__name__,
+            )
+            msg = f"Create schema {self.create_schema.__name__} is not compatible with {table_name}"
+            raise ValueError(msg)
+
+        if self.update_schema and not (
+            PydanticSQLAlchemyConverter.validate_schema_compatibility(
+                self.update_schema, self.edit_create_model, "update"
+            )
+        ):
+            table_name = getattr(
+                self.edit_create_model,
+                "__tablename__",
+                self.edit_create_model.__name__,
+            )
+            msg = f"Update schema {self.update_schema.__name__} is not compatible with {table_name}"
+            raise ValueError(msg)
+
+        if self.read_schema and not (
+            PydanticSQLAlchemyConverter.validate_schema_compatibility(
+                self.read_schema, self.edit_create_model, "read"
+            )
+        ):
+            table_name = getattr(
+                self.edit_create_model,
+                "__tablename__",
+                self.edit_create_model.__name__,
+            )
+            msg = f"Read schema {self.read_schema.__name__} is not compatible with {table_name}"
+            raise ValueError(msg)
 
         self.cte = self.get_cte()
 
         # Bootstrap
+        self.state: UiState = get_ui_state(self.key)
         self.set_initial_state()
         self.set_structure()
         self.notification()
@@ -245,7 +274,7 @@ class SqlUi:
 
         # CRUD
         self.crud(df, rows_selected)
-        ss.stsql_opened = False
+        self.state.opened = False
 
         # Returns
         self.df = df
@@ -253,18 +282,16 @@ class SqlUi:
         self.qtty_rows = qtty_rows
 
     def set_initial_state(self):
-        lib.set_state("stsql_updated", 1)
-        lib.set_state("stsql_update_ok", None)
-        lib.set_state("stsql_update_message", None)
-        lib.set_state("stsql_opened", False)
-        lib.set_state("stsql_filters", {})
+        lib.set_state(UPDATED_KEY, 1)
 
     def set_structure(self):
         self.header_container = st.container()
         self.data_container = st.container()
         self.pag_container = st.container()
 
-        table_name = getattr(self.edit_create_model, '__tablename__', self.edit_create_model.__name__)
+        table_name = getattr(
+            self.edit_create_model, "__tablename__", self.edit_create_model.__name__
+        )
         table_name = lib.get_pretty_name(table_name)
         self.header_container.header(table_name, divider="orange")
 
@@ -278,18 +305,17 @@ class SqlUi:
         self.btns_container = self.header_container.container()
 
     def notification(self):
-        if ss.stsql_update_ok is True:
+        if self.state.update_ok is True:
             self.header_container.success(
-                ss.stsql_update_message, icon=":material/thumb_up:"
+                self.state.update_message, icon=":material/thumb_up:"
             )
-        if ss.stsql_update_ok is False:
+        if self.state.update_ok is False:
             self.header_container.error(
-                ss.stsql_update_message, icon=":material/thumb_down:"
+                self.state.update_message, icon=":material/thumb_down:"
             )
         # Clear so the banner shows once, not on every following rerun.
-        if ss.stsql_update_ok is not None:
-            ss.stsql_update_ok = None
-            ss.stsql_update_message = None
+        self.state.update_ok = None
+        self.state.update_message = None
 
     def get_cte(self):
         if isinstance(self.read_instance, Select):
@@ -304,7 +330,7 @@ class SqlUi:
     @staticmethod
     def _get_column_info(col) -> tuple[str, str]:
         """Helper method to get column information for joined columns
-        
+
         Returns a tuple of (display_name, col_name)
         """
         display_name = col.description or col.name
@@ -315,9 +341,9 @@ class SqlUi:
         """Check if the statement has ORM options like selectinload"""
         # Check if the original read_instance has options applied
         if isinstance(self.read_instance, Select):
-            return bool(getattr(self.read_instance, '_with_options', None))
+            return bool(getattr(self.read_instance, "_with_options", None))
         return False
-    
+
     def _stmt_has_explicit_columns(self, stmt: Select) -> bool:
         """Check if statement uses explicit column selection (expression-based entities)"""
         if isinstance(self.read_instance, Select):
@@ -327,7 +353,7 @@ class SqlUi:
                 # If any selected item is not a full table/entity, it's expression-based
                 for col in selected_columns:
                     # If it's a column attribute rather than a full table/entity
-                    if hasattr(col, 'table') or hasattr(col, 'element'):
+                    if hasattr(col, "table") or hasattr(col, "element"):
                         return True
         return False
 
@@ -335,9 +361,7 @@ class SqlUi:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
-            filter_cols_name = [
-                col.description or col.name for col in self.cte.columns
-            ]
+            filter_cols_name = [col.description or col.name for col in self.cte.columns]
 
         with self.conn.session as s:
             existing = read_cte.get_existing_values(
@@ -369,9 +393,9 @@ class SqlUi:
             )
 
         filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
-        if filters != ss.stsql_filters:
+        if filters != self.state.filters:
             page = 1
-            ss.stsql_filters = filters
+            self.state.filters = filters
 
         return items_per_page, page
 
@@ -381,18 +405,30 @@ class SqlUi:
             col_name = col.name
             if col_name in df.columns:
                 if isinstance(col.type, SQLEnum):
-                    df[col_name] = df[col_name].map(lambda v: v.value if hasattr(v, 'value') else v)
-                elif 'JSON' in str(col.type).upper():
-                    # Handle JSON columns for display
-                    df[col_name] = df[col_name].apply(lambda x: 
-                        json.dumps(x, indent=2) if x is not None and isinstance(x, (dict, list)) 
-                        else str(x) if x is not None else None
+                    df[col_name] = df[col_name].map(
+                        lambda v: v.value if hasattr(v, "value") else v
                     )
-                elif 'ARRAY' in str(col.type).upper():
+                elif "JSON" in str(col.type).upper():
+                    # Handle JSON columns for display
+                    df[col_name] = df[col_name].apply(
+                        lambda x: (
+                            json.dumps(x, indent=2)
+                            if x is not None and isinstance(x, (dict, list))
+                            else str(x)
+                            if x is not None
+                            else None
+                        )
+                    )
+                elif "ARRAY" in str(col.type).upper():
                     # Handle ARRAY columns for display
-                    df[col_name] = df[col_name].apply(lambda x: 
-                        ', '.join(map(str, x)) if x is not None and isinstance(x, (list, tuple)) 
-                        else str(x) if x is not None else None
+                    df[col_name] = df[col_name].apply(
+                        lambda x: (
+                            ", ".join(map(str, x))
+                            if x is not None and isinstance(x, (list, tuple))
+                            else str(x)
+                            if x is not None
+                            else None
+                        )
                     )
 
         return df
@@ -411,14 +447,16 @@ class SqlUi:
                 "ORM options will be ignored as they're incompatible with expression-based SELECT statements. "
                 "Consider using separate queries for many-to-many relationships or select full entities instead of individual columns."
             )
-        
+
         # Check if we need special handling for many-to-many fields or specific statement types
         needs_orm_execution = (
-            self.read_schema or 
-            self.many_to_many_fields or 
-            (has_orm_options and not has_explicit_columns)  # Only use ORM execution if compatible
+            self.read_schema
+            or self.many_to_many_fields
+            or (
+                has_orm_options and not has_explicit_columns
+            )  # Only use ORM execution if compatible
         )
-        
+
         if needs_orm_execution:
             df = self._execute_with_pydantic_schema(stmt_pag)
         else:
@@ -433,12 +471,14 @@ class SqlUi:
         with self.conn.session as s:
             has_orm_options = self._stmt_has_orm_options(stmt)
             has_explicit_columns = self._stmt_has_explicit_columns(stmt)
-            
+
             # For many-to-many or selectinload, we need ORM objects, not Row objects
-            if self.many_to_many_fields or (has_orm_options and not has_explicit_columns):
+            if self.many_to_many_fields or (
+                has_orm_options and not has_explicit_columns
+            ):
                 # Use the filtered statement first to get the correct data
                 filtered_result = s.execute(stmt).all()
-                
+
                 # If we have many-to-many fields and filtered results, load relationships separately
                 if self.many_to_many_fields and filtered_result:
                     pk = pk_name(self.edit_create_model)
@@ -447,17 +487,25 @@ class SqlUi:
 
                     # Build options for eager loading
                     options = []
-                    for field_name, config in self.many_to_many_fields.items():
-                        relationship_attr = getattr(self.edit_create_model, config['relationship'])
+                    for config in self.many_to_many_fields.values():
+                        relationship_attr = getattr(
+                            self.edit_create_model, config["relationship"]
+                        )
                         options.append(selectinload(relationship_attr))
 
                     # Load entities with relationships for just the filtered PKs
-                    entities_with_relations = s.query(self.edit_create_model).filter(
-                        pk_attr(self.edit_create_model).in_(entity_ids)
-                    ).options(*options).all()
+                    entities_with_relations = (
+                        s.query(self.edit_create_model)
+                        .filter(pk_attr(self.edit_create_model).in_(entity_ids))
+                        .options(*options)
+                        .all()
+                    )
 
                     # Create a mapping of pk -> entity with relationships
-                    entity_map = {getattr(entity, pk): entity for entity in entities_with_relations}
+                    entity_map = {
+                        getattr(entity, pk): entity
+                        for entity in entities_with_relations
+                    }
 
                     # Merge filtered data with relationship data
                     result = []
@@ -479,15 +527,20 @@ class SqlUi:
             for row in result:
                 if self.read_schema:
                     # Use Pydantic validation if schema is provided
-                    validated_data = self.read_schema.model_validate(row, from_attributes=True).model_dump()
+                    validated_data = self.read_schema.model_validate(
+                        row, from_attributes=True
+                    ).model_dump()
                 else:
                     # Convert ORM/Row object to dict directly
-                    if hasattr(row, '__dict__'):
+                    if hasattr(row, "__dict__"):
                         # ORM object
-                        validated_data = {key: value for key, value in row.__dict__.items() 
-                                        if not key.startswith('_')}
+                        validated_data = {
+                            key: value
+                            for key, value in row.__dict__.items()
+                            if not key.startswith("_")
+                        }
                     else:
-                        # Row object  
+                        # Row object
                         validated_data = row._asdict()
 
                 # Ensure the primary key is always present for CRUD operations
@@ -500,10 +553,10 @@ class SqlUi:
                     if isinstance(value, list):
                         # Handle list of enums
                         validated_data[key] = [
-                            item.value if hasattr(item, 'value') else str(item)
+                            item.value if hasattr(item, "value") else str(item)
                             for item in value
                         ]
-                    elif hasattr(value, 'value'):
+                    elif hasattr(value, "value"):
                         # Handle single enum
                         validated_data[key] = value.value
 
@@ -523,22 +576,32 @@ class SqlUi:
             # Display only the columns specified in the schema
             column_order = list(self.read_schema.model_fields.keys())
 
-        df_style = df.style
-        df_style = df_style.format(self.df_style_formatter)  # pyright: ignore
+        formatter = {
+            **numeric_formatters(self.cte, df.columns),
+            **self.df_style_formatter,
+        }
+        df_style = df.style.format(formatter)
         if self.style_fn is not None:
             df_style = df_style.apply(self.style_fn, axis=1)
 
         selection_state = self.data_container.dataframe(
             df_style,
-            width='stretch' if self.read_use_container_width else 'content',  # pyright: ignore
+            width="stretch" if self.read_use_container_width else "content",
             height=650,
             hide_index=True,
             column_order=column_order,
             on_select="rerun",
             selection_mode="multi-row" if self.show_delete_btn else "single-row",
-            key=f"{self.key}_df_sql_ui",
+            key=self.df_key(),
         )
         return selection_state
+
+    def df_key(self) -> str:
+        """Return the dataframe key, renewed by every write (stsql_updated).
+
+        The selection holds row positions; a new key drops it once rows shift.
+        """
+        return f"{self.key}_df_sql_ui_{ss.stsql_updated}"
 
     @staticmethod
     def get_rows_selected(selection_state: DataframeState | None):
@@ -558,7 +621,7 @@ class SqlUi:
         action = update_model.action_btns(
             self.btns_container,
             qtty_selected=qtty_rows,
-            opened=ss.stsql_opened,
+            opened=self.state.opened,
             show_delete_btn=self.show_delete_btn,
             show_create_btn=self.show_create_btn,
             key=self.key,
@@ -579,7 +642,7 @@ class SqlUi:
             create_row.show_dialog()
         elif action == "copy":
             selected_pos = rows_selected[0]
-            initial_data = df.iloc[selected_pos].to_dict()
+            initial_data = row_to_python(df.iloc[selected_pos])
             create_row = create_delete_model.CreateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -596,7 +659,9 @@ class SqlUi:
         elif action == "edit":
             selected_pos = rows_selected[0]
             pk = pk_name(self.edit_create_model)
-            row_id = convert_numpy_to_python(df.iloc[selected_pos][pk], self.edit_create_model)
+            row_id = convert_numpy_to_python(
+                df.iloc[selected_pos][pk], self.edit_create_model
+            )
             update_row = update_model.UpdateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -607,13 +672,13 @@ class SqlUi:
                 foreign_key_options=self.foreign_key_options,
                 many_to_many_fields=self.many_to_many_fields,
                 key=self.key,
-                dt_filters=self.col_filter.dt_filters,
-                no_dt_filters=self.col_filter.no_dt_filters,
             )
             update_row.show_dialog()
         elif action == "delete":
             pk = pk_name(self.edit_create_model)
-            rows_id = convert_numpy_list_to_python(df.iloc[rows_selected][pk].to_list(), self.edit_create_model)
+            rows_id = convert_numpy_list_to_python(
+                df.iloc[rows_selected][pk].to_list(), self.edit_create_model
+            )
             delete_rows = create_delete_model.DeleteRows(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -621,3 +686,28 @@ class SqlUi:
                 key=self.key,
             )
             delete_rows.show_dialog()
+
+
+def numeric_formatters(cte: CTE, columns: Iterable[str]) -> DfStyleFormatter:
+    """Return Styler formatters for the Numeric/Float columns of `cte` in `columns`.
+
+    Styler otherwise shows every float with 6 decimals (50000.000000).
+    """
+    names = set(columns)
+    return {
+        col.name: partial(format_number, scale=col.type.scale)
+        for col in cte.columns
+        if col.name in names and isinstance(col.type, Numeric)
+    }
+
+
+def format_number(value: object, scale: int | None = None) -> str:
+    """Format a number with `scale` decimals, or its shortest repr if None.
+
+    Missing, infinite and non-numeric values keep their plain str().
+    """
+    if not isinstance(value, float | int | Decimal) or not math.isfinite(value):
+        return str(value)
+    if scale is not None:
+        return f"{value:.{scale}f}"
+    return str(value)

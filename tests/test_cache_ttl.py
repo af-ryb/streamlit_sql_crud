@@ -5,14 +5,16 @@ counter changes, so values added outside the library (ETL, agents, direct
 writes) stay invisible until the app restarts.
 """
 
+from typing import Any
+
 from streamlit_pydantic_crud import read_cte
 from streamlit_pydantic_crud.create_delete_model import DeleteRows
 from streamlit_pydantic_crud.filters import ExistingData
 
 
-def _ttl(cached_func: object) -> object:
+def _ttl(cached_func: Any) -> object:
     """Read the configured ttl of a st.cache_data-decorated function."""
-    return cached_func._info.ttl  # type: ignore[attr-defined]
+    return cached_func._info.ttl
 
 
 def test_get_existing_values_has_ttl() -> None:

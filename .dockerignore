@@ -1,8 +1,0 @@
-.~*
-.git/
-build/
-__*/
-venv/
-*egg-info/*
-*_pycache__/*
-.env

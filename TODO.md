@@ -1,172 +1,93 @@
-# Streamlit SQL CRUD - Development TODO
+# TODO: cleanup & review backlog
 
-## Completed Phases
+Results of the code review (2026-10-16). Work is split into steps; each step is a
+separate PR/commit series.
 
-### ✅ Phase 1: Project Foundation & Basic Functionality (COMPLETED)
-**Status**: ✅ **COMPLETED** - June 22, 2025
-- ✅ Set up basic project structure with `pyproject.toml` and dependencies
-- ✅ Implement core CRUD operations with SQLAlchemy models
-- ✅ Create basic Streamlit UI components for data interaction
-- ✅ Establish database connection patterns and session management
-- ✅ Add basic input validation and error handling
+Baseline: pytest 56 passed · pyright 0 (via 8 `# pyright: ignore`) · ty 8 diagnostics ·
+ruff 199 violations · 14 files unformatted · vulture 15 candidates.
 
-### ✅ Phase 2: PydanticUi Implementation (COMPLETED)
-**Status**: ✅ **COMPLETED** - June 22, 2025  
-**Test Results**: ✅ **41/41 tests passed**
-- ✅ Create standalone `PydanticUi` class for form generation
-- ✅ Implement comprehensive widget support via `json_schema_extra`
-- ✅ Add session state management for form persistence
-- ✅ Create multiple rendering modes (`render()`, `render_with_submit()`, `render_with_columns()`)
-- ✅ Fix critical type consistency issues in numeric widgets
-- ✅ Develop comprehensive test suite with 100% pass rate
+## Step 1 — Tooling (mechanical)
 
-### ✅ Phase 3: Clean Logic & SqlUi Integration (COMPLETED)
-**Status**: ✅ **COMPLETED** - June 22, 2025  
-**Integration Results**: ✅ **Full SqlUi-PydanticUi Integration Achieved**
-- ✅ Refactor `PydanticInputGenerator` - split monolithic methods into dedicated widget handlers
-- ✅ Create focused handler methods for each widget type (`_render_text_input_widget`, etc.)
-- ✅ Integrate `PydanticUi` into `SqlUi` (`CreateRow` and `UpdateRow` classes)
-- ✅ Maintain backward compatibility for existing SQLAlchemy workflows
-- ✅ Implement foreign key support with clean architecture separation
-- ✅ Fix critical bugs: submit buttons, form pre-population, numpy conversion errors
-- [x] Remove legacy compatibility methods for cleaner codebase
-- [x] Test integrated functionality with example application
+- [x] `ruff check --fix` + `ruff format` as a separate mechanical commit
+- [x] Replace pyright with ty: dev deps, `[tool.ty]` config, drop `[tool.pyright]`
+- [x] Fix ty diagnostics:
+  - [x] `lib.py` `logger._core` — the library should not add log sinks
+  - [x] `read_cte.py` `sac.cascader` items type (list invariance)
+  - [x] `schema_builder.py` `List[items_type]` / `create_model(**fields)`
+  - [x] `sql_ui.py` `df_style_formatter` type for `Styler.format`
+  - [x] `tests/test_cache_ttl.py` `_info` access
+- [x] Remove `# pyright: ignore` comments; remove removed rule `PD901` from ruff ignore
+- [x] Remaining manual ruff violations (ERA001, EM10x, SIM, B007, E721, F841, ...)
+- [x] `task fix`: ruff + ty (Makefile removed; `task check`/`task test` added)
+- [x] `.githooks/pre-commit`: black/isort/pycln/pyright → ruff + ty
+- [x] CI (GitHub Actions): ruff, ty, pytest
+- [x] `pyproject.toml`: drop `[metadata]`, empty `classifiers`, unused dev deps (isort, vermin, pyright)
+- [x] Makefile/Taskfile: `st`/`docker` targets point to missing `app/` and `CHANGEME` (removed; Makefile and `publish` dropped)
 
-**Phase 3 Key Achievements**:
-- ✅ **Architecture**: Clean separation between UI and database layers maintained
-- ✅ **Integration**: Seamless SqlUi-PydanticUi integration with automatic schema detection
-- ✅ **Compatibility**: 100% backward compatibility preserved for SQLAlchemy workflows
-- ✅ **Bug Resolution**: All critical issues resolved (submit buttons, pre-population, type conversion)
-- ✅ **Code Quality**: Monolithic methods refactored into 10 focused widget handlers
+## Step 2 — Bugs (regression test first, then fix)
 
-## Current Phase Status
+Confirmed by probes:
+1. [x] PEP 604 `X | None` is not treated as Optional (`get_origin` is `types.UnionType`,
+   not `Union`): `int | None` → `text_input`, `Enum | None`/`list | None` lose
+   selectbox/multiselect. `pydantic_utils.py` — introduce one `unwrap_optional()` helper.
+2. [x] `schema_builder`: datetime → `str` (pydantic emits format `"date-time"`, code
+   checks `"datetime"`).
+3. [x] `schema_builder`: required field with `widget`/`kw` becomes optional
+   (`default=None`); `$ref`/`$defs` (nested models, enums) unsupported.
+4. [x] `_parse_array_string` regex uses `\\b` in a raw string: `'{"a,b",c,d}'` →
+   `['a,b']`. Unify with the duplicate parser in `input_fields.input_array`.
+5. [x] `InputFields.input_enum` (no-schema mode): `opts.index(Status.ACTIVE)` raises
+   `ValueError` (`enums` holds names); label is the enum type name; no widget `key`.
 
-### 🎯 Ready for Phase 4
-**All previous phases completed successfully.** The streamlit_sql_crud library now provides:
+From reading (verify with a test first):
+6. [x] Cache keys miss inputs: `ExistingData.get_text/get_dt` keyed by
+   `(table_name, updated)` but depend on `default_values` and current row;
+   `DeleteRows.get_rows_str` keyed by `rows_id` only (other model, same ids).
+7. [x] Global `stsql_*` session-state keys are shared between `SqlUi` instances on one
+   page (pagination reset via `stsql_filters`, notifications, `opened`).
+8. [x] `DeleteRows`: failure logged as success (no `success=False`); `s.get()` may
+   return `None` → `s.delete(None)`.
+9. [x] Falsy defaults (`False`, `0`) ignored: `if default_value:` in
+   `CreateRow.get_sqlalchemy_fields` / `UpdateRow.get_sqlalchemy_updates`.
+10. [x] Widget key collisions: no `key` on number/date/checkbox/enum inputs;
+    `input_array` key lacks prefix; update form key lacks `key_prefix`.
+11. [x] `input_str` returns the string `"None"` when nothing is selected.
+12. [x] `@logger.catch()` on `generate_form_data` swallows errors and returns `None`.
+13. [x] `col.type.python_type` raises `NotImplementedError` for `NullType`/custom types
+    (e.g. `literal_column`) → filters crash.
+14. [x] `_render_id_field` checks `key_prefix == "update"` (never true);
+    `PydanticUndefined` detected via `repr`; `default_factory` ignored.
 
-- ✅ **Robust Foundation**: Complete CRUD operations with SQLAlchemy
-- ✅ **Modern UI Components**: PydanticUi with comprehensive widget support and foreign key handling
-- ✅ **Clean Architecture**: Focused widget handlers, clear separation of concerns, database-agnostic UI
-- ✅ **Seamless Integration**: SqlUi automatically detects and uses PydanticUi when schemas provided
-- ✅ **Dual Mode Operation**: Traditional SQLAlchemy and modern Pydantic workflows in unified codebase
-- ✅ **Production Ready**: All critical bugs resolved, comprehensive test coverage, verified integration
+## Step 3 — Code cleanliness
 
-## Potential Phase 4 Directions
+- [ ] No-schema `InputFields` number inputs (int/float/Numeric) start with the existing
+  value, so nullable columns likely cannot be emptied on edit (same fix as pydantic M1)
 
-### Option A: Advanced Widget Features
-- [ ] Custom widget types for specialized use cases (JSON editor, color picker, file selector)
-- [ ] Conditional field display based on other field values
-- [ ] Advanced layout options (tabs, accordions, collapsible sections)
-- [ ] Rich text editor integration with markdown support
-- [ ] File upload widget integration with validation
+- [x] Filter values are mirrored to URL query params named by column (global): two
+  `SqlUi` instances filtering a same-named column share the filter — prefix with `key`
+- [ ] `stDatalist` labels use the raw column name (no-schema mode)
+- [ ] Unify the array parser in `input_fields.input_array` with `utils.parse_pg_array`
 
-### Option B: Performance & Optimization  
-- [ ] Implement caching strategies for foreign key data and query results
-- [ ] Optimize session state management and memory usage
-- [ ] Add database query optimization and connection pooling
-- [ ] Performance monitoring and metrics collection
-- [ ] Lazy loading for large datasets
+- [ ] IDE `deprecated_instance_property` on `model_fields`: one typed helper
+  `model_fields(schema) -> dict[str, FieldInfo]`
+- [ ] Make `_render_field_input` public (`render_field`) — used by `PydanticUi` and tests
+- [ ] Deduplicate: `_load_foreign_key_data`/`_load_many_to_many_data` (Create/UpdateRow),
+  3× `show_dialog` wrappers, 3× schema validation in `SqlUi.__init__`,
+  ~12× `getattr(model, '__tablename__', ...)`, 3× `is_optional`, 3× enum detection,
+  `render` vs `render_with_columns`
+- [ ] Dead code: `get_fields`, `get_updates`, `save`, `_get_column_info`,
+  `pydantic_to_sqlalchemy`, `sqlalchemy_to_pydantic`, `layout`, `id_to_object`,
+  unreachable `elif` in `generate_form_data`, `lib.__main__`, commented `logger.debug`
+- [ ] Typing: `Literal` for `operation_type`, `TypedDict` for `foreign_key_options` /
+  `many_to_many_fields`, return types everywhere
+- [ ] Fragile checks: `hasattr(v, 'value')` → `isinstance(v, Enum)`; `'JSON' in str(type)`;
+  private `registry._class_registry` → `registry.mappers`; `rel.direction.value == 1`
+  → `ONETOMANY`; `assert` used for control flow
+- [ ] Portuguese names `inicio`/`final` (also visible UI labels)
+- [ ] `get_pretty_name` → `functools.cache` instead of `st.cache_data`
+- [ ] Pydantic mode still builds `ExistingData`/`InputFields` (extra DB queries per dialog)
+- [ ] Tests for schema_builder, type detection, many-to-many, delete
 
-### Option C: Enhanced User Experience
-- [ ] Form validation with real-time feedback and field-level validation
-- [ ] Advanced error handling with user-friendly messages and recovery suggestions
-- [ ] Progress indicators for long operations and async processing
-- [ ] Undo/redo functionality for data modifications
-- [ ] Keyboard shortcuts and accessibility improvements
+## Step 4 — API decisions
 
-### Option D: Integration & Extensions
-- [ ] Integration with external authentication systems (OAuth, LDAP)
-- [ ] Support for additional database backends (PostgreSQL, MongoDB, etc.)
-- [ ] API generation from CRUD models with automatic OpenAPI documentation
-- [ ] Export/import functionality (CSV, JSON, Excel, PDF)
-- [ ] Audit logging and change tracking with user attribution
-
-### Option E: Developer Experience
-- [ ] Comprehensive documentation with interactive examples
-- [ ] Migration utilities for upgrading between versions
-- [ ] VS Code extension for schema development and validation
-- [ ] CLI tools for project scaffolding and code generation
-- [ ] Testing utilities and mock data generators
-
-## Implementation Notes
-
-### Architecture Strengths
-- **Clean Separation**: UI components completely independent of database logic
-- **Flexibility**: Supports both traditional SQLAlchemy and modern Pydantic development patterns
-- **Maintainability**: 10 focused widget handler methods with clear responsibilities
-- **Extensibility**: Easy to add new widgets, customize behavior, and extend functionality
-- **Database Agnostic**: PydanticUi works independently, SqlUi handles database integration
-
-### Technical Debt Status
-- ✅ **Minimal**: Complete refactoring completed in Phase 3 with focused handlers
-- ✅ **Well-Tested**: Comprehensive test coverage with integration validation
-- ✅ **Documented**: Detailed completion summaries and implementation guides
-- ✅ **Production Ready**: All critical bugs resolved, clean architecture established
-
-### Recent Phase 3 Accomplishments
-- **Widget Handler Refactoring**: Replaced monolithic methods with 10 dedicated handlers
-- **SqlUi Integration**: Seamless PydanticUi integration with automatic schema detection
-- **Foreign Key Architecture**: Clean separation with preloaded data and database-independent rendering
-- **Critical Bug Fixes**: Submit buttons restored, form pre-population working, numpy conversion fixed
-- **Backward Compatibility**: Traditional SQLAlchemy workflows fully preserved
-
-### Next Steps
-Ready to proceed with Phase 4 based on user needs and priorities. All foundation work is complete with:
-- Clean, maintainable architecture
-- Full integration between components
-- Production-ready implementation
-- Comprehensive test coverage
-- Clear documentation and examples
-
-## Legacy API Cleanup (Completed)
-
-### ✅ Completed Tasks
-- [x] Added deprecation warning to `show_sql_ui` function
-- [x] Replaced `base_key` with `key` parameter in SqlUi class with deprecation warnings
-- [x] Added new `model` parameter for simplified API
-- [x] Updated example project to use new API
-- [x] Removed `show_sql_ui` function from exports
-- [x] Removed internal `base_key` usage from all modules
-- [x] Updated `create_delete_model.py`, `read_cte.py`, `many.py`, `sql_iu.py` to use `key` parameter
-
-## Feature Requests
-
-### Many-to-Many Relationship Support
-**Requested**: December 2024  
-**Use Case**: Support for Many-to-Many relationships through association tables
-
-Currently, SqlUi supports One-to-Many relationships via the `update_show_many` parameter, but lacks native support for Many-to-Many relationships. 
-This feature would be valuable for complex data models.
-
-#### Requirements:
-1. **Association Table Detection**: Automatically detect Many-to-Many relationships through association tables
-2. **Multi-select Widget**: Use `st.multiselect` instead of `st.selectbox` for Many-to-Many fields
-3. **Relationship Management**: Handle adding/removing records in association tables during create/update operations
-4. **Transaction Support**: Ensure atomic operations when modifying multiple tables
-5. **UI Integration**: Seamless integration with existing SqlUi interface
-
-#### Proposed Implementation:
-1. Add a new parameter `many_to_many_fields` to SqlUi:
-   ```python
-   SqlUi(
-       conn=conn,
-       model=MyModel,
-       many_to_many_fields={
-           'tags': {
-               'relationship': 'tags',  # SQLAlchemy relationship name
-               'display_field': 'name',
-               'filter': lambda q: q.filter(Tag.active == True)
-           }
-       }
-   )
-   ```
-
-2. Detect association tables from SQLAlchemy relationships
-3. Generate multiselect widgets for Many-to-Many fields
-4. Handle association table updates in transaction with main record
-
-#### Benefits:
-- Simplified UI for complex data relationships
-- Reduced need for custom implementations
-- Better support for common database patterns
-- Maintains SqlUi's ease of use
+- [ ] Remove deprecated `base_key` and `read_instance` + `edit_create_model` (before 1.0?)
