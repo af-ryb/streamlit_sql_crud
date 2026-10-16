@@ -27,6 +27,47 @@ def is_union(tp: Any) -> bool:
     return get_origin(tp) in (Union, types.UnionType)
 
 
+def parse_pg_array(value: str) -> list[str]:
+    """Parse a PostgreSQL array literal (``{a,"b,c"}``) into a list of strings.
+
+    Braces are optional, so ``a, b`` also works. Quoted items keep commas,
+    spaces and backslash-escaped characters; unquoted items are stripped and
+    empty ones dropped. Nested arrays and NULL are not interpreted.
+    """
+    text = value.strip()
+    if text.startswith("{") and text.endswith("}"):
+        text = text[1:-1]
+
+    items: list[str] = []
+    current: list[str] = []
+    quoted = in_quotes = escaped = False
+    for char in text:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == '"':
+            in_quotes = not in_quotes
+            quoted = True
+        elif char == "," and not in_quotes:
+            _append_item(items, current, quoted)
+            current, quoted = [], False
+        elif in_quotes or not char.isspace() or (current and not quoted):
+            current.append(char)
+    _append_item(items, current, quoted)
+    return items
+
+
+def _append_item(items: list[str], chars: list[str], quoted: bool) -> None:
+    """Append a parsed array item; unquoted items are stripped, empty dropped."""
+    item = "".join(chars)
+    if not quoted:
+        item = item.strip()
+    if quoted or item:
+        items.append(item)
+
+
 def pk_column(model: type[DeclarativeBase]) -> Column:
     """Return the single primary-key column of the model.
 

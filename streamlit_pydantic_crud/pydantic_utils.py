@@ -1,6 +1,5 @@
 import contextlib
 import json
-import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, get_args, get_origin
@@ -10,8 +9,8 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 
+from streamlit_pydantic_crud.utils import parse_pg_array, unwrap_optional
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
-from streamlit_pydantic_crud.utils import unwrap_optional
 
 
 class PydanticSQLAlchemyConverter:
@@ -521,7 +520,7 @@ class PydanticInputGenerator:
                 current_values = [str(item) for item in existing_value]
             elif isinstance(existing_value, str):
                 # Handle PostgreSQL array format
-                current_values = self._parse_array_string(existing_value)
+                current_values = parse_pg_array(existing_value)
 
         return st.multiselect(
             label,
@@ -539,28 +538,6 @@ class PydanticInputGenerator:
             return args[0]
         return None
 
-    @staticmethod
-    def _parse_array_string(value_str: str) -> list:
-        """Parse PostgreSQL array string format"""
-        value_str = value_str.strip()
-        if value_str.startswith("{") and value_str.endswith("}"):
-            value_str = value_str[1:-1]
-
-        if value_str:
-            # Handle quoted and unquoted values
-            parts = re.findall(r'"([^"]*)"|\\b([^,]+)\\b', value_str)
-            result = []
-            for quoted, unquoted in parts:
-                val = quoted or unquoted
-                if val.strip():
-                    result.append(val.strip())
-
-            # Fallback: simple comma split
-            if not result:
-                result = [v.strip() for v in value_str.split(",") if v.strip()]
-            return result
-        return []
-
     def _render_list_input(
         self, label: str, annotation: Any, existing_value: Any, key: str
     ) -> Any:
@@ -570,7 +547,7 @@ class PydanticInputGenerator:
             if isinstance(existing_value, (list, tuple)):
                 current_values = [str(item) for item in existing_value]
             elif isinstance(existing_value, str):
-                current_values = self._parse_array_string(existing_value)
+                current_values = parse_pg_array(existing_value)
 
         return st.multiselect(
             label,
@@ -832,7 +809,7 @@ class PydanticInputGenerator:
         if isinstance(value, (list, tuple)):
             return list(value)
         if isinstance(value, str):
-            return PydanticInputGenerator._parse_array_string(value)
+            return parse_pg_array(value)
         return [value]
 
     @staticmethod
