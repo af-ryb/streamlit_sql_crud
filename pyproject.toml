@@ -39,13 +39,6 @@ filterwarnings = [
 ]
 
 
-[metadata]
-description = "Streamlit Pydantic CRUD"
-keyword = []
-classifiers = [""]
-author = "Anonymous"
-author_email = ""
-
 [project]
 name = "streamlit_pydantic_crud"
 version = "0.5.0"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Conventions
 
-Project-specific rules (the rest is enforced by ruff/pyright — see config):
+Project-specific rules (the rest is enforced by ruff/ty — see config):
 - **Type hints on all code**; public APIs need docstrings.
 - **Line length: 88 chars** (ruff).
 - **Comments**: triple-quoted, English, two lines maximum.
@@ -18,18 +18,21 @@ Project-specific rules (the rest is enforced by ruff/pyright — see config):
 
 ### Code Quality and Formatting
 ```bash
-# Run all quality checks, auto-fix, and format (most common)
-make fix
-# OR using Task
+# Lint (auto-fix), format and type-check (most common)
 task fix
 # OR directly with uv
-uv run -- pyright && uv run -- ruff check --fix && uv run -- ruff format
+uv run -- ruff check --fix && uv run -- ruff format && uv run -- ty check
+# Non-mutating check (what CI runs): ruff, ruff format --check, ty, pytest
+task check
 ```
+CI (`.github/workflows/ci.yml`) runs the same checks on push/PR. Enable the
+pre-commit hook (ruff + ty on staged files) with
+`git config core.hooksPath .githooks`.
 
 ### Running Tests
 ```bash
 # Run the full suite (pytest testpaths = ["tests"], quiet mode via addopts)
-uv run -- pytest
+uv run -- pytest   # OR task test
 # Run a single test file
 uv run -- pytest tests/test_pk_helpers.py
 # Run a single test by name
@@ -41,16 +44,6 @@ Most tests drive the real Streamlit runtime through `streamlit.testing.v1.AppTes
 models) and a `run_app` fixture that renders apps from `tests/_apps/` and clears
 `st.cache_data` between runs to prevent memoized queries leaking across tests.
 
-### Building and Publishing
-```bash
-# Build and publish to PyPI
-make publish
-# OR
-task publish
-# OR directly
-uv build && uv publish
-```
-
 ### Documentation
 ```bash
 # Serve documentation locally
@@ -60,12 +53,8 @@ task deploy-docs
 ```
 
 ### Development Server
-```bash
-# NOTE: this repo has no app/ directory; `make st`/`task st` target app/webapp.py
-# and only work where that file exists. To run a live UI, use the example project
-# below (./run.sh) instead.
-make st
-```
+This repo has no app of its own. To run a live UI, use the example project
+below (`./run.sh`).
 
 ## Architecture Overview
 
@@ -118,10 +107,10 @@ This project uses **uv** as the package manager and requires **Python >=3.12**. 
 
 ## Quality Tools Configuration
 
-### Type Checking (Pyright)
-- Configured in `pyproject.toml`
-- Virtual environment: `.venv`
-- Includes: `streamlit_pydantic_crud/`
+### Type Checking (ty)
+- Configured in `pyproject.toml` (`[tool.ty.src]`)
+- Checks `streamlit_pydantic_crud/` and `tests/`
+- Run with `uv run -- ty check`
 
 ### Linting and Formatting (Ruff)
 - Line length: 88 characters
@@ -134,18 +123,17 @@ This project uses **uv** as the package manager and requires **Python >=3.12**. 
 
 ## Important File Patterns
 
-- Main package: `streamlit_pydantic_crud/` (import name differs from repo/PyPI name `streamlit_sql_crud`)
+- Main package: `streamlit_pydantic_crud/` (import name differs from repo name `streamlit_sql_crud`)
 - Tests: `tests/test_*.py` with shared fixtures in `tests/conftest.py` and harness apps in `tests/_apps/`
 - Documentation: `docs/` with MkDocs configuration
-- Config files: `pyproject.toml`, `Makefile`, `Taskfile.yml`
+- Config files: `pyproject.toml`, `Taskfile.yml`
 
 ## Development Workflow
 
 1. Make changes to code in `streamlit_pydantic_crud/`
-2. Run quality checks: `make fix` or `task fix`
+2. Run quality checks: `task fix` (or `task check` before pushing)
 3. **Test all new functionality** using the test project (see Testing section below)
 4. For documentation changes: `task show-docs` to preview
-5. Build and publish: `make publish` or `task publish`
 
 ## Testing with Example Project
 

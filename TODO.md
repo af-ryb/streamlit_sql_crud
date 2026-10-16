@@ -8,21 +8,21 @@ ruff 199 violations · 14 files unformatted · vulture 15 candidates.
 
 ## Step 1 — Tooling (mechanical)
 
-- [ ] `ruff check --fix` + `ruff format` as a separate mechanical commit
-- [ ] Replace pyright with ty: dev deps, `[tool.ty]` config, drop `[tool.pyright]`
-- [ ] Fix ty diagnostics:
-  - [ ] `lib.py` `logger._core` — the library should not add log sinks
-  - [ ] `read_cte.py` `sac.cascader` items type (list invariance)
-  - [ ] `schema_builder.py` `List[items_type]` / `create_model(**fields)`
-  - [ ] `sql_ui.py` `df_style_formatter` type for `Styler.format`
-  - [ ] `tests/test_cache_ttl.py` `_info` access
-- [ ] Remove `# pyright: ignore` comments; remove removed rule `PD901` from ruff ignore
-- [ ] Remaining manual ruff violations (ERA001, EM10x, SIM, B007, E721, F841, ...)
-- [ ] `make fix` / `task fix`: ruff + ty
-- [ ] `.githooks/pre-commit`: black/isort/pycln/pyright → ruff + ty
-- [ ] CI (GitHub Actions): ruff, ty, pytest
-- [ ] `pyproject.toml`: drop `[metadata]`, empty `classifiers`, unused dev deps (isort, vermin, pyright)
-- [ ] Makefile/Taskfile: `st`/`docker` targets point to missing `app/` and `CHANGEME`
+- [x] `ruff check --fix` + `ruff format` as a separate mechanical commit
+- [x] Replace pyright with ty: dev deps, `[tool.ty]` config, drop `[tool.pyright]`
+- [x] Fix ty diagnostics:
+  - [x] `lib.py` `logger._core` — the library should not add log sinks
+  - [x] `read_cte.py` `sac.cascader` items type (list invariance)
+  - [x] `schema_builder.py` `List[items_type]` / `create_model(**fields)`
+  - [x] `sql_ui.py` `df_style_formatter` type for `Styler.format`
+  - [x] `tests/test_cache_ttl.py` `_info` access
+- [x] Remove `# pyright: ignore` comments; remove removed rule `PD901` from ruff ignore
+- [x] Remaining manual ruff violations (ERA001, EM10x, SIM, B007, E721, F841, ...)
+- [x] `task fix`: ruff + ty (Makefile removed; `task check`/`task test` added)
+- [x] `.githooks/pre-commit`: black/isort/pycln/pyright → ruff + ty
+- [x] CI (GitHub Actions): ruff, ty, pytest
+- [x] `pyproject.toml`: drop `[metadata]`, empty `classifiers`, unused dev deps (isort, vermin, pyright)
+- [x] Makefile/Taskfile: `st`/`docker` targets point to missing `app/` and `CHANGEME` (removed; Makefile and `publish` dropped)
 
 ## Step 2 — Bugs (regression test first, then fix)
 
