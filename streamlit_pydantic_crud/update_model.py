@@ -17,6 +17,7 @@ from streamlit_pydantic_crud.lib import (
     set_state,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
+from streamlit_pydantic_crud.state import get_ui_state
 from streamlit_pydantic_crud.utils import (
     convert_numpy_to_python,
     pk_attr,
@@ -48,6 +49,7 @@ class UpdateRow:
         self.update_schema = update_schema
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
+        self.key = key
         self.key_prefix = f"{key}_update"
         self.dt_filters = dt_filters or {}
         self.no_dt_filters = no_dt_filters or {}
@@ -389,9 +391,10 @@ class UpdateRow:
             updated_before = ss.stsql_updated
             status, msg = self.show()
 
-            ss.stsql_update_ok = status
-            ss.stsql_update_message = msg
-            ss.stsql_opened = True
+            ui_state = get_ui_state(self.key)
+            ui_state.update_ok = status
+            ui_state.update_message = msg
+            ui_state.opened = True
 
             if ss.stsql_updated > updated_before:
                 st.rerun()

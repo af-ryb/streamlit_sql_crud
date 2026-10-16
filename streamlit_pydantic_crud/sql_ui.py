@@ -16,6 +16,7 @@ from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
 from streamlit_pydantic_crud.utils import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
@@ -250,6 +251,7 @@ class SqlUi:
         self.cte = self.get_cte()
 
         # Bootstrap
+        self.state: UiState = get_ui_state(self.key)
         self.set_initial_state()
         self.set_structure()
         self.notification()
@@ -268,7 +270,7 @@ class SqlUi:
 
         # CRUD
         self.crud(df, rows_selected)
-        ss.stsql_opened = False
+        self.state.opened = False
 
         # Returns
         self.df = df
@@ -276,11 +278,7 @@ class SqlUi:
         self.qtty_rows = qtty_rows
 
     def set_initial_state(self):
-        lib.set_state("stsql_updated", 1)
-        lib.set_state("stsql_update_ok", None)
-        lib.set_state("stsql_update_message", None)
-        lib.set_state("stsql_opened", False)
-        lib.set_state("stsql_filters", {})
+        lib.set_state(UPDATED_KEY, 1)
 
     def set_structure(self):
         self.header_container = st.container()
@@ -303,18 +301,17 @@ class SqlUi:
         self.btns_container = self.header_container.container()
 
     def notification(self):
-        if ss.stsql_update_ok is True:
+        if self.state.update_ok is True:
             self.header_container.success(
-                ss.stsql_update_message, icon=":material/thumb_up:"
+                self.state.update_message, icon=":material/thumb_up:"
             )
-        if ss.stsql_update_ok is False:
+        if self.state.update_ok is False:
             self.header_container.error(
-                ss.stsql_update_message, icon=":material/thumb_down:"
+                self.state.update_message, icon=":material/thumb_down:"
             )
         # Clear so the banner shows once, not on every following rerun.
-        if ss.stsql_update_ok is not None:
-            ss.stsql_update_ok = None
-            ss.stsql_update_message = None
+        self.state.update_ok = None
+        self.state.update_message = None
 
     def get_cte(self):
         if isinstance(self.read_instance, Select):
@@ -392,9 +389,9 @@ class SqlUi:
             )
 
         filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
-        if filters != ss.stsql_filters:
+        if filters != self.state.filters:
             page = 1
-            ss.stsql_filters = filters
+            self.state.filters = filters
 
         return items_per_page, page
 
@@ -610,7 +607,7 @@ class SqlUi:
         action = update_model.action_btns(
             self.btns_container,
             qtty_selected=qtty_rows,
-            opened=ss.stsql_opened,
+            opened=self.state.opened,
             show_delete_btn=self.show_delete_btn,
             show_create_btn=self.show_create_btn,
             key=self.key,

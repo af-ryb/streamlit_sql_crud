@@ -16,6 +16,7 @@ from streamlit_pydantic_crud.lib import (
     set_state,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
+from streamlit_pydantic_crud.state import get_ui_state
 from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name
 
 
@@ -43,6 +44,7 @@ class CreateRow:
         self.no_dt_filters = no_dt_filters or {}
 
         self.default_values = default_values or {}
+        self.key = key
         self.key_prefix = f"{key}_create"
 
         set_state("stsql_updated", 0)
@@ -304,9 +306,10 @@ class CreateRow:
             updated_before = ss.stsql_updated
             status, msg = self.show(pretty_name)
 
-            ss.stsql_update_ok = status
-            ss.stsql_update_message = msg
-            ss.stsql_opened = True
+            ui_state = get_ui_state(self.key)
+            ui_state.update_ok = status
+            ui_state.update_message = msg
+            ui_state.opened = True
 
             if ss.stsql_updated > updated_before:
                 st.rerun()
@@ -325,6 +328,7 @@ class DeleteRows:
         self.conn = conn
         self.model = model
         self.rows_id = rows_id
+        self.key = key
         self.key_prefix = f"{key}_delete"
 
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
@@ -391,9 +395,10 @@ class DeleteRows:
             updated_before = ss.stsql_updated
             status, msg = self.show(pretty_name)
 
-            ss.stsql_update_ok = status
-            ss.stsql_update_message = msg
-            ss.stsql_opened = True
+            ui_state = get_ui_state(self.key)
+            ui_state.update_ok = status
+            ui_state.update_message = msg
+            ui_state.opened = True
 
             if ss.stsql_updated > updated_before:
                 st.rerun()
