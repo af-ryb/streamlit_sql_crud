@@ -352,34 +352,36 @@ class DeleteRows:
         st.dataframe({pretty_name: rows_str}, hide_index=True)
 
         btn = st.button("Delete", key=f"{self.key_prefix}_del_btn")
-        if btn:
-            lancs = []
-            with self.conn.session as s:
-                try:
-                    for row_id in self.rows_id:
-                        lanc = s.get(self.model, row_id)
-                        lancs.append(str(lanc))
-                        s.delete(lanc)
-
-                    s.commit()
-                    ss.stsql_updated += 1
-                    qtty = len(self.rows_id)
-                    lancs_str = ", ".join(lancs)
-                    table_name = getattr(
-                        self.model, "__tablename__", self.model.__name__
-                    )
-                    log("DELETE", table_name, lancs_str)
-                    return True, f"Successfully deleted {qtty}"
-                except Exception as e:
-                    ss.stsql_updated += 1
-                    table_name = getattr(
-                        self.model, "__tablename__", self.model.__name__
-                    )
-                    log("DELETE", table_name, "")
-                    logger.exception(f"Delete failed for {table_name}")
-                    return False, format_database_error(e)
-        else:
+        if not btn:
             return None, None
+
+        lancs: list[str] = []
+        missing: list[int] = []
+        with self.conn.session as s:
+            try:
+                for row_id in self.rows_id:
+                    lanc = s.get(self.model, row_id)
+                    if lanc is None:
+                        missing.append(row_id)
+                        continue
+                    lancs.append(str(lanc))
+                    s.delete(lanc)
+
+                s.commit()
+                ss.stsql_updated += 1
+            except Exception as e:
+                ss.stsql_updated += 1
+                log("DELETE", table_name, self.rows_id, success=False)
+                logger.exception(f"Delete failed for {table_name}")
+                return False, format_database_error(e)
+
+        missing_msg = f"Not found (already deleted?): {missing}" if missing else ""
+        if not lancs:
+            return False, missing_msg
+
+        log("DELETE", table_name, ", ".join(lancs))
+        msg = f"Successfully deleted {len(lancs)}"
+        return True, f"{msg}. {missing_msg}" if missing else msg
 
     def show_dialog(self):
         pretty_name = get_pretty_name(self.model.__tablename__)
