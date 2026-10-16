@@ -39,6 +39,7 @@ class PydanticUi[T: BaseModel]:
         self.key = key
         self.session_state_key = session_state_key or key
         self.pk_name = pk_name
+        self.missing_required: list[str] = []
 
         self.input_generator = PydanticInputGenerator(
             schema=schema, key_prefix=key, pk_name=pk_name
@@ -136,13 +137,21 @@ class PydanticUi[T: BaseModel]:
             return None
 
     def _has_required_fields(self, form_data: dict[str, Any]) -> bool:
-        """Check if all required fields have values."""
-        for field_name, field_info in self.schema.model_fields.items():
-            if field_info.is_required() and field_name not in form_data:
-                return False
-            if field_info.is_required() and form_data.get(field_name) in [None, "", []]:
-                return False
-        return True
+        """Check if all required fields have values.
+
+        Records the labels of empty required fields in ``missing_required``.
+        """
+        self.missing_required = [
+            self._field_label(field_name)
+            for field_name, field_info in self.schema.model_fields.items()
+            if field_info.is_required() and form_data.get(field_name) in [None, "", []]
+        ]
+        return not self.missing_required
+
+    def _field_label(self, field_name: str) -> str:
+        """Return the widget label of a field: its description or title-case name."""
+        description = self.schema.model_fields[field_name].description
+        return description or field_name.replace("_", " ").title()
 
     def _display_validation_errors(self, error: ValidationError):
         """Display validation errors in a user-friendly format."""
@@ -268,8 +277,16 @@ class PydanticUi[T: BaseModel]:
 
             # Submit button
             submitted = st.form_submit_button(submit_label, **btn_kwargs)
+            if submitted:
+                self._warn_missing_required()
 
             return model_instance, submitted
+
+    def _warn_missing_required(self) -> None:
+        """Show a warning listing the required fields left empty."""
+        if self.missing_required:
+            names = ", ".join(self.missing_required)
+            st.warning(f"Please fill in the required fields: {names}")
 
     def render_with_columns(self, columns: int = 2) -> T | None:
         """Render form fields in columns layout.
