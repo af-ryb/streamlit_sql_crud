@@ -27,35 +27,35 @@ ruff 199 violations · 14 files unformatted · vulture 15 candidates.
 ## Step 2 — Bugs (regression test first, then fix)
 
 Confirmed by probes:
-1. [ ] PEP 604 `X | None` is not treated as Optional (`get_origin` is `types.UnionType`,
+1. [x] PEP 604 `X | None` is not treated as Optional (`get_origin` is `types.UnionType`,
    not `Union`): `int | None` → `text_input`, `Enum | None`/`list | None` lose
    selectbox/multiselect. `pydantic_utils.py` — introduce one `unwrap_optional()` helper.
-2. [ ] `schema_builder`: datetime → `str` (pydantic emits format `"date-time"`, code
+2. [x] `schema_builder`: datetime → `str` (pydantic emits format `"date-time"`, code
    checks `"datetime"`).
-3. [ ] `schema_builder`: required field with `widget`/`kw` becomes optional
+3. [x] `schema_builder`: required field with `widget`/`kw` becomes optional
    (`default=None`); `$ref`/`$defs` (nested models, enums) unsupported.
-4. [ ] `_parse_array_string` regex uses `\\b` in a raw string: `'{"a,b",c,d}'` →
+4. [x] `_parse_array_string` regex uses `\\b` in a raw string: `'{"a,b",c,d}'` →
    `['a,b']`. Unify with the duplicate parser in `input_fields.input_array`.
-5. [ ] `InputFields.input_enum` (no-schema mode): `opts.index(Status.ACTIVE)` raises
+5. [x] `InputFields.input_enum` (no-schema mode): `opts.index(Status.ACTIVE)` raises
    `ValueError` (`enums` holds names); label is the enum type name; no widget `key`.
 
 From reading (verify with a test first):
-6. [ ] Cache keys miss inputs: `ExistingData.get_text/get_dt` keyed by
+6. [x] Cache keys miss inputs: `ExistingData.get_text/get_dt` keyed by
    `(table_name, updated)` but depend on `default_values` and current row;
    `DeleteRows.get_rows_str` keyed by `rows_id` only (other model, same ids).
-7. [ ] Global `stsql_*` session-state keys are shared between `SqlUi` instances on one
+7. [x] Global `stsql_*` session-state keys are shared between `SqlUi` instances on one
    page (pagination reset via `stsql_filters`, notifications, `opened`).
-8. [ ] `DeleteRows`: failure logged as success (no `success=False`); `s.get()` may
+8. [x] `DeleteRows`: failure logged as success (no `success=False`); `s.get()` may
    return `None` → `s.delete(None)`.
-9. [ ] Falsy defaults (`False`, `0`) ignored: `if default_value:` in
+9. [x] Falsy defaults (`False`, `0`) ignored: `if default_value:` in
    `CreateRow.get_sqlalchemy_fields` / `UpdateRow.get_sqlalchemy_updates`.
-10. [ ] Widget key collisions: no `key` on number/date/checkbox/enum inputs;
+10. [x] Widget key collisions: no `key` on number/date/checkbox/enum inputs;
     `input_array` key lacks prefix; update form key lacks `key_prefix`.
-11. [ ] `input_str` returns the string `"None"` when nothing is selected.
-12. [ ] `@logger.catch()` on `generate_form_data` swallows errors and returns `None`.
-13. [ ] `col.type.python_type` raises `NotImplementedError` for `NullType`/custom types
+11. [x] `input_str` returns the string `"None"` when nothing is selected.
+12. [x] `@logger.catch()` on `generate_form_data` swallows errors and returns `None`.
+13. [x] `col.type.python_type` raises `NotImplementedError` for `NullType`/custom types
     (e.g. `literal_column`) → filters crash.
-14. [ ] `_render_id_field` checks `key_prefix == "update"` (never true);
+14. [x] `_render_id_field` checks `key_prefix == "update"` (never true);
     `PydanticUndefined` detected via `repr`; `default_factory` ignored.
 
 ## Step 3 — Code cleanliness
