@@ -1,7 +1,7 @@
-import contextlib
 import json
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Any, get_args, get_origin
 
 import streamlit as st
@@ -451,12 +451,9 @@ class PydanticInputGenerator:
 
         enum_values = [member.value for member in enum_type.__members__.values()]
         current_index = None
-        if existing_value and hasattr(existing_value, "value"):
-            with contextlib.suppress(ValueError):
-                current_index = enum_values.index(existing_value.value)
-        elif existing_value in enum_values:
-            with contextlib.suppress(ValueError):
-                current_index = enum_values.index(existing_value)
+        member = enum_member(existing_value, enum_type)
+        if member is not None:
+            current_index = enum_values.index(member.value)
 
         return st.selectbox(label, enum_values, index=current_index, key=key)
 
@@ -509,14 +506,7 @@ class PydanticInputGenerator:
         # Use enum values for the options
         enum_values = [member.value for member in enum_type.__members__.values()]
 
-        # Convert existing values to display format
-        current_values = []
-        if existing_value is not None:
-            if isinstance(existing_value, (list, tuple)):
-                current_values = [str(item) for item in existing_value]
-            elif isinstance(existing_value, str):
-                # Handle PostgreSQL array format
-                current_values = parse_pg_array(existing_value)
+        current_values = self.enum_list_defaults(existing_value, enum_type)
 
         return st.multiselect(
             label,
@@ -525,6 +515,37 @@ class PydanticInputGenerator:
             key=key,
             help=f"Available options: {', '.join(enum_values)}",
         )
+
+    @staticmethod
+    def enum_list_defaults(existing_value: Any, enum_type: type[Enum]) -> list:
+        """Map stored enum items (members, values, names, PG literal) to values.
+
+        Items matching no member are dropped with a warning so the multiselect
+        default always stays within its options.
+        """
+        result = []
+        for item in PydanticInputGenerator._to_list(existing_value):
+            member = enum_member(item, enum_type)
+            if member is None:
+                logger.warning(f"Dropping unknown {enum_type.__name__} value {item!r}")
+            elif member.value not in result:
+                result.append(member.value)
+        return result
+
+    @staticmethod
+    def known_defaults(defaults: list, options: list, label: str) -> list:
+        """Return defaults mapped onto options, dropping unknown ones with a warning.
+
+        Matching uses ``match_option`` so enum members and values interchange.
+        """
+        result = []
+        for item in defaults:
+            idx = PydanticInputGenerator.match_option(item, options)
+            if idx is None:
+                logger.warning(f"Dropping default {item!r} not in options of {label}")
+            elif options[idx] not in result:
+                result.append(options[idx])
+        return result
 
     def _extract_enum_from_list_annotation(self, annotation: Any) -> Any:
         """Extract the item type from List[T] or Optional[List[T]]"""
@@ -945,6 +966,10 @@ class PydanticInputGenerator:
         default_vals = PydanticInputGenerator._resolve_multiselect_default(
             existing_value, explicit_default, field_default
         )
+        if not kwargs.get("accept_new_options"):
+            default_vals = PydanticInputGenerator.known_defaults(
+                default_vals, options, label
+            )
         return st.multiselect(
             label, options=options, default=default_vals, key=key, **kwargs
         )
@@ -1119,17 +1144,36 @@ class PydanticInputGenerator:
                     getattr(obj, pk) for obj in existing_value if hasattr(obj, pk)
                 ]
 
-        # Use IDs in the multiselect
+        option_ids = list(id_to_display.keys())
         selected_ids = st.multiselect(
             label,
-            options=list(id_to_display.keys()),
-            default=current_selection_ids,
+            options=option_ids,
+            default=self.known_defaults(current_selection_ids, option_ids, label),
             format_func=lambda x: id_to_display.get(x, str(x)),
             key=key,
             help=f"Select from {len(options)} available options",
         )
 
         return selected_ids
+
+
+def enum_member(value: Any, enum_type: type[Enum]) -> Enum | None:
+    """Resolve a member from itself, its value, its name or ``"Cls.NAME"``.
+
+    Returns None for None and for anything matching no member.
+    """
+    if value is None:
+        return None
+    if isinstance(value, enum_type):
+        return value
+    raw = value.value if isinstance(value, Enum) else value
+    for member in enum_type:
+        if member.value == raw:
+            return member
+    if isinstance(raw, str):
+        name = raw.rsplit(".", 1)[-1]
+        return enum_type.__members__.get(name)
+    return None
 
 
 def _resolved_default(field: FieldInfo) -> Any:
