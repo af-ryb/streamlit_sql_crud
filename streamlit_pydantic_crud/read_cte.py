@@ -10,6 +10,7 @@ from sqlalchemy import CTE, Select, distinct, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
+from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
@@ -171,18 +172,25 @@ class ColFilter:
             default_inicio, default_final = params.get_dt_param(colname, self.key)
 
             inicio_key = f"{self.key_prefix}_date_filter_inicio_{label}"
+            final_key = f"{self.key_prefix}_date_filter_final_{label}"
+            """The URL only seeds the state: a passed value would stick in the
+            browser widget after a cancel."""
+            if inicio_key not in ss:
+                ss[inicio_key] = params.parse_date(default_inicio)
+            if final_key not in ss:
+                ss[final_key] = params.parse_date(default_final)
+
             inicio = inicio_c.date_input(
                 "Inicio",
-                value=default_inicio,
+                value=None,
                 key=inicio_key,
                 args=(colname, inicio_key, "inicio", self.key),
                 on_change=params.set_dt_param,
             )
 
-            final_key = f"{self.key_prefix}_date_filter_final_{label}"
             final = final_c.date_input(
                 "Final",
-                value=default_final,
+                value=None,
                 key=final_key,
                 args=(colname, final_key, "final", self.key),
                 on_change=params.set_dt_param,
@@ -229,14 +237,18 @@ class ColFilter:
 
             label = get_pretty_name(colname)
             key = f"{self.key_prefix}_no_dt_filter_{label}"
-            index = params.get_no_dt_param(col, existing_value, self.key)
+            if key not in ss:
+                """Seed from the URL once; a computed index would hide the
+                native clear button and stick in the browser after a cancel."""
+                index = params.get_no_dt_param(col, existing_value, self.key)
+                ss[key] = None if index is None else existing_value[index]
             col1, col2 = self.container.columns(
                 [0.95, 0.05], vertical_alignment="bottom"
             )
             value = col1.selectbox(
                 label,
                 options=self.existing_values[colname],
-                index=index,
+                index=None,
                 key=key,
                 format_func=params.display_value,
                 args=(colname, key, self.key),

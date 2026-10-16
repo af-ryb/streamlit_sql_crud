@@ -58,3 +58,34 @@ def test_selectbox_native_clear_drops_param(
     monkeypatch.setattr(params, "ss", {NAME: None})
     params.set_no_dt_param("name", NAME)
     assert "name" not in query
+
+
+def test_selectbox_cancel_pushes_none_to_frontend(
+    run_app: Callable[[str], AppTest],
+) -> None:
+    """Popping the state left the browser widget showing the old option."""
+    at = run_app("filter_app.py")
+    at.selectbox(key=NAME).set_value("P2").run()
+    at.button(key=f"{NAME}_btn").click().run()
+    proto = at.selectbox(key=NAME).proto
+    assert proto.set_value
+    assert not proto.HasField("raw_value")
+
+
+def test_date_cancel_pushes_none_to_frontend(
+    run_app: Callable[[str], AppTest],
+) -> None:
+    at = run_app("filter_app.py")
+    at.date_input(key=INICIO).set_value(date(2000, 1, 3)).run()
+    at.button(key=DATE_BTN).click().run()
+    proto = at.date_input(key=INICIO).proto
+    assert proto.set_value
+    assert list(proto.value) == []
+
+
+def test_selected_filter_stays_clearable(run_app: Callable[[str], AppTest]) -> None:
+    """A computed index made Streamlit hide the native clear button."""
+    at = run_app("filter_app.py")
+    at.selectbox(key=NAME).set_value("P2").run()
+    assert not at.selectbox(key=NAME).proto.HasField("default")
+    assert at.selectbox(key=NAME).value == "P2"

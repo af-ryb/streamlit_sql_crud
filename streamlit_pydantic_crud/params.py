@@ -36,6 +36,16 @@ def get_dt_param(colname: str, prefix: str = ""):
     return inicio, final
 
 
+def parse_date(value: str | None) -> date | None:
+    """Return the ISO date in a URL param, or None if absent or invalid."""
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def get_no_dt_param(
     col: KeyedColumnElement, existing: list, prefix: str = ""
 ) -> int | None:
@@ -92,9 +102,10 @@ def set_no_dt_param(colname: str, key: str, prefix: str = ""):
 def clear_filter(widget_keys: list[str], param_names: list[str]) -> None:
     """Reset filter widgets and drop their URL params (button on_click).
 
-    Runs before the rerun, so the widgets render empty again.
+    Setting None (not popping) makes Streamlit push the empty value to the
+    browser widget, which otherwise keeps showing and resending the old one.
     """
     for widget_key in widget_keys:
-        ss.pop(widget_key, None)
+        ss[widget_key] = None
     for name in param_names:
         st.query_params.pop(name, None)
