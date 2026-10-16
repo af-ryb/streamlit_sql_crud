@@ -44,14 +44,6 @@ Most tests drive the real Streamlit runtime through `streamlit.testing.v1.AppTes
 models) and a `run_app` fixture that renders apps from `tests/_apps/` and clears
 `st.cache_data` between runs to prevent memoized queries leaking across tests.
 
-### Documentation
-```bash
-# Serve documentation locally
-task show-docs
-# Deploy documentation to GitHub Pages
-task deploy-docs
-```
-
 ### Development Server
 This repo has no app of its own. To run a live UI, use the example project
 below (`./run.sh`).
@@ -125,7 +117,6 @@ This project uses **uv** as the package manager and requires **Python >=3.12**. 
 
 - Main package: `streamlit_pydantic_crud/` (import name differs from repo name `streamlit_sql_crud`)
 - Tests: `tests/test_*.py` with shared fixtures in `tests/conftest.py` and harness apps in `tests/_apps/`
-- Documentation: `docs/` with MkDocs configuration
 - Config files: `pyproject.toml`, `Taskfile.yml`
 
 ## Development Workflow
@@ -133,7 +124,6 @@ This project uses **uv** as the package manager and requires **Python >=3.12**. 
 1. Make changes to code in `streamlit_pydantic_crud/`
 2. Run quality checks: `task fix` (or `task check` before pushing)
 3. **Test all new functionality** using the test project (see Testing section below)
-4. For documentation changes: `task show-docs` to preview
 
 ## Testing with Example Project
 

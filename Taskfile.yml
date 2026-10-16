@@ -1,16 +1,6 @@
 version: '3'
 
 tasks:
-  deploy-docs:
-    desc: Deploy mkdocs to github
-    cmds:
-      - uv run mkdocs gh-deploy
-
-  show-docs:
-    desc: Serve local mkdocs
-    cmds:
-      - uv run mkdocs serve
-
   fix:
     desc: Lint, format and type-check (mutating)
     cmds:

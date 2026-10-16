@@ -1,4 +1,0 @@
-
-## API
-
-::: streamlit_sql
