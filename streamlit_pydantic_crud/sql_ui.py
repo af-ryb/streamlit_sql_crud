@@ -22,6 +22,7 @@ from streamlit_pydantic_crud.utils import (
     convert_numpy_to_python,
     pk_attr,
     pk_name,
+    row_to_python,
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
@@ -628,7 +629,7 @@ class SqlUi:
             create_row.show_dialog()
         elif action == "copy":
             selected_pos = rows_selected[0]
-            initial_data = df.iloc[selected_pos].to_dict()
+            initial_data = row_to_python(df.iloc[selected_pos])
             create_row = create_delete_model.CreateRow(
                 conn=self.conn,
                 model=self.edit_create_model,

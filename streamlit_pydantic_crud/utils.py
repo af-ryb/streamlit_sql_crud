@@ -4,6 +4,7 @@ import types
 from typing import Any, Union, get_args, get_origin
 
 import numpy as np
+import pandas as pd
 from sqlalchemy import Column
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
 
@@ -134,3 +135,25 @@ def convert_numpy_list_to_python(values: list, model: type[DeclarativeBase]) -> 
         List with values converted to appropriate Python native types
     """
     return [convert_numpy_to_python(value, model) for value in values]
+
+
+def row_to_python(row: pd.Series) -> dict[str, Any]:
+    """Return a DataFrame row as a dict of plain Python values.
+
+    NaN, NaT and pd.NA become None, numpy scalars and arrays become Python
+    scalars and lists, so a copied row never prefills "nan".
+    """
+    return {str(name): cell_to_python(value) for name, value in row.items()}
+
+
+def cell_to_python(value: Any) -> Any:
+    """Convert one DataFrame cell to a plain Python value (see row_to_python)."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if not pd.api.types.is_scalar(value):
+        return value
+    if pd.isna(value):
+        return None
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
