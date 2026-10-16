@@ -297,6 +297,11 @@ class PydanticInputGenerator:
                 key=key,
             )
 
+            if field_value is None and self._is_update_optional(field_info):
+                """Updates dump with exclude_unset: send None to clear a value."""
+                form_data[field_name] = None
+                continue
+
             # Handle field inclusion logic based on operation type
             should_exclude = self._is_empty_value_for_optional_field(
                 field_name, field_value
@@ -347,6 +352,13 @@ class PydanticInputGenerator:
                     form_data[field_name] = field_value
 
         return form_data
+
+    def _is_update_optional(self, field_info: dict[str, Any]) -> bool:
+        """Return True for an optional field while editing an existing row."""
+        is_optional = field_info.get("is_optional", False) or not field_info.get(
+            "is_required", True
+        )
+        return self.operation_type == "update" and is_optional
 
     def _render_field_input(
         self,
@@ -593,13 +605,14 @@ class PydanticInputGenerator:
 
         if input_type == "text_input":
             return self._render_text_input_widget(label, {}, existing_value, key)
+        optional = bool(field_info.get("is_optional"))
         if input_type == "number_input_int":
             return self._render_number_input_widget(
-                label, {"step": 1}, existing_value, key, use_int=True
+                label, {"step": 1}, existing_value, key, True, optional
             )
         if input_type == "number_input_float":
             return self._render_number_input_widget(
-                label, {"step": 0.1}, existing_value, key, use_int=False
+                label, {"step": 0.1}, existing_value, key, False, optional
             )
         if input_type == "checkbox":
             return self._render_checkbox_widget(label, {}, existing_value, key)
@@ -609,7 +622,7 @@ class PydanticInputGenerator:
             return self._render_datetime_input_widget(label, {}, existing_value, key)
         if input_type == "number_input_decimal":
             return self._render_number_input_widget(
-                label, {"step": 0.01}, existing_value, key, use_int=False
+                label, {"step": 0.01}, existing_value, key, False, optional
             )
         if input_type == "text_area_json":
             return self._render_json_text_area_widget(
@@ -650,7 +663,12 @@ class PydanticInputGenerator:
         if widget_type == "number_input":
             use_int = not self._should_use_float_for_number_input(widget_kwargs)
             return self._render_number_input_widget(
-                label, widget_kwargs, value, key, use_int
+                label,
+                widget_kwargs,
+                value,
+                key,
+                use_int,
+                bool(field_info.get("is_optional")),
             )
         if widget_type == "selectbox":
             return self._render_selectbox_widget(
@@ -882,8 +900,12 @@ class PydanticInputGenerator:
         existing_value: Any,
         key: str,
         use_int: bool = False,
+        optional: bool = False,
     ) -> Any:
-        """Render a number input widget with proper type handling"""
+        """Render a number input widget with proper type handling.
+
+        An optional field without a value renders empty and returns None.
+        """
         min_val = widget_kwargs.get("min_value")
         max_val = widget_kwargs.get("max_value")
         step = widget_kwargs.get("step")
@@ -932,8 +954,10 @@ class PydanticInputGenerator:
                 step = 0.1
                 default_val = 0.0
 
+        if optional and existing_value is None:
+            default_val = None
         # Ensure default_val is within bounds
-        if min_val is not None and max_val is not None:
+        elif min_val is not None and max_val is not None:
             default_val = max(min_val, min(max_val, default_val))
         elif min_val is not None:
             default_val = max(min_val, default_val)
