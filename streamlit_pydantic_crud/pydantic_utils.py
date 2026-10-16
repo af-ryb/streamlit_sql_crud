@@ -3,7 +3,7 @@ import json
 import re
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Union, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import streamlit as st
 from loguru import logger
@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
+from streamlit_pydantic_crud.utils import unwrap_optional
 
 
 class PydanticSQLAlchemyConverter:
@@ -157,27 +158,11 @@ class PydanticSQLAlchemyConverter:
                         constraint_type = type(constraint).__name__
                         info["constraints"][constraint_type] = constraint
 
-                # Handle Optional types and extract inner types
-                if get_origin(field.annotation) is Union:
-                    args = get_args(field.annotation)
-                    if len(args) == 2 and type(None) in args:
-                        # Optional field: a two-member Union with None
-                        info["is_optional"] = True
-                        non_none_type = next(
-                            arg for arg in args if arg is not type(None)
-                        )
-                        info["inner_type"] = get_origin(non_none_type) or non_none_type
-                    else:
-                        info["is_optional"] = False
-                        info["inner_type"] = (
-                            get_origin(field.annotation) or field.annotation
-                        )
-                else:
-                    info["is_optional"] = not field.is_required()
-                    # Extract the origin type (e.g., list from List[str])
-                    info["inner_type"] = (
-                        get_origin(field.annotation) or field.annotation
-                    )
+                """Unwrap Optional / `X | None`; inner_type is the origin
+                (e.g. list for list[str])."""
+                inner, is_optional = unwrap_optional(field.annotation)
+                info["is_optional"] = is_optional or not field.is_required()
+                info["inner_type"] = get_origin(inner) or inner
 
                 field_info[field_name] = info
 
@@ -198,16 +183,7 @@ class PydanticSQLAlchemyConverter:
             String indicating the Streamlit input type to use
         """
         inner_type = pydantic_field_info.get("inner_type", str)
-        annotation = pydantic_field_info.get("annotation", str)
-
-        # Check for list types (including typing.List)
-        if (
-            inner_type is list
-            or get_origin(annotation) is list
-            or get_origin(inner_type) is list
-            or str(annotation).startswith("typing.List")
-            or str(inner_type).startswith("typing.List")
-        ):
+        if inner_type is list or get_origin(inner_type) is list:
             return "multiselect"
 
         # Map Python types to Streamlit input types
@@ -227,8 +203,6 @@ class PydanticSQLAlchemyConverter:
             return "number_input_decimal"
         if inner_type is dict:
             return "text_area_json"
-        if inner_type is list:
-            return "multiselect"
         return "text_input"  # Default fallback
 
 
@@ -457,74 +431,27 @@ class PydanticInputGenerator:
         return self._render_basic_input(label, field_info, value, key=key)
 
     def _is_enum_field(self, annotation: Any) -> bool:
-        """Check if field is a single enum"""
-        # Direct enum check
-        if annotation and hasattr(annotation, "__members__"):
-            return True
-
-        # Check Optional[Enum] (Union with None)
-        origin = get_origin(annotation)
-        if origin is Union:
-            args = get_args(annotation)
-            for arg in args:
-                if arg is not type(None) and hasattr(arg, "__members__"):
-                    return True
-
-        return False
+        """Check if field is a single enum or an optional enum"""
+        inner, _ = unwrap_optional(annotation)
+        return bool(inner) and hasattr(inner, "__members__")
 
     def _is_enum_list_field(self, annotation: Any) -> bool:
-        """Check if field is a list of enums"""
-        origin = get_origin(annotation)
-        args = get_args(annotation)
-
-        # Check List[Enum]
-        if origin is list and args and hasattr(args[0], "__members__"):
-            return True
-
-        # Check Optional[List[Enum]]
-        if origin is Union and args:
-            for arg in args:
-                if arg is not type(None):
-                    inner_origin = get_origin(arg)
-                    inner_args = get_args(arg)
-                    if (
-                        inner_origin is list
-                        and inner_args
-                        and hasattr(inner_args[0], "__members__")
-                    ):
-                        return True
-        return False
+        """Check if field is a list of enums (optionally wrapped in Optional)"""
+        item = self._extract_enum_from_list_annotation(annotation)
+        return item is not None and hasattr(item, "__members__")
 
     @staticmethod
     def _is_list_field(annotation: Any) -> bool:
-        """Check if specified field is a regular list"""
-        origin = get_origin(annotation)
-
-        # Check List[T]
-        if origin is list:
-            return True
-
-        # Check Optional[List[T]]
-        if origin is Union:
-            args = get_args(annotation)
-            for arg in args:
-                if arg is not type(None) and get_origin(arg) is list:
-                    return True
-        return False
+        """Check if specified field is a list, optionally wrapped in Optional"""
+        inner, _ = unwrap_optional(annotation)
+        return get_origin(inner) is list
 
     @staticmethod
     def _render_enum_input(
         label: str, annotation: Any, existing_value: Any, key: str
     ) -> Any:
         """Render selectbox for single enum"""
-        # Extract the actual enum type from Optional[Enum] if needed
-        enum_type = annotation
-        if get_origin(annotation) is Union:
-            args = get_args(annotation)
-            for arg in args:
-                if arg is not type(None) and hasattr(arg, "__members__"):
-                    enum_type = arg
-                    break
+        enum_type, _ = unwrap_optional(annotation)
 
         enum_values = [member.value for member in enum_type.__members__.values()]
         current_index = None
@@ -605,23 +532,11 @@ class PydanticInputGenerator:
         )
 
     def _extract_enum_from_list_annotation(self, annotation: Any) -> Any:
-        """Extract enum type from List[Enum] or Optional[List[Enum]]"""
-        origin = get_origin(annotation)
-        args = get_args(annotation)
-
-        # Check List[Enum]
-        if origin is list and args:
+        """Extract the item type from List[T] or Optional[List[T]]"""
+        inner, _ = unwrap_optional(annotation)
+        args = get_args(inner)
+        if get_origin(inner) is list and args:
             return args[0]
-
-        # Check Optional[List[Enum]]
-        if origin is Union and args:
-            for arg in args:
-                if arg is not type(None):
-                    inner_origin = get_origin(arg)
-                    inner_args = get_args(arg)
-                    if inner_origin is list and inner_args:
-                        return inner_args[0]
-
         return None
 
     @staticmethod

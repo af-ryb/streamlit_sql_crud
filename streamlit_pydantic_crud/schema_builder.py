@@ -1,7 +1,7 @@
 """Schema builder utilities for creating Pydantic models from JSON schemas."""
 
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, create_model
 
@@ -189,8 +189,5 @@ def _list_of(item_type: Any) -> Any:
 
 
 def _optional(base_type: Any) -> Any:
-    """Build ``Optional[base_type]`` from a type known only at runtime.
-
-    Kept as typing.Optional: ``X | None`` is not yet detected as optional downstream.
-    """
-    return Optional[base_type]  # noqa: UP045
+    """Build ``base_type | None`` from a type known only at runtime."""
+    return base_type | None

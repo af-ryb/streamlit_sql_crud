@@ -1,10 +1,30 @@
 """Utility functions for streamlit_sql package"""
 
-from typing import Any
+import types
+from typing import Any, Union, get_args, get_origin
 
 import numpy as np
 from sqlalchemy import Column
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
+
+
+def unwrap_optional(tp: Any) -> tuple[Any, bool]:
+    """Split ``X | None`` / ``Optional[X]`` into ``(X, True)``.
+
+    Anything else, including unions of several non-None types, is returned
+    unchanged as ``(tp, False)``.
+    """
+    if is_union(tp):
+        args = get_args(tp)
+        non_none = [arg for arg in args if arg is not type(None)]
+        if len(args) == 2 and len(non_none) == 1:
+            return non_none[0], True
+    return tp, False
+
+
+def is_union(tp: Any) -> bool:
+    """Return True for both ``typing.Union[...]`` and PEP 604 ``X | Y``."""
+    return get_origin(tp) in (Union, types.UnionType)
 
 
 def pk_column(model: type[DeclarativeBase]) -> Column:
