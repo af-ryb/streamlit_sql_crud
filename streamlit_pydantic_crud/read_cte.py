@@ -14,6 +14,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
+from streamlit_pydantic_crud.filters import safe_python_type
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
 
 hash_funcs: dict[Any, Callable[[Any], Any]] = {
@@ -27,15 +28,16 @@ hash_funcs: dict[Any, Callable[[Any], Any]] = {
 }
 
 
-def get_existing_cond(col: KeyedColumnElement):
-    is_str = col.type.python_type is str
-    is_bool = col.type.python_type is bool
+def get_existing_cond(col: KeyedColumnElement) -> bool:
+    py_type = safe_python_type(col)
+    is_str = py_type is str
+    is_bool = py_type is bool
     is_enum = isinstance(col.type, SQLEnum)
     is_not_pk = not col.primary_key
 
     fks = list(col.foreign_keys)
     has_fk = len(fks) > 0
-    int_not_fk_cond = col.type.python_type is int and not has_fk
+    int_not_fk_cond = py_type is int and not has_fk
 
     # Check for JSON column types that don't support SELECT DISTINCT in BigQuery
     is_json_type = False
@@ -146,7 +148,7 @@ class ColFilter:
             col
             for col in self.cte.columns
             if (col.description or col.name) in self.available_col_filter
-            and col.type.python_type is date
+            and safe_python_type(col) is date
         ]
 
         result: dict[str, tuple[date | None, date | None]] = {}
@@ -210,7 +212,7 @@ class ColFilter:
             col
             for col in self.cte.columns
             if (col.description or col.name) in self.available_col_filter
-            and col.type.python_type is not date
+            and safe_python_type(col) not in (None, date)
         ]
 
         result: dict[str, Any] = {}

@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import streamlit as st
 from dateutil.relativedelta import relativedelta
@@ -8,10 +9,23 @@ from loguru import logger
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
+
+
+def safe_python_type(col: ColumnElement[Any]) -> type | None:
+    """Return the column's Python type, or None when the type has none.
+
+    `NullType` (e.g. `literal_column`, untyped `func.*`) and some custom types
+    raise NotImplementedError; callers treat such columns as not filterable.
+    """
+    try:
+        return col.type.python_type
+    except NotImplementedError:
+        return None
 
 
 @dataclass
@@ -101,7 +115,7 @@ class ExistingData:
         opts = {
             col.name: _self._get_str_opts(col)
             for col in _self.cols
-            if col.type.python_type is str
+            if safe_python_type(col) is str
         }
         return opts
 
@@ -134,7 +148,7 @@ class ExistingData:
         opts = {
             col.name: _self._get_dt_col(col)
             for col in _self.cols
-            if col.type.python_type is date
+            if safe_python_type(col) is date
         }
         return opts
 

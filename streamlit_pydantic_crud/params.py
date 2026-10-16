@@ -4,7 +4,7 @@ import streamlit as st
 from sqlalchemy.sql.elements import KeyedColumnElement
 from streamlit import session_state as ss
 
-from streamlit_pydantic_crud.filters import FkOpt
+from streamlit_pydantic_crud.filters import FkOpt, safe_python_type
 
 
 def get_dt_param(colname: str):
@@ -32,12 +32,13 @@ def get_no_dt_param(col: KeyedColumnElement, existing: list):
     if not param:
         return None
 
-    if col.type.python_type is str:
+    py_type = safe_python_type(col)
+    if py_type is str:
         if param in existing:
             return existing.index(param)
         return None
 
-    if col.type.python_type is not int:
+    if py_type is not int:
         return None
 
     try:
