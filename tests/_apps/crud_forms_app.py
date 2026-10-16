@@ -2,6 +2,7 @@
 
 The DB path comes from CRUD_TEST_DB and the scenario from CRUD_TEST_MODE, so
 one app covers enum editing, default values and widget key collisions.
+Seeding more than ten distinct notes keeps `note` a free-text input.
 """
 
 import os
@@ -70,7 +71,6 @@ eng = create_engine(f"sqlite:///{DB}")
 Base.metadata.create_all(eng)
 with Session(eng) as s:
     if not s.query(Task).first():
-        """More than ten distinct notes keep `note` a free-text input."""
         s.add(Owner(id=1, name="Ann"))
         s.add_all(
             Task(

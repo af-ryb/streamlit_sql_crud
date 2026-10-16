@@ -133,7 +133,8 @@ class InputFields:
         # Treat as enum if there are threshold or fewer unique values
         return len(opts) <= self.string_enum_threshold and len(opts) > 0
 
-    def input_str(self, col_name: str, value=None):
+    def input_str(self, col_name: str, value: str | None = None) -> str | None:
+        """Render a free-text datalist input; return None when left empty."""
         key = f"{self.key_prefix}_{col_name}"
         val_index, opts = self.get_col_str_opts(col_name, value)
         input_value = stDatalist(
@@ -142,8 +143,9 @@ class InputFields:
             index=val_index,
             key=key,
         )
-        result = str(input_value)
-        return result
+        if input_value is None or input_value == "":
+            return None
+        return str(input_value)
 
     @staticmethod
     def coerce_decimal(value: float | int | None, step: float | None) -> Decimal | None:
