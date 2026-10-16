@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import cache
 from typing import Literal
 
 import streamlit as st
@@ -63,8 +64,8 @@ def show_crud_dialog(
     wrap_show()
 
 
-@st.cache_data
-def get_pretty_name(name: str):
+@cache
+def get_pretty_name(name: str) -> str:
     pretty_name = " ".join(name.split("_")).title()
     return pretty_name
 
@@ -125,9 +126,3 @@ def format_database_error(error: Exception) -> str:
 
     # Default fallback - return original error but more user-friendly
     return f"💾 Database Error: {error_str}"
-
-
-if __name__ == "__main__":
-    set_logging(False)
-    log(action="CREATE", table="tableA", row="rowabc")
-    log(action="UPDATE", table="tableB", row="xyzw", success=False)

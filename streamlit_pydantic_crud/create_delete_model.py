@@ -101,11 +101,6 @@ class CreateRow:
             no_dt_filters=self.no_dt_filters,
         )
 
-    def get_fields(self):
-        if self.create_schema:
-            return self.get_pydantic_fields()
-        return self.get_sqlalchemy_fields()
-
     def get_pydantic_fields(self):
         """Generate fields using PydanticUi"""
         # Use PydanticUi to render the form with submit button

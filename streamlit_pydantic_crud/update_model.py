@@ -162,11 +162,6 @@ class UpdateRow:
     def get_session_key(self):
         return f"{self.key_prefix}_form_data"
 
-    def get_updates(self):
-        if self.update_schema:
-            return self.get_pydantic_updates()
-        return self.get_sqlalchemy_updates()
-
     def get_pydantic_updates(self):
         """Generate updates using PydanticUi"""
         # Use PydanticUi to render the form with submit button
@@ -193,14 +188,6 @@ class UpdateRow:
             updated[col_name] = input_value
 
         return updated
-
-    def save(self, updated: dict | BaseModel):
-        if self.update_schema and isinstance(updated, BaseModel):
-            return self.save_pydantic(updated)
-        if isinstance(updated, dict):
-            return self.save_sqlalchemy(updated)
-        msg = f"Invalid updated data type: {type(updated)}"
-        raise ValueError(msg)
 
     def save_pydantic(self, validated_data: BaseModel):
         """Save using pre-validated Pydantic data from PydanticUi"""

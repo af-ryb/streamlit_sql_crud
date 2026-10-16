@@ -311,16 +311,6 @@ class SqlUi:
 
         return cte
 
-    @staticmethod
-    def _get_column_info(col) -> tuple[str, str]:
-        """Helper method to get column information for joined columns
-
-        Returns a tuple of (display_name, col_name)
-        """
-        display_name = col.description or col.name
-
-        return display_name, col.name
-
     def _stmt_has_orm_options(self, stmt: Select) -> bool:
         """Check if the statement has ORM options like selectinload"""
         # Check if the original read_instance has options applied

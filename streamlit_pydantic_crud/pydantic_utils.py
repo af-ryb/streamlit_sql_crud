@@ -88,51 +88,6 @@ class PydanticSQLAlchemyConverter:
             raise
 
     @staticmethod
-    def pydantic_to_sqlalchemy(
-        pydantic_data: BaseModel, sqlalchemy_model: type[DeclarativeBase]
-    ) -> DeclarativeBase:
-        """Convert Pydantic model instance to SQLAlchemy model instance
-
-        Args:
-            pydantic_data: Validated Pydantic model instance
-            sqlalchemy_model: SQLAlchemy model class
-
-        Returns:
-            SQLAlchemy model instance
-        """
-        try:
-            # Get the validated data as dict
-            data_dict = pydantic_data.model_dump(exclude_unset=True)
-
-            # Create the SQLAlchemy instance
-            return sqlalchemy_model(**data_dict)
-
-        except Exception:
-            logger.exception("Error converting Pydantic to SQLAlchemy")
-            raise
-
-    @staticmethod
-    def sqlalchemy_to_pydantic(
-        sqlalchemy_instance: DeclarativeBase, pydantic_schema: type[BaseModel]
-    ) -> BaseModel:
-        """Convert SQLAlchemy model instance to Pydantic model instance
-
-        Args:
-            sqlalchemy_instance: SQLAlchemy model instance
-            pydantic_schema: Pydantic schema class
-
-        Returns:
-            Pydantic model instance
-        """
-        try:
-            # Use from_attributes=True configuration to create from SQLAlchemy instance
-            return pydantic_schema.model_validate(sqlalchemy_instance)
-
-        except Exception:
-            logger.exception("Error converting SQLAlchemy to Pydantic")
-            raise
-
-    @staticmethod
     def get_pydantic_field_info(schema: type[BaseModel]) -> dict[str, dict[str, Any]]:
         """Extract field information from Pydantic schema for input generation
 
@@ -342,16 +297,6 @@ class PydanticInputGenerator:
                             form_data[field_name] = field_value
                     else:
                         form_data[field_name] = field_value
-            elif self.operation_type == "update" and field_value is not None:
-                # This branch handles cases where should_exclude is True but we're in update mode
-                # (This shouldn't happen anymore since we changed _is_empty_value_for_optional_field)
-                field_info_local = self.field_info.get(field_name, {})
-                is_optional = is_optional_field(field_info_local)
-                if is_optional and (field_value == "" or field_value == []):
-                    form_data[field_name] = None
-                elif not is_optional:
-                    # Include non-optional fields even if empty for validation
-                    form_data[field_name] = field_value
 
         return form_data
 
