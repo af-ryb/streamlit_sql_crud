@@ -191,17 +191,8 @@ class ColFilter:
                 st.query_params.pop(f"{colname}_final", None)
                 st.rerun()
 
-            assert inicio is None or isinstance(inicio, date)
-            if inicio is None:
-                inicio_date = None
-            else:
-                inicio_date = date(inicio.year, inicio.month, inicio.day)
-
-            assert final is None or isinstance(final, date)
-            if final is None:
-                final_date = None
-            else:
-                final_date = date(final.year, final.month, final.day)
+            inicio_date = to_date(inicio)
+            final_date = to_date(final)
 
             result[colname] = inicio_date, final_date
 
@@ -249,46 +240,48 @@ class ColFilter:
         return result
 
 
-def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, str | None]):
+def to_date(value: object) -> date | None:
+    """Return `value` as a plain date, or None if it is not a date."""
+    if not isinstance(value, date):
+        return None
+    return date(value.year, value.month, value.day)
+
+
+def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, Any]) -> Select:
+    """Select from `cte` with the non-date filters applied."""
     stmt = select(cte)
 
     for colname, value in no_dt_filters.items():
         if value:
-            # First try to get by description, then by name
-            col = None
-            for c in cte.columns:
-                if c.description == colname or c.name == colname:
-                    col = c
-                    break
-
-            if col is not None:
-                stmt = stmt.where(col == value)
-            else:
-                assert col is not None, f"Column '{colname}' not found in CTE"
+            stmt = stmt.where(find_cte_col(cte, colname) == value)
 
     return stmt
 
 
-def get_stmt_no_pag(cte: CTE, col_filter: ColFilter):
-    no_dt_filters = col_filter.no_dt_filters
-    stmt = get_stmt_no_pag_dt(cte, no_dt_filters)
+def get_stmt_no_pag(cte: CTE, col_filter: ColFilter) -> Select:
+    """Select from `cte` with all filters of `col_filter` applied."""
+    stmt = get_stmt_no_pag_dt(cte, col_filter.no_dt_filters)
 
-    dt_filters = col_filter.dt_filters
-    for colname, filters in dt_filters.items():
-        # First try to get by description, then by name
-        col = None
-        for c in cte.columns:
-            if c.description == colname or c.name == colname:
-                col = c
-                break
-        assert col is not None
-        inicio, final = filters
+    for colname, (inicio, final) in col_filter.dt_filters.items():
+        col = find_cte_col(cte, colname)
         if inicio:
             stmt = stmt.where(col >= inicio)
         if final:
             stmt = stmt.where(col <= final)
 
     return stmt
+
+
+def find_cte_col(cte: CTE, colname: str) -> KeyedColumnElement:
+    """Return the CTE column matching `colname` by description, then name.
+
+    Raises ValueError when the CTE has no such column.
+    """
+    for c in cte.columns:
+        if c.description == colname or c.name == colname:
+            return c
+    msg = f"Filter column '{colname}' not found in the read query"
+    raise ValueError(msg)
 
 
 @st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)

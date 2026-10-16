@@ -53,9 +53,11 @@ def get_no_dt_param(col: KeyedColumnElement, existing: list):
 def set_dt_param(colname: str, key: str, suffix: str):
     query_key = f"{colname}_{suffix}"
     value = ss[key]
-    assert isinstance(value, date)
-    value_str = value.strftime("%Y-%m-%d")
-    st.query_params[query_key] = value_str
+    if isinstance(value, date):
+        st.query_params[query_key] = value.strftime("%Y-%m-%d")
+    else:
+        """A cleared date input yields None: drop the filter param."""
+        st.query_params.pop(query_key, None)
 
 
 def set_no_dt_param(colname: str, key: str):
