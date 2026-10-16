@@ -13,9 +13,9 @@ from streamlit.testing.v1 import AppTest
 from streamlit_pydantic_crud import params
 
 NAME = "_create_no_dt_filter_Name"
-INICIO = "_create_date_filter_inicio_Born"
-FINAL = "_create_date_filter_final_Born"
-DATE_BTN = f"st_sql_{INICIO}_{FINAL}_cancel_btn"
+START = "_create_date_filter_start_Born"
+END = "_create_date_filter_end_Born"
+DATE_BTN = f"st_sql_{START}_{END}_cancel_btn"
 
 
 def ids(at: AppTest) -> str:
@@ -38,14 +38,14 @@ def test_selectbox_cancel_clears_filter(run_app: Callable[[str], AppTest]) -> No
 
 def test_date_cancel_clears_filter(run_app: Callable[[str], AppTest]) -> None:
     at = run_app("filter_app.py")
-    at.date_input(key=INICIO).set_value(date(2000, 1, 3)).run()
+    at.date_input(key=START).set_value(date(2000, 1, 3)).run()
     assert ids(at) == "IDS=3,4"
-    assert at.query_params.get("born_inicio") == ["2000-01-03"]
+    assert at.query_params.get("born_start") == ["2000-01-03"]
 
     at.button(key=DATE_BTN).click().run()
     assert not at.exception
-    assert at.date_input(key=INICIO).value is None
-    assert "born_inicio" not in at.query_params
+    assert at.date_input(key=START).value is None
+    assert "born_start" not in at.query_params
     assert ids(at) == "IDS=1,2,3,4"
 
 
@@ -76,9 +76,9 @@ def test_date_cancel_pushes_none_to_frontend(
     run_app: Callable[[str], AppTest],
 ) -> None:
     at = run_app("filter_app.py")
-    at.date_input(key=INICIO).set_value(date(2000, 1, 3)).run()
+    at.date_input(key=START).set_value(date(2000, 1, 3)).run()
     at.button(key=DATE_BTN).click().run()
-    proto = at.date_input(key=INICIO).proto
+    proto = at.date_input(key=START).proto
     assert proto.set_value
     assert list(proto.value) == []
 
@@ -89,3 +89,9 @@ def test_selected_filter_stays_clearable(run_app: Callable[[str], AppTest]) -> N
     at.selectbox(key=NAME).set_value("P2").run()
     assert not at.selectbox(key=NAME).proto.HasField("default")
     assert at.selectbox(key=NAME).value == "P2"
+
+
+def test_date_filter_labels_are_english(run_app: Callable[[str], AppTest]) -> None:
+    at = run_app("filter_app.py")
+    assert at.date_input(key=START).label == "Start"
+    assert at.date_input(key=END).label == "End"

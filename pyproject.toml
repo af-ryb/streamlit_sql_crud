@@ -24,7 +24,10 @@ line-length = 88
 
 [tool.ruff.lint]
 ignore = ["SIM108", "E501", "RET504", "PLR", "PTH123", "ISC001","ARG001","ARG002", "C901"]
-select = ["UP","YTT", "A", "EM", "ICN","I", "SIM", "E", "F", "C90", "B", "C4", "FA", "ISC", "INP", "PIE", "RET", "TID", "ARG", "PTH", "ERA", "PD", "PL", "FLY", "NPY", "PERF", "FURB", "RUF"]
+select = ["UP","YTT", "A", "EM", "ICN","I", "SIM", "E", "F", "C90", "B", "C4", "FA", "ISC", "INP", "PIE", "RET", "TID", "ARG", "PTH", "ERA", "PD", "PL", "FLY", "NPY", "PERF", "FURB", "RUF", "ANN201", "ANN202", "ANN204", "ANN205", "ANN206"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
 
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["_self"]
@@ -41,7 +44,7 @@ filterwarnings = [
 
 [project]
 name = "streamlit_pydantic_crud"
-version = "0.6.0"
+version = "0.6.1"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
 requires-python = ">=3.12"

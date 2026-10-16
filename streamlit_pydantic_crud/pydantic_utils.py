@@ -1,4 +1,6 @@
 import json
+from collections.abc import Sequence
+from contextlib import AbstractContextManager, nullcontext
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -9,8 +11,14 @@ from loguru import logger
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy.orm import DeclarativeBase
+from streamlit.delta_generator import DeltaGenerator
 
-from streamlit_pydantic_crud.utils import parse_pg_array, unwrap_optional
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    OperationType,
+)
+from streamlit_pydantic_crud.utils import parse_pg_array, tablename, unwrap_optional
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
 
 
@@ -32,7 +40,7 @@ class PydanticSQLAlchemyConverter:
             bool: True if compatible, False otherwise
         """
         try:
-            schema_fields = schema.model_fields
+            schema_fields = model_fields(schema)
             sqlalchemy_columns = {col.name: col for col in model.__table__.columns}
 
             # Get all relationships in the model
@@ -57,7 +65,7 @@ class PydanticSQLAlchemyConverter:
                     and field_name not in relationships
                     and field_name not in properties
                 ):
-                    table_name = getattr(model, "__tablename__", model.__name__)
+                    table_name = tablename(model)
                     logger.warning(
                         f"Field '{field_name}' in {schema.__name__} not found in {table_name}"
                     )
@@ -85,51 +93,6 @@ class PydanticSQLAlchemyConverter:
             raise
 
     @staticmethod
-    def pydantic_to_sqlalchemy(
-        pydantic_data: BaseModel, sqlalchemy_model: type[DeclarativeBase]
-    ) -> DeclarativeBase:
-        """Convert Pydantic model instance to SQLAlchemy model instance
-
-        Args:
-            pydantic_data: Validated Pydantic model instance
-            sqlalchemy_model: SQLAlchemy model class
-
-        Returns:
-            SQLAlchemy model instance
-        """
-        try:
-            # Get the validated data as dict
-            data_dict = pydantic_data.model_dump(exclude_unset=True)
-
-            # Create the SQLAlchemy instance
-            return sqlalchemy_model(**data_dict)
-
-        except Exception:
-            logger.exception("Error converting Pydantic to SQLAlchemy")
-            raise
-
-    @staticmethod
-    def sqlalchemy_to_pydantic(
-        sqlalchemy_instance: DeclarativeBase, pydantic_schema: type[BaseModel]
-    ) -> BaseModel:
-        """Convert SQLAlchemy model instance to Pydantic model instance
-
-        Args:
-            sqlalchemy_instance: SQLAlchemy model instance
-            pydantic_schema: Pydantic schema class
-
-        Returns:
-            Pydantic model instance
-        """
-        try:
-            # Use from_attributes=True configuration to create from SQLAlchemy instance
-            return pydantic_schema.model_validate(sqlalchemy_instance)
-
-        except Exception:
-            logger.exception("Error converting SQLAlchemy to Pydantic")
-            raise
-
-    @staticmethod
     def get_pydantic_field_info(schema: type[BaseModel]) -> dict[str, dict[str, Any]]:
         """Extract field information from Pydantic schema for input generation
 
@@ -142,7 +105,7 @@ class PydanticSQLAlchemyConverter:
         try:
             field_info = {}
 
-            for field_name, field in schema.model_fields.items():
+            for field_name, field in model_fields(schema).items():
                 info = {
                     "annotation": field.annotation,
                     "default": _resolved_default(field),
@@ -213,11 +176,11 @@ class PydanticInputGenerator:
         self,
         schema: type[BaseModel],
         key_prefix: str = "",
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
-        operation_type: str = "create",
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
+        operation_type: OperationType = "create",
         pk_name: str = "id",
-    ):
+    ) -> None:
         self.schema = schema
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
@@ -246,12 +209,8 @@ class PydanticInputGenerator:
             True if the value should be excluded from form data (create operations only)
         """
         field_info = self.field_info.get(field_name, {})
-        is_optional = field_info.get("is_optional", False) or not field_info.get(
-            "is_required", True
-        )
-
         # Only filter empty values for optional fields
-        if not is_optional:
+        if not is_optional_field(field_info):
             return False
 
         # For update operations, we want to include empty values as None
@@ -263,12 +222,16 @@ class PydanticInputGenerator:
         return bool(field_value == "" or field_value == [] or field_value is None)
 
     def generate_form_data(
-        self, existing_values: dict[str, Any] | None = None
+        self,
+        existing_values: dict[str, Any] | None = None,
+        containers: Sequence[DeltaGenerator] | None = None,
     ) -> dict[str, Any]:
         """Generate form data dictionary for validation
 
         Args:
             existing_values: Dictionary of existing values for update operations
+            containers: Containers (e.g. ``st.columns``) the fields are spread
+                over in turn; None renders them in the current container
 
         Returns:
             Dictionary of form field values
@@ -277,6 +240,7 @@ class PydanticInputGenerator:
         form_data = {}
         existing_values = existing_values or {}
 
+        rendered = 0
         for field_name, field_info in self.field_info.items():
             key = f"{self.key_prefix}_{field_name}" if self.key_prefix else field_name
             existing_value = existing_values.get(field_name)
@@ -288,14 +252,18 @@ class PydanticInputGenerator:
             # Get field annotation for better type detection
             annotation = field_info.get("annotation")
 
-            # Use our custom implementation for all field types
-            field_value = self._render_field_input(
-                field_name,
-                field_info=field_info,
-                annotation=annotation,
-                existing_value=existing_value,
-                key=key,
+            container: AbstractContextManager[Any] = (
+                containers[rendered % len(containers)] if containers else nullcontext()
             )
+            rendered += 1
+            with container:
+                field_value = self.render_field(
+                    field_name,
+                    field_info=field_info,
+                    annotation=annotation,
+                    existing_value=existing_value,
+                    key=key,
+                )
 
             if field_value is None and self._is_update_optional(field_info):
                 """Updates dump with exclude_unset: send None to clear a value."""
@@ -329,38 +297,21 @@ class PydanticInputGenerator:
                     # For update operations, check if we need to convert empty values to None
                     if self.operation_type == "update":
                         field_info_local = self.field_info.get(field_name, {})
-                        is_optional = field_info_local.get(
-                            "is_optional", False
-                        ) or not field_info_local.get("is_required", True)
+                        is_optional = is_optional_field(field_info_local)
                         if is_optional and (field_value == "" or field_value == []):
                             form_data[field_name] = None
                         else:
                             form_data[field_name] = field_value
                     else:
                         form_data[field_name] = field_value
-            elif self.operation_type == "update" and field_value is not None:
-                # This branch handles cases where should_exclude is True but we're in update mode
-                # (This shouldn't happen anymore since we changed _is_empty_value_for_optional_field)
-                field_info_local = self.field_info.get(field_name, {})
-                is_optional = field_info_local.get(
-                    "is_optional", False
-                ) or not field_info_local.get("is_required", True)
-                if is_optional and (field_value == "" or field_value == []):
-                    form_data[field_name] = None
-                elif not is_optional:
-                    # Include non-optional fields even if empty for validation
-                    form_data[field_name] = field_value
 
         return form_data
 
     def _is_update_optional(self, field_info: dict[str, Any]) -> bool:
         """Return True for an optional field while editing an existing row."""
-        is_optional = field_info.get("is_optional", False) or not field_info.get(
-            "is_required", True
-        )
-        return self.operation_type == "update" and is_optional
+        return self.operation_type == "update" and is_optional_field(field_info)
 
-    def _render_field_input(
+    def render_field(
         self,
         field_name: str,
         field_info: dict[str, Any],
@@ -381,11 +332,9 @@ class PydanticInputGenerator:
 
         # Custom widgets resolve session/kw/default precedence themselves, so
         # pass the raw session value (not pre-filled with the default).
-        if (
-            hasattr(self.schema, "model_fields")
-            and field_name in self.schema.model_fields
-        ):
-            field = self.schema.model_fields[field_name]
+        schema_fields = model_fields(self.schema)
+        if field_name in schema_fields:
+            field = schema_fields[field_name]
             json_schema_extra = getattr(field, "json_schema_extra", None)
             if json_schema_extra:
                 return self._render_custom_field(
@@ -441,12 +390,12 @@ class PydanticInputGenerator:
     def _is_enum_field(self, annotation: Any) -> bool:
         """Check if field is a single enum or an optional enum"""
         inner, _ = unwrap_optional(annotation)
-        return bool(inner) and hasattr(inner, "__members__")
+        return is_enum_type(inner)
 
     def _is_enum_list_field(self, annotation: Any) -> bool:
         """Check if field is a list of enums (optionally wrapped in Optional)"""
         item = self._extract_enum_from_list_annotation(annotation)
-        return item is not None and hasattr(item, "__members__")
+        return is_enum_type(item)
 
     @staticmethod
     def _is_list_field(annotation: Any) -> bool:
@@ -605,7 +554,7 @@ class PydanticInputGenerator:
 
         if input_type == "text_input":
             return self._render_text_input_widget(label, {}, existing_value, key)
-        optional = bool(field_info.get("is_optional"))
+        optional = is_optional_field(field_info)
         if input_type == "number_input_int":
             return self._render_number_input_widget(
                 label, {"step": 1}, existing_value, key, True, optional
@@ -668,7 +617,7 @@ class PydanticInputGenerator:
                 value,
                 key,
                 use_int,
-                bool(field_info.get("is_optional")),
+                is_optional_field(field_info),
             )
         if widget_type == "selectbox":
             return self._render_selectbox_widget(
@@ -806,9 +755,9 @@ class PydanticInputGenerator:
         for i, opt in enumerate(options):
             if opt == value:
                 return i
-        target = value.value if hasattr(value, "value") else value
+        target = value.value if isinstance(value, Enum) else value
         for i, opt in enumerate(options):
-            opt_val = opt.value if hasattr(opt, "value") else opt
+            opt_val = opt.value if isinstance(opt, Enum) else opt
             if opt_val == target:
                 return i
         return None
@@ -1042,7 +991,7 @@ class PydanticInputGenerator:
         options: list,
         display_field: str | None = None,
         value_field: str | None = None,
-    ):
+    ) -> None:
         """Set foreign key options for a field with preloaded data.
 
         Args:
@@ -1115,7 +1064,7 @@ class PydanticInputGenerator:
 
     def set_many_to_many_options(
         self, field_name: str, options: list, display_field: str, pk_name: str = "id"
-    ):
+    ) -> None:
         """Set many-to-many options for a field with preloaded data."""
         self.many_to_many_data[field_name] = {
             "options": options,
@@ -1212,3 +1161,21 @@ def _resolved_default(field: FieldInfo) -> Any:
     if field.is_required():
         return None
     return field.get_default(call_default_factory=True, validated_data={})
+
+
+def model_fields(schema: type[BaseModel] | BaseModel) -> dict[str, FieldInfo]:
+    """Return a schema's fields, reading them from the class even for instances."""
+    cls = schema if isinstance(schema, type) else type(schema)
+    return cls.model_fields
+
+
+def is_optional_field(field_info: dict[str, Any]) -> bool:
+    """Return True when extracted field info marks the field optional."""
+    return bool(field_info.get("is_optional")) or not field_info.get(
+        "is_required", True
+    )
+
+
+def is_enum_type(tp: Any) -> bool:
+    """Return True when ``tp`` is an ``Enum`` subclass (not an unwrapped Optional)."""
+    return isinstance(tp, type) and issubclass(tp, Enum)

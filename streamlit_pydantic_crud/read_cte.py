@@ -17,6 +17,7 @@ from streamlit.delta_generator import DeltaGenerator
 from streamlit_pydantic_crud import params
 from streamlit_pydantic_crud.filters import safe_python_type
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
+from streamlit_pydantic_crud.utils import is_json_type
 
 SHOW_ALL = "Show All"
 
@@ -43,12 +44,8 @@ def get_existing_cond(col: KeyedColumnElement) -> bool:
     int_not_fk_cond = py_type is int and not has_fk
 
     # Check for JSON column types that don't support SELECT DISTINCT in BigQuery
-    is_json_type = False
     col_type_name = str(col.type).upper()
-    if "JSON" in col_type_name or (
-        hasattr(col.type, "__class__") and "JSON" in col.type.__class__.__name__.upper()
-    ):
-        is_json_type = True
+    is_json = is_json_type(col.type)
 
     # Also check for other unsupported types like ARRAY, STRUCT in BigQuery
     unsupported_types = ["ARRAY", "STRUCT", "RECORD"]
@@ -58,7 +55,7 @@ def get_existing_cond(col: KeyedColumnElement) -> bool:
 
     cond = (
         is_not_pk
-        and not is_json_type
+        and not is_json
         and not is_unsupported_type
         and (is_str or is_bool or int_not_fk_cond or is_enum)
     )
@@ -71,7 +68,7 @@ def get_existing_values(
     cte: CTE,
     updated: int,
     available_col_filter: list[str] | None = None,
-):
+) -> dict[str, Any]:
     if not available_col_filter:
         available_col_filter = []
 
@@ -132,12 +129,11 @@ class ColFilter:
         self.dt_filters = self.get_dt_filters()
         self.no_dt_filters = self.get_no_dt_filters()
 
-    def __str__(self):
+    def __str__(self) -> str:
         dt_str = ", ".join(
             f"{k}: {dt.strftime('%d/%m/%Y')}"
             for k, v in self.dt_filters.items()
             for dt in v
-            if v
             if dt
         )
         no_dt_str = ", ".join(
@@ -154,7 +150,7 @@ class ColFilter:
 
         return filter_str
 
-    def get_dt_filters(self):
+    def get_dt_filters(self) -> dict[str, tuple[date | None, date | None]]:
         cols = [
             col
             for col in self.cte.columns
@@ -168,59 +164,59 @@ class ColFilter:
             colname = col.description or col.name
             label = get_pretty_name(colname)
             self.container.write(label)
-            inicio_c, final_c, btn_c = self.container.columns(
+            start_c, end_c, btn_c = self.container.columns(
                 [0.475, 0.475, 0.05], vertical_alignment="bottom"
             )
 
-            default_inicio, default_final = params.get_dt_param(colname, self.key)
+            default_start, default_end = params.get_dt_param(colname, self.key)
 
-            inicio_key = f"{self.key_prefix}_date_filter_inicio_{label}"
-            final_key = f"{self.key_prefix}_date_filter_final_{label}"
+            start_key = f"{self.key_prefix}_date_filter_start_{label}"
+            end_key = f"{self.key_prefix}_date_filter_end_{label}"
             """The URL only seeds the state: a passed value would stick in the
             browser widget after a cancel."""
-            if inicio_key not in ss:
-                ss[inicio_key] = params.parse_date(default_inicio)
-            if final_key not in ss:
-                ss[final_key] = params.parse_date(default_final)
+            if start_key not in ss:
+                ss[start_key] = params.parse_date(default_start)
+            if end_key not in ss:
+                ss[end_key] = params.parse_date(default_end)
 
-            inicio = inicio_c.date_input(
-                "Inicio",
+            start = start_c.date_input(
+                "Start",
                 value=None,
-                key=inicio_key,
-                args=(colname, inicio_key, "inicio", self.key),
+                key=start_key,
+                args=(colname, start_key, "start", self.key),
                 on_change=params.set_dt_param,
             )
 
-            final = final_c.date_input(
-                "Final",
+            end = end_c.date_input(
+                "End",
                 value=None,
-                key=final_key,
-                args=(colname, final_key, "final", self.key),
+                key=end_key,
+                args=(colname, end_key, "end", self.key),
                 on_change=params.set_dt_param,
             )
 
             btn_c.button(
                 "",
                 icon=":material/cancel:",
-                key=f"st_sql_{inicio_key}_{final_key}_cancel_btn",
+                key=f"st_sql_{start_key}_{end_key}_cancel_btn",
                 on_click=params.clear_filter,
                 args=(
-                    [inicio_key, final_key],
+                    [start_key, end_key],
                     [
-                        params.param_name(self.key, f"{colname}_inicio"),
-                        params.param_name(self.key, f"{colname}_final"),
+                        params.param_name(self.key, f"{colname}_start"),
+                        params.param_name(self.key, f"{colname}_end"),
                     ],
                 ),
             )
 
-            inicio_date = to_date(inicio)
-            final_date = to_date(final)
+            start_date = to_date(start)
+            end_date = to_date(end)
 
-            result[colname] = inicio_date, final_date
+            result[colname] = start_date, end_date
 
         return result
 
-    def get_no_dt_filters(self):
+    def get_no_dt_filters(self) -> dict[str, Any]:
         cols = [
             col
             for col in self.cte.columns
@@ -292,12 +288,12 @@ def get_stmt_no_pag(cte: CTE, col_filter: ColFilter) -> Select:
     """Select from `cte` with all filters of `col_filter` applied."""
     stmt = get_stmt_no_pag_dt(cte, col_filter.no_dt_filters)
 
-    for colname, (inicio, final) in col_filter.dt_filters.items():
+    for colname, (start, end) in col_filter.dt_filters.items():
         col = find_cte_col(cte, colname)
-        if inicio:
-            stmt = stmt.where(col >= inicio)
-        if final:
-            stmt = stmt.where(col <= final)
+        if start:
+            stmt = stmt.where(col >= start)
+        if end:
+            stmt = stmt.where(col <= end)
 
     return stmt
 
@@ -315,7 +311,7 @@ def find_cte_col(cte: CTE, colname: str) -> KeyedColumnElement:
 
 
 @st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)
-def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
+def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int) -> int:
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:
         qtty = s.execute(stmt).scalar_one()
@@ -337,7 +333,7 @@ def show_pagination(
     opts_items_page: tuple[int | None, ...],
     key: str = "",
     default_index: int = 0,
-):
+) -> tuple[int, int]:
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
     # Convert options to strings, replacing None with "Show All"
@@ -406,7 +402,7 @@ def get_stmt_pag(
     limit: int,
     page: int,
     order_by: KeyedColumnElement | None = None,
-):
+) -> Select[Any]:
     offset = (page - 1) * limit
     stmt = stmt_no_pag
     # A deterministic ORDER BY keeps rows from jumping between pages.

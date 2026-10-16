@@ -93,6 +93,21 @@ def test_delete_failure_is_logged_as_failure(clicked: MagicMock) -> None:
     assert clicked.call_args.kwargs.get("success") is False
 
 
+def test_delete_several_existing_rows(
+    clicked: MagicMock, engine: Engine, session: Session
+) -> None:
+    """Every listed row is deleted, the others stay."""
+    conn = as_conn(FakeConn(engine))
+
+    status, _msg = DeleteRows(conn, Department, [1, 2], key="d").show("Dept")
+
+    assert status is True
+    session.expire_all()
+    assert session.get(Department, 1) is None
+    assert session.get(Department, 2) is None
+    assert session.get(Department, 3) is not None
+
+
 def test_delete_skips_rows_already_gone(
     clicked: MagicMock, engine: Engine, session: Session
 ) -> None:
@@ -102,6 +117,7 @@ def test_delete_skips_rows_already_gone(
     status, msg = DeleteRows(conn, Department, [1, 999], key="d").show("Dept")
 
     assert status is True
+    assert msg is not None
     assert "999" in msg
     session.expire_all()
     assert session.get(Department, 1) is None
@@ -117,4 +133,5 @@ def test_delete_with_no_rows_left_fails_gracefully(
     status, msg = DeleteRows(conn, Department, [999], key="d").show("Dept")
 
     assert status is False
+    assert msg is not None
     assert "999" in msg

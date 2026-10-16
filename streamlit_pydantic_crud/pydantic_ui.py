@@ -8,7 +8,12 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    OperationType,
+)
+from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator, model_fields
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
 )
@@ -26,7 +31,7 @@ class PydanticUi[T: BaseModel]:
         key: str,
         session_state_key: str | None = None,
         pk_name: str = "id",
-    ):
+    ) -> None:
         """Initialize PydanticUi.
 
         Args:
@@ -99,7 +104,7 @@ class PydanticUi[T: BaseModel]:
             session_state_key=session_state_key,
         )
 
-    def _init_session_state(self):
+    def _init_session_state(self) -> None:
         """Initialize session state for form data persistence."""
         if self.session_state_key not in st.session_state:
             st.session_state[self.session_state_key] = {}
@@ -110,31 +115,7 @@ class PydanticUi[T: BaseModel]:
         Returns:
             Validated Pydantic model instance or None if validation fails
         """
-        try:
-            # Get existing values from session state
-            existing_values = st.session_state.get(self.session_state_key, {})
-
-            # Generate form data using input generator
-            form_data = self.input_generator.generate_form_data(existing_values)
-
-            # Update session state with current form data
-            st.session_state[self.session_state_key] = form_data
-
-            # Validate and return model instance
-            if self._has_required_fields(form_data):
-                try:
-                    model_instance = self.schema(**form_data)
-                    return model_instance
-                except ValidationError as e:
-                    self._display_validation_errors(e)
-                    return None
-
-            return None
-
-        except Exception as e:
-            logger.exception("Error rendering PydanticUi form")
-            st.error(f"Form rendering error: {e!s}")
-            return None
+        return self._render_form()
 
     def _has_required_fields(self, form_data: dict[str, Any]) -> bool:
         """Check if all required fields have values.
@@ -143,17 +124,17 @@ class PydanticUi[T: BaseModel]:
         """
         self.missing_required = [
             self._field_label(field_name)
-            for field_name, field_info in self.schema.model_fields.items()
+            for field_name, field_info in model_fields(self.schema).items()
             if field_info.is_required() and form_data.get(field_name) in [None, "", []]
         ]
         return not self.missing_required
 
     def _field_label(self, field_name: str) -> str:
         """Return the widget label of a field: its description or title-case name."""
-        description = self.schema.model_fields[field_name].description
+        description = model_fields(self.schema)[field_name].description
         return description or field_name.replace("_", " ").title()
 
-    def _display_validation_errors(self, error: ValidationError):
+    def _display_validation_errors(self, error: ValidationError) -> None:
         """Display validation errors in a user-friendly format."""
         st.error("Validation errors:")
         for err in error.errors():
@@ -181,18 +162,18 @@ class PydanticUi[T: BaseModel]:
             logger.exception("Error getting session data")
             return None
 
-    def clear_session_data(self):
+    def clear_session_data(self) -> None:
         """Clear session state data for this form."""
         if self.session_state_key in st.session_state:
             del st.session_state[self.session_state_key]
 
         # Also clear individual widget keys
-        for field_name in self.schema.model_fields:
+        for field_name in model_fields(self.schema):
             widget_key = f"{self.key}_{field_name}"
             if widget_key in st.session_state:
                 del st.session_state[widget_key]
 
-    def update_session_data(self, data: dict[str, Any] | BaseModel | None):
+    def update_session_data(self, data: dict[str, Any] | BaseModel | None) -> None:
         """Update session state with new data.
 
         Args:
@@ -208,7 +189,7 @@ class PydanticUi[T: BaseModel]:
                 data_dict = data
 
             # Clear existing widget keys first to avoid Streamlit error
-            for field_name in self.schema.model_fields:
+            for field_name in model_fields(self.schema):
                 widget_key = f"{self.key}_{field_name}"
                 if widget_key in st.session_state:
                     del st.session_state[widget_key]
@@ -237,7 +218,7 @@ class PydanticUi[T: BaseModel]:
         already committed but render() hasn't been called yet.
         """
         data = {}
-        for field_name in self.schema.model_fields:
+        for field_name in model_fields(self.schema):
             widget_key = f"{self.key}_{field_name}"
             if widget_key in st.session_state:
                 data[field_name] = st.session_state[widget_key]
@@ -297,50 +278,27 @@ class PydanticUi[T: BaseModel]:
         Returns:
             Validated Pydantic model instance or None if validation fails
         """
+        return self._render_form(columns)
+
+    def _render_form(self, columns: int | None = None) -> T | None:
+        """Render the fields (spread over `columns` if given) and validate them."""
         try:
-            # Get existing values from session state
             existing_values = st.session_state.get(self.session_state_key, {})
-
-            # Create columns
-            cols = st.columns(columns)
-
-            # Distribute fields across columns
-            field_names = list(self.schema.model_fields.keys())
-            form_data = {}
-
-            for i, field_name in enumerate(field_names):
-                col_index = i % columns
-                field_info = self.input_generator.field_info[field_name]
-
-                with cols[col_index]:
-                    # Generate field input
-                    key = f"{self.key}_{field_name}"
-                    existing_value = existing_values.get(field_name)
-                    annotation = field_info.get("annotation")
-
-                    field_value = self.input_generator._render_field_input(
-                        field_name, field_info, annotation, existing_value, key
-                    )
-
-                    if field_value is not None:
-                        form_data[field_name] = field_value
-
-            # Update session state
+            containers = st.columns(columns) if columns else None
+            form_data = self.input_generator.generate_form_data(
+                existing_values, containers
+            )
             st.session_state[self.session_state_key] = form_data
 
-            # Validate and return model instance
             if self._has_required_fields(form_data):
                 try:
-                    model_instance = self.schema(**form_data)
-                    return model_instance
+                    return self.schema(**form_data)
                 except ValidationError as e:
                     self._display_validation_errors(e)
-                    return None
-
             return None
 
         except Exception as e:
-            logger.exception("Error rendering PydanticUi form with columns")
+            logger.exception("Error rendering PydanticUi form")
             st.error(f"Form rendering error: {e!s}")
             return None
 
@@ -356,10 +314,10 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
         schema: type[T],
         key: str,
         session_state_key: str | None = None,
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
         pk_name: str = "id",
-    ):
+    ) -> None:
         """Initialize PydanticCrudUi for CRUD operations.
 
         Args:
@@ -394,7 +352,7 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
 
         self._init_session_state()
 
-    def set_operation_type(self, operation_type: str):
+    def set_operation_type(self, operation_type: OperationType) -> None:
         """Update the operation type for the input generator.
 
         Args:

@@ -1,9 +1,10 @@
 from functools import cached_property
+from typing import Any
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import func, select
-from sqlalchemy.orm import RelationshipProperty, Session
+from sqlalchemy import Select, func, select
+from sqlalchemy.orm import RelationshipDirection, RelationshipProperty, Session
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud import lib, read_cte
@@ -25,14 +26,16 @@ class ReadManyRel:
         self.rel = rel
 
     @cached_property
-    def other_col(self):
+    def other_col(self) -> Any:
         pairs = self.rel.local_remote_pairs
-        assert pairs is not None
+        if pairs is None:
+            msg = f"Relationship {self.rel} has no local/remote column pairs"
+            raise ValueError(msg)
         col = pairs[0][1]
         return col
 
     @cached_property
-    def other_model(self):
+    def other_model(self) -> Any:
         other_col = self.other_col
         other_colname: str = other_col.table.name
         mappers = self.model.registry.mappers
@@ -46,13 +49,13 @@ class ReadManyRel:
         return other_model
 
     @cached_property
-    def suffix_key(self):
+    def suffix_key(self) -> str:
         model_name: str = self.model.__table__.name
         key = f"{model_name}_{self.other_col.name}_{self.rel.target}"
         return key
 
     @property
-    def base_stmt(self):
+    def base_stmt(self) -> Select[Any]:
         stmt = select(pk_attr(self.other_model), self.other_model)
 
         if self.model != self.other_model:
@@ -61,18 +64,20 @@ class ReadManyRel:
         stmt = stmt.where(self.other_col == self.model_id)
         return stmt
 
-    def get_qtty_rows(self, session: Session):
+    def get_qtty_rows(self, session: Session) -> int:
         subq = self.base_stmt.subquery()
         stmt = select(func.count(subq.c[pk_name(self.other_model)]))
         qtty = session.execute(stmt).scalar_one()
         return qtty
 
-    def get_stmt_pag(self, items_per_page: int, page: int):
+    def get_stmt_pag(self, items_per_page: int, page: int) -> Select[Any]:
         offset = (page - 1) * items_per_page
         stmt = self.base_stmt.offset(offset).limit(items_per_page)
         return stmt
 
-    def get_data(self, session: Session, items_per_page: int, page: int):
+    def get_data(
+        self, session: Session, items_per_page: int, page: int
+    ) -> list[tuple[int, str]]:
         stmt = self.get_stmt_pag(items_per_page, page)
         rows = session.execute(stmt)
 
@@ -83,7 +88,7 @@ class ReadManyRel:
 @st.fragment
 def show_rel(
     conn: SQLConnection, model, model_id: int | str, rel: RelationshipProperty
-):
+) -> None:
     read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
@@ -143,8 +148,12 @@ def show_rel(
                 delete_rows.show(pretty_name)
 
 
-def show_rels(conn: SQLConnection, model, model_id: int | str):
-    rels = [rel for rel in model.__mapper__.relationships if rel.direction.value == 1]
+def show_rels(conn: SQLConnection, model, model_id: int | str) -> None:
+    rels = [
+        rel
+        for rel in model.__mapper__.relationships
+        if rel.direction is RelationshipDirection.ONETOMANY
+    ]
 
     for rel in rels:
         show_rel(conn, model, model_id, rel)

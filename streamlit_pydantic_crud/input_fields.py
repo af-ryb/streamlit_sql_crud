@@ -1,6 +1,6 @@
-import re
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 import streamlit as st
 from sqlalchemy import ARRAY, Numeric
@@ -11,6 +11,7 @@ from streamlit_datalist import stDatalist
 
 from streamlit_pydantic_crud.filters import ExistingData, FkOpt
 from streamlit_pydantic_crud.lib import get_pretty_name
+from streamlit_pydantic_crud.utils import parse_pg_array
 
 
 class InputFields:
@@ -48,7 +49,7 @@ class InputFields:
         self.existing_data = existing_data
         self.string_enum_threshold = string_enum_threshold
 
-    def input_fk(self, col_name: str, value: int | None):
+    def input_fk(self, col_name: str, value: int | None) -> int | None:
         key = f"{self.key_prefix}_{col_name}"
         opts = self.existing_data.fk[col_name]
 
@@ -62,10 +63,14 @@ class InputFields:
         )
         if not input_value:
             return None
-        assert isinstance(input_value, FkOpt)
+        if not isinstance(input_value, FkOpt):
+            msg = f"Expected an FkOpt option for {col_name}, got {input_value!r}"
+            raise TypeError(msg)
         return input_value.idx
 
-    def get_col_str_opts(self, col_name: str, value: str | None):
+    def get_col_str_opts(
+        self, col_name: str, value: str | None
+    ) -> tuple[int | None, list[str]]:
         opts = list(self.existing_data.text[col_name])
         if value is None:
             return None, opts
@@ -101,7 +106,7 @@ class InputFields:
             key=f"{self.key_prefix}_{col_name}",
         )
 
-    def input_str_enum(self, col_name: str, value=None):
+    def input_str_enum(self, col_name: str, value=None) -> str | None:
         """Handle string columns that should be treated as enums using selectbox."""
         key = f"{self.key_prefix}_{col_name}"
         pretty_name = get_pretty_name(col_name)
@@ -138,9 +143,9 @@ class InputFields:
         key = f"{self.key_prefix}_{col_name}"
         val_index, opts = self.get_col_str_opts(col_name, value)
         input_value = stDatalist(
-            col_name,
+            get_pretty_name(col_name),
             list(opts),
-            index=val_index,
+            index=val_index,  # ty: ignore[invalid-argument-type]
             key=key,
         )
         if input_value is None or input_value == "":
@@ -160,8 +165,33 @@ class InputFields:
             value_dec = value_dec.quantize(Decimal(str(step)))
         return value_dec
 
+    def input_number(
+        self,
+        col_name: str,
+        value: float | None,
+        step: float | None,
+        nullable: bool = False,
+    ) -> float | None:
+        """Render an int/float number input; a nullable one can be emptied.
+
+        A widget created with a value refills a cleared field on blur, so a
+        nullable column seeds its state and starts with `value=None` instead.
+        """
+        key = f"{self.key_prefix}_{col_name}"
+        if nullable:
+            if key not in st.session_state:
+                st.session_state[key] = value
+            value = None
+        return st.number_input(
+            get_pretty_name(col_name), value=value, step=step, key=key
+        )
+
     def input_numeric(
-        self, col_name: str, scale: int | None, value: object = None
+        self,
+        col_name: str,
+        scale: int | None,
+        value: object = None,
+        nullable: bool = False,
     ) -> Decimal | None:
         """Render a number input for a Numeric column and return a Decimal."""
         step = None
@@ -169,16 +199,11 @@ class InputFields:
             step = 10 ** (scale * -1)
 
         value_float = float(str(value)) if value is not None else None
-        input_value = st.number_input(
-            get_pretty_name(col_name),
-            value=value_float,
-            step=step,
-            key=f"{self.key_prefix}_{col_name}",
-        )
+        input_value = self.input_number(col_name, value_float, step, nullable)
 
         return self.coerce_decimal(input_value, step)
 
-    def input_array(self, col_name: str, col_type, col_value=None):
+    def input_array(self, col_name: str, col_type, col_value=None) -> list[Any]:
         """Handle ARRAY column input with multiselect"""
         pretty_name = get_pretty_name(col_name)
 
@@ -188,27 +213,7 @@ class InputFields:
             if isinstance(col_value, (list, tuple)):
                 current_values = list(col_value)
             elif isinstance(col_value, str):
-                # Handle various string representations
-                value_str = col_value.strip()
-
-                # PostgreSQL array format: {val1,val2} or {"val1","val2"}
-                if value_str.startswith("{") and value_str.endswith("}"):
-                    value_str = value_str[1:-1]  # Remove braces
-
-                # Handle quoted values and unquoted values
-                if value_str:
-                    # Split by comma, but handle quoted strings
-                    parts = re.findall(r'"([^"]*)"|\b([^,]+)\b', value_str)
-                    for quoted, unquoted in parts:
-                        val = quoted or unquoted
-                        if val.strip():
-                            current_values.append(val.strip())
-
-                # Fallback: simple comma split
-                if not current_values and value_str:
-                    current_values = [
-                        v.strip() for v in value_str.split(",") if v.strip()
-                    ]
+                current_values = parse_pg_array(col_value)
 
         # Get existing values for options (if available)
         existing_values = self.existing_data.text.get(col_name, set())
@@ -239,9 +244,11 @@ class InputFields:
 
         return selected_values
 
-    def get_input_value(self, col: KeyedColumnElement, col_value):
+    def get_input_value(self, col: KeyedColumnElement, col_value) -> Any:
         col_name = col.description
-        assert col_name is not None
+        if col_name is None:
+            msg = "Column has no name; cannot build an input for it"
+            raise ValueError(msg)
         pretty_name = get_pretty_name(col_name)
         key = f"{self.key_prefix}_{col_name}"
 
@@ -263,14 +270,12 @@ class InputFields:
             else:
                 input_value = self.input_str(col_name, col_value)
         elif col.type.python_type is int:
-            input_value = st.number_input(pretty_name, value=col_value, step=1, key=key)
+            input_value = self.input_number(col_name, col_value, 1, col.nullable)
         elif col.type.python_type is float:
-            input_value = st.number_input(
-                pretty_name, value=col_value, step=0.1, key=key
-            )
+            input_value = self.input_number(col_name, col_value, 0.1, col.nullable)
         elif isinstance(col.type, Numeric):
             scale = col.type.scale
-            input_value = self.input_numeric(col_name, scale, col_value)
+            input_value = self.input_numeric(col_name, scale, col_value, col.nullable)
         elif col.type.python_type is datetime:
             input_value = st.datetime_input(pretty_name, value=col_value, key=key)
         elif col.type.python_type is date:

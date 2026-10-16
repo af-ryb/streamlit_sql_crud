@@ -19,7 +19,7 @@ class Simple(BaseModel):
 def test_generate_form_data_propagates_errors() -> None:
     gen = PydanticInputGenerator(Simple)
     with (
-        patch.object(gen, "_render_field_input", side_effect=RuntimeError("boom")),
+        patch.object(gen, "render_field", side_effect=RuntimeError("boom")),
         pytest.raises(RuntimeError, match="boom"),
     ):
         gen.generate_form_data()
@@ -31,7 +31,7 @@ def test_pydantic_ui_render_reports_generation_error(mock_st: MagicMock) -> None
     mock_st.session_state = {}
     ui = PydanticUi(schema=Simple, key="f")
     with patch.object(
-        ui.input_generator, "_render_field_input", side_effect=RuntimeError("boom")
+        ui.input_generator, "render_field", side_effect=RuntimeError("boom")
     ):
         assert ui.render() is None
     mock_st.error.assert_called_once()
@@ -88,7 +88,7 @@ def test_field_info_default_resolution() -> None:
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
 def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
-    gen._render_field_input(
+    gen.render_field(
         "tags", gen.field_info["tags"], list[str], existing_value=None, key="f_tags"
     )
     assert mock_st.multiselect.call_args.kwargs["default"] == ["a", "b"]
@@ -97,7 +97,7 @@ def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
 def test_default_factory_selects_custom_widget_option(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
-    gen._render_field_input(
+    gen.render_field(
         "level", gen.field_info["level"], str, existing_value=None, key="f_level"
     )
     assert mock_st.selectbox.call_args.kwargs["index"] == 1

@@ -3,6 +3,7 @@ import math
 import warnings
 from collections.abc import Callable, Iterable
 from decimal import Decimal
+from enum import Enum
 from functools import partial
 from typing import Any
 
@@ -18,14 +19,20 @@ from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
-from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.pydantic_utils import (
+    PydanticSQLAlchemyConverter,
+    model_fields,
+)
 from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
 from streamlit_pydantic_crud.utils import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
+    is_json_type,
     pk_attr,
     pk_name,
     row_to_python,
+    tablename,
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
@@ -62,12 +69,12 @@ class SqlUi:
         create_schema: type[BaseModel] | None = None,
         update_schema: type[BaseModel] | None = None,
         read_schema: type[BaseModel] | None = None,
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
         items_per_page_default: int = 0,
-    ):
+    ) -> None:
         """The CRUD interface will be displayes just by initializing the class
 
         Arguments:
@@ -212,45 +219,14 @@ class SqlUi:
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
 
-        # Validate schema compatibility if provided
-        if self.create_schema and not (
-            PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.create_schema, self.edit_create_model, "create"
-            )
+        """Fail fast when a Pydantic schema does not fit the edited model."""
+        for schema, operation in (
+            (self.create_schema, "create"),
+            (self.update_schema, "update"),
+            (self.read_schema, "read"),
         ):
-            table_name = getattr(
-                self.edit_create_model,
-                "__tablename__",
-                self.edit_create_model.__name__,
-            )
-            msg = f"Create schema {self.create_schema.__name__} is not compatible with {table_name}"
-            raise ValueError(msg)
-
-        if self.update_schema and not (
-            PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.update_schema, self.edit_create_model, "update"
-            )
-        ):
-            table_name = getattr(
-                self.edit_create_model,
-                "__tablename__",
-                self.edit_create_model.__name__,
-            )
-            msg = f"Update schema {self.update_schema.__name__} is not compatible with {table_name}"
-            raise ValueError(msg)
-
-        if self.read_schema and not (
-            PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.read_schema, self.edit_create_model, "read"
-            )
-        ):
-            table_name = getattr(
-                self.edit_create_model,
-                "__tablename__",
-                self.edit_create_model.__name__,
-            )
-            msg = f"Read schema {self.read_schema.__name__} is not compatible with {table_name}"
-            raise ValueError(msg)
+            if schema is not None:
+                self._validate_schema(schema, operation)
 
         self.cte = self.get_cte()
 
@@ -281,18 +257,27 @@ class SqlUi:
         self.rows_selected = rows_selected
         self.qtty_rows = qtty_rows
 
-    def set_initial_state(self):
+    def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
+        """Raise ValueError if `schema` is incompatible with the edited model."""
+        if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+            schema, self.edit_create_model, operation
+        ):
+            table_name = tablename(self.edit_create_model)
+            msg = (
+                f"{operation.capitalize()} schema {schema.__name__} "
+                f"is not compatible with {table_name}"
+            )
+            raise ValueError(msg)
+
+    def set_initial_state(self) -> None:
         lib.set_state(UPDATED_KEY, 1)
 
-    def set_structure(self):
+    def set_structure(self) -> None:
         self.header_container = st.container()
         self.data_container = st.container()
         self.pag_container = st.container()
 
-        table_name = getattr(
-            self.edit_create_model, "__tablename__", self.edit_create_model.__name__
-        )
-        table_name = lib.get_pretty_name(table_name)
+        table_name = lib.get_pretty_name(tablename(self.edit_create_model))
         self.header_container.header(table_name, divider="orange")
 
         self.expander_container = self.header_container.expander(
@@ -304,7 +289,7 @@ class SqlUi:
 
         self.btns_container = self.header_container.container()
 
-    def notification(self):
+    def notification(self) -> None:
         if self.state.update_ok is True:
             self.header_container.success(
                 self.state.update_message, icon=":material/thumb_up:"
@@ -317,7 +302,7 @@ class SqlUi:
         self.state.update_ok = None
         self.state.update_message = None
 
-    def get_cte(self):
+    def get_cte(self) -> CTE:
         if isinstance(self.read_instance, Select):
             cte = self.read_instance.cte()
         elif isinstance(self.read_instance, CTE):
@@ -326,16 +311,6 @@ class SqlUi:
             cte = select(self.read_instance).cte()
 
         return cte
-
-    @staticmethod
-    def _get_column_info(col) -> tuple[str, str]:
-        """Helper method to get column information for joined columns
-
-        Returns a tuple of (display_name, col_name)
-        """
-        display_name = col.description or col.name
-
-        return display_name, col.name
 
     def _stmt_has_orm_options(self, stmt: Select) -> bool:
         """Check if the statement has ORM options like selectinload"""
@@ -357,7 +332,7 @@ class SqlUi:
                         return True
         return False
 
-    def filter(self):
+    def filter(self) -> read_cte.ColFilter:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
@@ -383,7 +358,9 @@ class SqlUi:
 
         return col_filter
 
-    def pagination(self, qtty_rows: int, col_filter: read_cte.ColFilter):
+    def pagination(
+        self, qtty_rows: int, col_filter: read_cte.ColFilter
+    ) -> tuple[int, int]:
         with self.pag_container:
             items_per_page, page = read_cte.show_pagination(
                 qtty_rows,
@@ -399,16 +376,16 @@ class SqlUi:
 
         return items_per_page, page
 
-    def convert_arrow(self, df: pd.DataFrame):
+    def convert_arrow(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = self.cte.columns
         for col in cols:
             col_name = col.name
             if col_name in df.columns:
                 if isinstance(col.type, SQLEnum):
                     df[col_name] = df[col_name].map(
-                        lambda v: v.value if hasattr(v, "value") else v
+                        lambda v: v.value if isinstance(v, Enum) else v
                     )
-                elif "JSON" in str(col.type).upper():
+                elif is_json_type(col.type):
                     # Handle JSON columns for display
                     df[col_name] = df[col_name].apply(
                         lambda x: (
@@ -436,7 +413,7 @@ class SqlUi:
     def get_df(
         self,
         stmt_pag: Select,
-    ):
+    ) -> pd.DataFrame:
         # Check if we have ORM options but explicit column selection (incompatible combination)
         has_orm_options = self._stmt_has_orm_options(stmt_pag)
         has_explicit_columns = self._stmt_has_explicit_columns(stmt_pag)
@@ -466,7 +443,7 @@ class SqlUi:
 
         return df
 
-    def _execute_with_pydantic_schema(self, stmt: Select):
+    def _execute_with_pydantic_schema(self, stmt: Select) -> pd.DataFrame:
         """Execute query using ORM execution for many-to-many or selectinload support"""
         with self.conn.session as s:
             has_orm_options = self._stmt_has_orm_options(stmt)
@@ -553,10 +530,10 @@ class SqlUi:
                     if isinstance(value, list):
                         # Handle list of enums
                         validated_data[key] = [
-                            item.value if hasattr(item, "value") else str(item)
+                            item.value if isinstance(item, Enum) else str(item)
                             for item in value
                         ]
-                    elif hasattr(value, "value"):
+                    elif isinstance(value, Enum):
                         # Handle single enum
                         validated_data[key] = value.value
 
@@ -566,7 +543,7 @@ class SqlUi:
             df = pd.DataFrame(validated_rows)
             return df
 
-    def show_df(self, df: pd.DataFrame):
+    def show_df(self, df: pd.DataFrame) -> DataframeState | None:
         if df.empty:
             st.header(":red[Table is Empty]")
             return None
@@ -574,7 +551,7 @@ class SqlUi:
         column_order = None
         if self.read_schema:
             # Display only the columns specified in the schema
-            column_order = list(self.read_schema.model_fields.keys())
+            column_order = list(model_fields(self.read_schema).keys())
 
         formatter = {
             **numeric_formatters(self.cte, df.columns),
@@ -604,7 +581,7 @@ class SqlUi:
         return f"{self.key}_df_sql_ui_{ss.stsql_updated}"
 
     @staticmethod
-    def get_rows_selected(selection_state: DataframeState | None):
+    def get_rows_selected(selection_state: DataframeState | None) -> list[int]:
         """Get rows selected from Streamlit dataframe selection state"""
         rows_pos = []
         if (
@@ -616,7 +593,7 @@ class SqlUi:
 
         return rows_pos
 
-    def crud(self, df: pd.DataFrame, rows_selected: list[int]):
+    def crud(self, df: pd.DataFrame, rows_selected: list[int]) -> None:
         qtty_rows = len(rows_selected)
         action = update_model.action_btns(
             self.btns_container,

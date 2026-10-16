@@ -60,33 +60,41 @@ From reading (verify with a test first):
 
 ## Step 3 — Code cleanliness
 
-- [ ] No-schema `InputFields` number inputs (int/float/Numeric) start with the existing
+- [x] No-schema `InputFields` number inputs (int/float/Numeric) start with the existing
   value, so nullable columns likely cannot be emptied on edit (same fix as pydantic M1)
 
 - [x] Filter values are mirrored to URL query params named by column (global): two
   `SqlUi` instances filtering a same-named column share the filter — prefix with `key`
-- [ ] `stDatalist` labels use the raw column name (no-schema mode)
-- [ ] Unify the array parser in `input_fields.input_array` with `utils.parse_pg_array`
+- [x] `stDatalist` labels use the raw column name (no-schema mode)
+- [x] Unify the array parser in `input_fields.input_array` with `utils.parse_pg_array`
 
-- [ ] IDE `deprecated_instance_property` on `model_fields`: one typed helper
+- [x] IDE `deprecated_instance_property` on `model_fields`: one typed helper
   `model_fields(schema) -> dict[str, FieldInfo]`
-- [ ] Make `_render_field_input` public (`render_field`) — used by `PydanticUi` and tests
-- [ ] Deduplicate: `_load_foreign_key_data`/`_load_many_to_many_data` (Create/UpdateRow),
+- [x] Make `_render_field_input` public (`render_field`) — used by `PydanticUi` and tests
+- [x] Deduplicate: `_load_foreign_key_data`/`_load_many_to_many_data` (Create/UpdateRow),
   3× `show_dialog` wrappers, 3× schema validation in `SqlUi.__init__`,
   ~12× `getattr(model, '__tablename__', ...)`, 3× `is_optional`, 3× enum detection,
   `render` vs `render_with_columns`
-- [ ] Dead code: `get_fields`, `get_updates`, `save`, `_get_column_info`,
+- [x] Dead code: `get_fields`, `get_updates`, `save`, `_get_column_info`,
   `pydantic_to_sqlalchemy`, `sqlalchemy_to_pydantic`, `layout`, `id_to_object`,
   unreachable `elif` in `generate_form_data`, `lib.__main__`, commented `logger.debug`
-- [ ] Typing: `Literal` for `operation_type`, `TypedDict` for `foreign_key_options` /
+- [x] Typing: `Literal` for `operation_type`, `TypedDict` for `foreign_key_options` /
   `many_to_many_fields`, return types everywhere
-- [ ] Fragile checks: `hasattr(v, 'value')` → `isinstance(v, Enum)`; `'JSON' in str(type)`;
+- [x] Fragile checks: `hasattr(v, 'value')` → `isinstance(v, Enum)`; `'JSON' in str(type)`;
   private `registry._class_registry` → `registry.mappers`; `rel.direction.value == 1`
   → `ONETOMANY`; `assert` used for control flow
-- [ ] Portuguese names `inicio`/`final` (also visible UI labels)
-- [ ] `get_pretty_name` → `functools.cache` instead of `st.cache_data`
-- [ ] Pydantic mode still builds `ExistingData`/`InputFields` (extra DB queries per dialog)
-- [ ] Tests for schema_builder, type detection, many-to-many, delete
+- [x] Portuguese names `inicio`/`final` (also visible UI labels)
+- [x] `get_pretty_name` → `functools.cache` instead of `st.cache_data`
+- [x] Pydantic mode still builds `ExistingData`/`InputFields` (extra DB queries per dialog)
+- [x] Tests for schema_builder, type detection, many-to-many, delete
+
+Leftovers:
+- [ ] FK/M2M option-load errors are only logged (invisible with `disable_log=True`) —
+  consider `st.warning`
+- [ ] No-schema nullable-number row-switching not browser-verified (example app has no
+  no-schema page)
+- [ ] Stale example-repo scripts `test_final_verification.py`/`test_null_value_fix.py`
+  patch the removed `_render_field_input`
 
 ## Step 4 — API decisions
 
