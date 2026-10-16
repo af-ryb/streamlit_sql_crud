@@ -246,9 +246,8 @@ class UpdateRow:
                 continue
 
             col_value = getattr(self.row, col_name)
-            default_value = self.default_values.get(col_name)
 
-            if default_value:
+            if col_name in self.default_values:
                 input_value = col_value
             else:
                 input_value = self.input_fields.get_input_value(col, col_value)

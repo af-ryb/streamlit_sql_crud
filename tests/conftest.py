@@ -6,7 +6,7 @@ a real database without PostgreSQL or Docker.
 """
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -105,5 +105,18 @@ def run_app(tmp_path: Path):
         at = AppTest.from_file(str(APP_DIR / app_name), default_timeout=30)
         at.run()
         return at
+
+    return _run
+
+
+@pytest.fixture
+def run_mode(
+    run_app: Callable[[str], AppTest], monkeypatch: pytest.MonkeyPatch
+) -> Callable[[str], AppTest]:
+    """Return a callable rendering `crud_forms_app.py` in a given scenario."""
+
+    def _run(mode: str) -> AppTest:
+        monkeypatch.setenv("CRUD_TEST_MODE", mode)
+        return run_app("crud_forms_app.py")
 
     return _run

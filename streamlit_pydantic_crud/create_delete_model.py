@@ -185,11 +185,10 @@ class CreateRow:
             if col_name is None:
                 continue
 
-            default_value = self.default_values.get(col_name)
             initial_value = self.initial_data.get(col_name)
 
-            if default_value:
-                input_value = default_value
+            if col_name in self.default_values:
+                input_value = self.default_values[col_name]
             else:
                 input_value = self.input_fields.get_input_value(col, initial_value)
 

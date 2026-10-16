@@ -7,27 +7,13 @@ row values are members, so editing such a row raised ValueError.
 from collections.abc import Callable
 from enum import Enum
 
-import pytest
 from streamlit.testing.v1 import AppTest
 
-APP = "crud_forms_app.py"
-
-
-@pytest.fixture
-def run_mode(
-    run_app: Callable[[str], AppTest], monkeypatch: pytest.MonkeyPatch
-) -> Callable[[str], AppTest]:
-    """Render the forms harness app in the given scenario."""
-
-    def _run(mode: str) -> AppTest:
-        monkeypatch.setenv("CRUD_TEST_MODE", mode)
-        return run_app(APP)
-
-    return _run
+RunMode = Callable[[str], AppTest]
 
 
 def test_edit_row_with_python_enum_preselects_member(
-    run_mode: Callable[[str], AppTest],
+    run_mode: RunMode,
 ) -> None:
     """Editing a row with an Enum(PyEnum) value renders with it selected."""
     at = run_mode("fields_row")
@@ -41,7 +27,7 @@ def test_edit_row_with_python_enum_preselects_member(
 
 
 def test_string_enum_column_preselects_value(
-    run_mode: Callable[[str], AppTest],
+    run_mode: RunMode,
 ) -> None:
     """A plain Enum('low', 'high') column uses the column name and row value."""
     at = run_mode("fields_row")
@@ -52,7 +38,7 @@ def test_string_enum_column_preselects_value(
 
 
 def test_update_saves_selected_enum_member(
-    run_mode: Callable[[str], AppTest],
+    run_mode: RunMode,
 ) -> None:
     """Changing the enum in the update form persists the new member."""
     at = run_mode("update")
