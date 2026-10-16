@@ -5,8 +5,9 @@ from typing import Any, Union, get_args, get_origin
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import Column
+from sqlalchemy import JSON, Column
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
+from sqlalchemy.types import TypeDecorator, TypeEngine
 
 
 def unwrap_optional(tp: Any) -> tuple[Any, bool]:
@@ -21,6 +22,13 @@ def unwrap_optional(tp: Any) -> tuple[Any, bool]:
         if len(args) == 2 and len(non_none) == 1:
             return non_none[0], True
     return tp, False
+
+
+def is_json_type(col_type: TypeEngine[Any]) -> bool:
+    """Return True for JSON-like SQLAlchemy types (``JSON``, ``JSONB``, wrappers)."""
+    if isinstance(col_type, TypeDecorator):
+        return is_json_type(col_type.impl_instance)
+    return isinstance(col_type, JSON)
 
 
 def is_union(tp: Any) -> bool:

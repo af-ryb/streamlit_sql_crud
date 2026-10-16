@@ -17,6 +17,7 @@ from streamlit.delta_generator import DeltaGenerator
 from streamlit_pydantic_crud import params
 from streamlit_pydantic_crud.filters import safe_python_type
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
+from streamlit_pydantic_crud.utils import is_json_type
 
 SHOW_ALL = "Show All"
 
@@ -43,12 +44,8 @@ def get_existing_cond(col: KeyedColumnElement) -> bool:
     int_not_fk_cond = py_type is int and not has_fk
 
     # Check for JSON column types that don't support SELECT DISTINCT in BigQuery
-    is_json_type = False
     col_type_name = str(col.type).upper()
-    if "JSON" in col_type_name or (
-        hasattr(col.type, "__class__") and "JSON" in col.type.__class__.__name__.upper()
-    ):
-        is_json_type = True
+    is_json = is_json_type(col.type)
 
     # Also check for other unsupported types like ARRAY, STRUCT in BigQuery
     unsupported_types = ["ARRAY", "STRUCT", "RECORD"]
@@ -58,7 +55,7 @@ def get_existing_cond(col: KeyedColumnElement) -> bool:
 
     cond = (
         is_not_pk
-        and not is_json_type
+        and not is_json
         and not is_unsupported_type
         and (is_str or is_bool or int_not_fk_cond or is_enum)
     )

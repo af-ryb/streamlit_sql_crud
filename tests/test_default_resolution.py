@@ -140,5 +140,5 @@ def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) ->
 
     gen = G(schema=Schema, key_prefix="t")
     mock_st.selectbox.return_value = "blue"
-    gen._render_field_input("color", gen.field_info["color"], str, None, "t_color")
+    gen.render_field("color", gen.field_info["color"], str, None, "t_color")
     assert mock_st.selectbox.call_args.kwargs["index"] == 1

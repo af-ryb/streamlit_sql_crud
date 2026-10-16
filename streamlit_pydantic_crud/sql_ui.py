@@ -3,6 +3,7 @@ import math
 import warnings
 from collections.abc import Callable, Iterable
 from decimal import Decimal
+from enum import Enum
 from functools import partial
 from typing import Any
 
@@ -18,11 +19,15 @@ from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
-from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.pydantic_utils import (
+    PydanticSQLAlchemyConverter,
+    model_fields,
+)
 from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
 from streamlit_pydantic_crud.utils import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
+    is_json_type,
     pk_attr,
     pk_name,
     row_to_python,
@@ -406,9 +411,9 @@ class SqlUi:
             if col_name in df.columns:
                 if isinstance(col.type, SQLEnum):
                     df[col_name] = df[col_name].map(
-                        lambda v: v.value if hasattr(v, "value") else v
+                        lambda v: v.value if isinstance(v, Enum) else v
                     )
-                elif "JSON" in str(col.type).upper():
+                elif is_json_type(col.type):
                     # Handle JSON columns for display
                     df[col_name] = df[col_name].apply(
                         lambda x: (
@@ -553,10 +558,10 @@ class SqlUi:
                     if isinstance(value, list):
                         # Handle list of enums
                         validated_data[key] = [
-                            item.value if hasattr(item, "value") else str(item)
+                            item.value if isinstance(item, Enum) else str(item)
                             for item in value
                         ]
-                    elif hasattr(value, "value"):
+                    elif isinstance(value, Enum):
                         # Handle single enum
                         validated_data[key] = value.value
 
@@ -574,7 +579,7 @@ class SqlUi:
         column_order = None
         if self.read_schema:
             # Display only the columns specified in the schema
-            column_order = list(self.read_schema.model_fields.keys())
+            column_order = list(model_fields(self.read_schema).keys())
 
         formatter = {
             **numeric_formatters(self.cte, df.columns),

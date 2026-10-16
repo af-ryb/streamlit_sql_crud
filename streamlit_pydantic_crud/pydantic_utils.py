@@ -32,7 +32,7 @@ class PydanticSQLAlchemyConverter:
             bool: True if compatible, False otherwise
         """
         try:
-            schema_fields = schema.model_fields
+            schema_fields = model_fields(schema)
             sqlalchemy_columns = {col.name: col for col in model.__table__.columns}
 
             # Get all relationships in the model
@@ -142,7 +142,7 @@ class PydanticSQLAlchemyConverter:
         try:
             field_info = {}
 
-            for field_name, field in schema.model_fields.items():
+            for field_name, field in model_fields(schema).items():
                 info = {
                     "annotation": field.annotation,
                     "default": _resolved_default(field),
@@ -246,12 +246,8 @@ class PydanticInputGenerator:
             True if the value should be excluded from form data (create operations only)
         """
         field_info = self.field_info.get(field_name, {})
-        is_optional = field_info.get("is_optional", False) or not field_info.get(
-            "is_required", True
-        )
-
         # Only filter empty values for optional fields
-        if not is_optional:
+        if not is_optional_field(field_info):
             return False
 
         # For update operations, we want to include empty values as None
@@ -289,7 +285,7 @@ class PydanticInputGenerator:
             annotation = field_info.get("annotation")
 
             # Use our custom implementation for all field types
-            field_value = self._render_field_input(
+            field_value = self.render_field(
                 field_name,
                 field_info=field_info,
                 annotation=annotation,
@@ -329,9 +325,7 @@ class PydanticInputGenerator:
                     # For update operations, check if we need to convert empty values to None
                     if self.operation_type == "update":
                         field_info_local = self.field_info.get(field_name, {})
-                        is_optional = field_info_local.get(
-                            "is_optional", False
-                        ) or not field_info_local.get("is_required", True)
+                        is_optional = is_optional_field(field_info_local)
                         if is_optional and (field_value == "" or field_value == []):
                             form_data[field_name] = None
                         else:
@@ -342,9 +336,7 @@ class PydanticInputGenerator:
                 # This branch handles cases where should_exclude is True but we're in update mode
                 # (This shouldn't happen anymore since we changed _is_empty_value_for_optional_field)
                 field_info_local = self.field_info.get(field_name, {})
-                is_optional = field_info_local.get(
-                    "is_optional", False
-                ) or not field_info_local.get("is_required", True)
+                is_optional = is_optional_field(field_info_local)
                 if is_optional and (field_value == "" or field_value == []):
                     form_data[field_name] = None
                 elif not is_optional:
@@ -355,12 +347,9 @@ class PydanticInputGenerator:
 
     def _is_update_optional(self, field_info: dict[str, Any]) -> bool:
         """Return True for an optional field while editing an existing row."""
-        is_optional = field_info.get("is_optional", False) or not field_info.get(
-            "is_required", True
-        )
-        return self.operation_type == "update" and is_optional
+        return self.operation_type == "update" and is_optional_field(field_info)
 
-    def _render_field_input(
+    def render_field(
         self,
         field_name: str,
         field_info: dict[str, Any],
@@ -381,11 +370,9 @@ class PydanticInputGenerator:
 
         # Custom widgets resolve session/kw/default precedence themselves, so
         # pass the raw session value (not pre-filled with the default).
-        if (
-            hasattr(self.schema, "model_fields")
-            and field_name in self.schema.model_fields
-        ):
-            field = self.schema.model_fields[field_name]
+        schema_fields = model_fields(self.schema)
+        if field_name in schema_fields:
+            field = schema_fields[field_name]
             json_schema_extra = getattr(field, "json_schema_extra", None)
             if json_schema_extra:
                 return self._render_custom_field(
@@ -441,12 +428,12 @@ class PydanticInputGenerator:
     def _is_enum_field(self, annotation: Any) -> bool:
         """Check if field is a single enum or an optional enum"""
         inner, _ = unwrap_optional(annotation)
-        return bool(inner) and hasattr(inner, "__members__")
+        return is_enum_type(inner)
 
     def _is_enum_list_field(self, annotation: Any) -> bool:
         """Check if field is a list of enums (optionally wrapped in Optional)"""
         item = self._extract_enum_from_list_annotation(annotation)
-        return item is not None and hasattr(item, "__members__")
+        return is_enum_type(item)
 
     @staticmethod
     def _is_list_field(annotation: Any) -> bool:
@@ -605,7 +592,7 @@ class PydanticInputGenerator:
 
         if input_type == "text_input":
             return self._render_text_input_widget(label, {}, existing_value, key)
-        optional = bool(field_info.get("is_optional"))
+        optional = is_optional_field(field_info)
         if input_type == "number_input_int":
             return self._render_number_input_widget(
                 label, {"step": 1}, existing_value, key, True, optional
@@ -668,7 +655,7 @@ class PydanticInputGenerator:
                 value,
                 key,
                 use_int,
-                bool(field_info.get("is_optional")),
+                is_optional_field(field_info),
             )
         if widget_type == "selectbox":
             return self._render_selectbox_widget(
@@ -806,9 +793,9 @@ class PydanticInputGenerator:
         for i, opt in enumerate(options):
             if opt == value:
                 return i
-        target = value.value if hasattr(value, "value") else value
+        target = value.value if isinstance(value, Enum) else value
         for i, opt in enumerate(options):
-            opt_val = opt.value if hasattr(opt, "value") else opt
+            opt_val = opt.value if isinstance(opt, Enum) else opt
             if opt_val == target:
                 return i
         return None
@@ -1212,3 +1199,21 @@ def _resolved_default(field: FieldInfo) -> Any:
     if field.is_required():
         return None
     return field.get_default(call_default_factory=True, validated_data={})
+
+
+def model_fields(schema: type[BaseModel] | BaseModel) -> dict[str, FieldInfo]:
+    """Return a schema's fields, reading them from the class even for instances."""
+    cls = schema if isinstance(schema, type) else type(schema)
+    return cls.model_fields
+
+
+def is_optional_field(field_info: dict[str, Any]) -> bool:
+    """Return True when extracted field info marks the field optional or not required."""
+    return bool(field_info.get("is_optional")) or not field_info.get(
+        "is_required", True
+    )
+
+
+def is_enum_type(tp: Any) -> bool:
+    """Return True when ``tp`` is an ``Enum`` subclass (not an unwrapped Optional)."""
+    return isinstance(tp, type) and issubclass(tp, Enum)

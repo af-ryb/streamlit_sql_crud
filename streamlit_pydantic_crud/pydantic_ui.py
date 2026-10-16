@@ -8,7 +8,7 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
+from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator, model_fields
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
 )
@@ -143,14 +143,14 @@ class PydanticUi[T: BaseModel]:
         """
         self.missing_required = [
             self._field_label(field_name)
-            for field_name, field_info in self.schema.model_fields.items()
+            for field_name, field_info in model_fields(self.schema).items()
             if field_info.is_required() and form_data.get(field_name) in [None, "", []]
         ]
         return not self.missing_required
 
     def _field_label(self, field_name: str) -> str:
         """Return the widget label of a field: its description or title-case name."""
-        description = self.schema.model_fields[field_name].description
+        description = model_fields(self.schema)[field_name].description
         return description or field_name.replace("_", " ").title()
 
     def _display_validation_errors(self, error: ValidationError):
@@ -187,7 +187,7 @@ class PydanticUi[T: BaseModel]:
             del st.session_state[self.session_state_key]
 
         # Also clear individual widget keys
-        for field_name in self.schema.model_fields:
+        for field_name in model_fields(self.schema):
             widget_key = f"{self.key}_{field_name}"
             if widget_key in st.session_state:
                 del st.session_state[widget_key]
@@ -208,7 +208,7 @@ class PydanticUi[T: BaseModel]:
                 data_dict = data
 
             # Clear existing widget keys first to avoid Streamlit error
-            for field_name in self.schema.model_fields:
+            for field_name in model_fields(self.schema):
                 widget_key = f"{self.key}_{field_name}"
                 if widget_key in st.session_state:
                     del st.session_state[widget_key]
@@ -237,7 +237,7 @@ class PydanticUi[T: BaseModel]:
         already committed but render() hasn't been called yet.
         """
         data = {}
-        for field_name in self.schema.model_fields:
+        for field_name in model_fields(self.schema):
             widget_key = f"{self.key}_{field_name}"
             if widget_key in st.session_state:
                 data[field_name] = st.session_state[widget_key]
@@ -305,7 +305,7 @@ class PydanticUi[T: BaseModel]:
             cols = st.columns(columns)
 
             # Distribute fields across columns
-            field_names = list(self.schema.model_fields.keys())
+            field_names = list(model_fields(self.schema).keys())
             form_data = {}
 
             for i, field_name in enumerate(field_names):
@@ -318,7 +318,7 @@ class PydanticUi[T: BaseModel]:
                     existing_value = existing_values.get(field_name)
                     annotation = field_info.get("annotation")
 
-                    field_value = self.input_generator._render_field_input(
+                    field_value = self.input_generator.render_field(
                         field_name, field_info, annotation, existing_value, key
                     )
 
