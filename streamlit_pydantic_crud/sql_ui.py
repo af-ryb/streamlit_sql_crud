@@ -1,13 +1,16 @@
 import json
+import math
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from decimal import Decimal
+from functools import partial
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import CTE, Select, select
+from sqlalchemy import CTE, Numeric, Select, select
 from sqlalchemy.orm import DeclarativeBase, selectinload
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit import session_state as ss
@@ -573,8 +576,11 @@ class SqlUi:
             # Display only the columns specified in the schema
             column_order = list(self.read_schema.model_fields.keys())
 
-        df_style = df.style
-        df_style = df_style.format(self.df_style_formatter)
+        formatter = {
+            **numeric_formatters(self.cte, df.columns),
+            **self.df_style_formatter,
+        }
+        df_style = df.style.format(formatter)
         if self.style_fn is not None:
             df_style = df_style.apply(self.style_fn, axis=1)
 
@@ -680,3 +686,28 @@ class SqlUi:
                 key=self.key,
             )
             delete_rows.show_dialog()
+
+
+def numeric_formatters(cte: CTE, columns: Iterable[str]) -> DfStyleFormatter:
+    """Return Styler formatters for the Numeric/Float columns of `cte` in `columns`.
+
+    Styler otherwise shows every float with 6 decimals (50000.000000).
+    """
+    names = set(columns)
+    return {
+        col.name: partial(format_number, scale=col.type.scale)
+        for col in cte.columns
+        if col.name in names and isinstance(col.type, Numeric)
+    }
+
+
+def format_number(value: object, scale: int | None = None) -> str:
+    """Format a number with `scale` decimals, or its shortest repr if None.
+
+    Missing, infinite and non-numeric values keep their plain str().
+    """
+    if not isinstance(value, float | int | Decimal) or not math.isfinite(value):
+        return str(value)
+    if scale is not None:
+        return f"{value:.{scale}f}"
+    return str(value)
