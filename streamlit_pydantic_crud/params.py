@@ -67,3 +67,17 @@ def set_no_dt_param(colname: str, key: str):
     elif isinstance(value, FkOpt):
         value_str = str(value.idx)
         st.query_params[colname] = value_str
+    elif value is None:
+        """A cleared selectbox yields None: drop the filter param."""
+        st.query_params.pop(colname, None)
+
+
+def clear_filter(widget_keys: list[str], param_names: list[str]) -> None:
+    """Reset filter widgets and drop their URL params (button on_click).
+
+    Runs before the rerun, so the widgets render empty again.
+    """
+    for widget_key in widget_keys:
+        ss.pop(widget_key, None)
+    for name in param_names:
+        st.query_params.pop(name, None)

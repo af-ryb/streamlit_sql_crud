@@ -183,15 +183,16 @@ class ColFilter:
                 on_change=params.set_dt_param,
             )
 
-            btn = btn_c.button(
+            btn_c.button(
                 "",
                 icon=":material/cancel:",
                 key=f"st_sql_{inicio_key}_{final_key}_cancel_btn",
+                on_click=params.clear_filter,
+                args=(
+                    [inicio_key, final_key],
+                    [f"{colname}_inicio", f"{colname}_final"],
+                ),
             )
-            if btn:
-                st.query_params.pop(f"{colname}_inicio", None)
-                st.query_params.pop(f"{colname}_final", None)
-                st.rerun()
 
             inicio_date = to_date(inicio)
             final_date = to_date(final)
@@ -232,10 +233,13 @@ class ColFilter:
                 args=(colname, key),
                 on_change=params.set_no_dt_param,
             )
-            btn = col2.button(label="", icon=":material/cancel:", key=f"{key}_btn")
-            if btn:
-                st.query_params.pop(colname, None)
-                st.rerun()
+            col2.button(
+                label="",
+                icon=":material/cancel:",
+                key=f"{key}_btn",
+                on_click=params.clear_filter,
+                args=([key], [colname]),
+            )
 
             result[colname] = value
 
