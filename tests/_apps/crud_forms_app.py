@@ -62,6 +62,9 @@ class Task(Base):
     due: Mapped[date | None] = mapped_column()
     amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("owner.id"))
+    qty: Mapped[int | None] = mapped_column()
+    score: Mapped[float | None] = mapped_column()
+    price: Mapped[float | None] = mapped_column(Numeric(10, 2))
 
     def __str__(self) -> str:
         return f"Task {self.id}"
@@ -82,6 +85,9 @@ with Session(eng) as s:
                 count=i,
                 ratio=0.5,
                 amount=i,
+                qty=i,
+                score=0.5,
+                price=i,
             )
             for i in range(1, 13)
         )
