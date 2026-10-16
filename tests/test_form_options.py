@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from loguru import logger
 from sqlalchemy import Column, Engine, ForeignKey, Table, create_engine, select
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -149,8 +150,17 @@ def test_many_to_many_options_apply_filter(conn: Any) -> None:
     assert args[2:] == ("label", "id")
 
 
-def test_failing_field_is_logged_not_raised(conn: Any) -> None:
-    """A broken config leaves the other fields loaded."""
+@pytest.fixture
+def logged() -> Iterator[list[str]]:
+    """Collect formatted loguru messages emitted during the test."""
+    messages: list[str] = []
+    sink_id = logger.add(messages.append, format="{message}")
+    yield messages
+    logger.remove(sink_id)
+
+
+def test_failing_field_is_logged_not_raised(conn: Any, logged: list[str]) -> None:
+    """A broken M2M config is logged and leaves the other fields loaded."""
     form = MagicMock()
     m2m: ManyToManyFields = {
         "bad": {"relationship": "missing", "display_field": "label"},
@@ -163,3 +173,25 @@ def test_failing_field_is_logged_not_raised(conn: Any) -> None:
         c.args[0] for c in form.input_generator.set_many_to_many_options.mock_calls
     ]
     assert names == ["tag_ids"]
+    assert any("many-to-many data for bad" in m for m in logged)
+    assert not any("for tag_ids" in m for m in logged)
+
+
+def test_failing_fk_field_is_logged_not_raised(conn: Any, logged: list[str]) -> None:
+    """A bad FK display_field is logged and leaves the other fields loaded."""
+    form = MagicMock()
+    fk: ForeignKeyOptions = {
+        "writer": {
+            "query": select(Author),
+            "display_field": "nope",
+            "value_field": "id",
+        },
+        "editor": AUTHOR_FK,
+    }
+
+    load_form_options(form, conn, Post, fk, {})
+
+    names = [c.args[0] for c in form.input_generator.set_foreign_key_options.mock_calls]
+    assert names == ["editor"]
+    assert any("foreign key data for writer" in m for m in logged)
+    assert not any("for editor" in m for m in logged)

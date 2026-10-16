@@ -74,10 +74,20 @@ def _array_app() -> None:
     fields.input_array("tags", ARRAY(String), '{a,"b,c"}')
 
 
-def test_array_string_value_uses_shared_parser() -> None:
+def test_array_string_value_uses_shared_parser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A PostgreSQL array literal is parsed by utils.parse_pg_array."""
+    calls: list[str] = []
+
+    def spy(value: str) -> list[str]:
+        calls.append(value)
+        return parse_pg_array(value)
+
+    monkeypatch.setattr(input_fields, "parse_pg_array", spy)
     at = AppTest.from_function(_array_app).run()
 
     assert not at.exception
     assert at.multiselect(key="a_tags").value == parse_pg_array('{a,"b,c"}')
     assert at.multiselect(key="a_tags").value == ["a", "b,c"]
+    assert calls == ['{a,"b,c"}']
