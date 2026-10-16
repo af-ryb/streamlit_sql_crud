@@ -1,4 +1,6 @@
 import json
+from collections.abc import Sequence
+from contextlib import AbstractContextManager, nullcontext
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -9,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy.orm import DeclarativeBase
+from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud.utils import parse_pg_array, tablename, unwrap_optional
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
@@ -259,12 +262,16 @@ class PydanticInputGenerator:
         return bool(field_value == "" or field_value == [] or field_value is None)
 
     def generate_form_data(
-        self, existing_values: dict[str, Any] | None = None
+        self,
+        existing_values: dict[str, Any] | None = None,
+        containers: Sequence[DeltaGenerator] | None = None,
     ) -> dict[str, Any]:
         """Generate form data dictionary for validation
 
         Args:
             existing_values: Dictionary of existing values for update operations
+            containers: Containers (e.g. ``st.columns``) the fields are spread
+                over in turn; None renders them in the current container
 
         Returns:
             Dictionary of form field values
@@ -273,7 +280,7 @@ class PydanticInputGenerator:
         form_data = {}
         existing_values = existing_values or {}
 
-        for field_name, field_info in self.field_info.items():
+        for index, (field_name, field_info) in enumerate(self.field_info.items()):
             key = f"{self.key_prefix}_{field_name}" if self.key_prefix else field_name
             existing_value = existing_values.get(field_name)
 
@@ -284,14 +291,17 @@ class PydanticInputGenerator:
             # Get field annotation for better type detection
             annotation = field_info.get("annotation")
 
-            # Use our custom implementation for all field types
-            field_value = self.render_field(
-                field_name,
-                field_info=field_info,
-                annotation=annotation,
-                existing_value=existing_value,
-                key=key,
+            container: AbstractContextManager[Any] = (
+                containers[index % len(containers)] if containers else nullcontext()
             )
+            with container:
+                field_value = self.render_field(
+                    field_name,
+                    field_info=field_info,
+                    annotation=annotation,
+                    existing_value=existing_value,
+                    key=key,
+                )
 
             if field_value is None and self._is_update_optional(field_info):
                 """Updates dump with exclude_unset: send None to clear a value."""

@@ -110,31 +110,7 @@ class PydanticUi[T: BaseModel]:
         Returns:
             Validated Pydantic model instance or None if validation fails
         """
-        try:
-            # Get existing values from session state
-            existing_values = st.session_state.get(self.session_state_key, {})
-
-            # Generate form data using input generator
-            form_data = self.input_generator.generate_form_data(existing_values)
-
-            # Update session state with current form data
-            st.session_state[self.session_state_key] = form_data
-
-            # Validate and return model instance
-            if self._has_required_fields(form_data):
-                try:
-                    model_instance = self.schema(**form_data)
-                    return model_instance
-                except ValidationError as e:
-                    self._display_validation_errors(e)
-                    return None
-
-            return None
-
-        except Exception as e:
-            logger.exception("Error rendering PydanticUi form")
-            st.error(f"Form rendering error: {e!s}")
-            return None
+        return self._render_form()
 
     def _has_required_fields(self, form_data: dict[str, Any]) -> bool:
         """Check if all required fields have values.
@@ -297,50 +273,27 @@ class PydanticUi[T: BaseModel]:
         Returns:
             Validated Pydantic model instance or None if validation fails
         """
+        return self._render_form(columns)
+
+    def _render_form(self, columns: int | None = None) -> T | None:
+        """Render the fields (spread over `columns` if given) and validate them."""
         try:
-            # Get existing values from session state
             existing_values = st.session_state.get(self.session_state_key, {})
-
-            # Create columns
-            cols = st.columns(columns)
-
-            # Distribute fields across columns
-            field_names = list(model_fields(self.schema).keys())
-            form_data = {}
-
-            for i, field_name in enumerate(field_names):
-                col_index = i % columns
-                field_info = self.input_generator.field_info[field_name]
-
-                with cols[col_index]:
-                    # Generate field input
-                    key = f"{self.key}_{field_name}"
-                    existing_value = existing_values.get(field_name)
-                    annotation = field_info.get("annotation")
-
-                    field_value = self.input_generator.render_field(
-                        field_name, field_info, annotation, existing_value, key
-                    )
-
-                    if field_value is not None:
-                        form_data[field_name] = field_value
-
-            # Update session state
+            containers = st.columns(columns) if columns else None
+            form_data = self.input_generator.generate_form_data(
+                existing_values, containers
+            )
             st.session_state[self.session_state_key] = form_data
 
-            # Validate and return model instance
             if self._has_required_fields(form_data):
                 try:
-                    model_instance = self.schema(**form_data)
-                    return model_instance
+                    return self.schema(**form_data)
                 except ValidationError as e:
                     self._display_validation_errors(e)
-                    return None
-
             return None
 
         except Exception as e:
-            logger.exception("Error rendering PydanticUi form with columns")
+            logger.exception("Error rendering PydanticUi form")
             st.error(f"Form rendering error: {e!s}")
             return None
 
