@@ -171,11 +171,14 @@ class ExistingData:
 
         opts = [self.get_foreign_opt(row, fk_pk_name) for row in rows]
 
-        opt_row = None
-        if self.row is not None:
-            opt_row = self.get_foreign_opt(self.row, fk_pk_name)
-        if opt_row and opt_row not in opts:
-            opts.append(opt_row)
+        value = getattr(self.row, col.name, None) if self.row else None
+        if value is not None and not any(opt.idx == value for opt in opts):
+            target_stmt = select(model).where(foreign_key.column == value)
+            target = self.session.execute(target_stmt).scalars().first()
+            if target is None:
+                opts.append(FkOpt(value, str(value)))
+            else:
+                opts.append(self.get_foreign_opt(target, fk_pk_name))
 
         return opts
 

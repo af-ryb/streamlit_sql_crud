@@ -80,3 +80,20 @@ def test_unmapped_fk_target_falls_back(session: Session) -> None:
     row = _Orphan(id=1, target_id=7)
     opts = ExistingData(session, _Orphan, {}, row=row).fk["target_id"]
     assert [(opt.idx, opt.name) for opt in opts] == [(7, "7")]
+
+
+def test_fk_opts_append_referenced_row_not_edited_row(session: Session) -> None:
+    """The edited row's current FK target is offered, not the row itself."""
+    emp = session.get(Employee, 3)
+    assert emp is not None
+    emp.department_id = 4
+
+    data = ExistingData(session, Employee, {"is_active": True}, row=emp)
+    opts = data.fk["department_id"]
+
+    assert [(opt.idx, opt.name) for opt in opts] == [
+        (1, "Dept 1"),
+        (3, "Dept 3"),
+        (5, "Dept 5"),
+        (4, "Dept 4"),
+    ]
