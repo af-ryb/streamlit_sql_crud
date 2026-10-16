@@ -60,6 +60,9 @@ From reading (verify with a test first):
 
 ## Step 3 — Code cleanliness
 
+- [ ] No-schema `InputFields` number inputs (int/float/Numeric) start with the existing
+  value, so nullable columns likely cannot be emptied on edit (same fix as pydantic M1)
+
 - [x] Filter values are mirrored to URL query params named by column (global): two
   `SqlUi` instances filtering a same-named column share the filter — prefix with `key`
 - [ ] `stDatalist` labels use the raw column name (no-schema mode)
