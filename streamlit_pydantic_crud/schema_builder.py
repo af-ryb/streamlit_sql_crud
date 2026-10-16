@@ -27,7 +27,7 @@ def create_pydantic_model_from_json_schema(
     if field_options is None:
         field_options = {}
 
-    fields = {}
+    fields: dict[str, Any] = {}
 
     for field_name, field_schema in json_schema.get("properties", {}).items():
         # Check for anyOf pattern (used for optional fields)
@@ -81,7 +81,7 @@ def create_pydantic_model_from_json_schema(
                             items_type = create_pydantic_model_from_json_schema(
                                 items_schema, field_options, f"{model_name}Item"
                             )
-                            base_type = list[items_type]
+                            base_type = _list_of(items_type)
                 elif field_type == "object":
                     base_type = create_pydantic_model_from_json_schema(
                         actual_type_schema,
@@ -92,7 +92,7 @@ def create_pydantic_model_from_json_schema(
                     base_type = Any
 
                 # Make it optional since it has anyOf with null
-                python_type = Optional[base_type]
+                python_type = _optional(base_type)
             else:
                 # Fallback if we can't determine type
                 python_type = Any
@@ -137,7 +137,7 @@ def create_pydantic_model_from_json_schema(
                         items_type = create_pydantic_model_from_json_schema(
                             items_schema, field_options, f"{model_name}Item"
                         )
-                        python_type = list[items_type]
+                        python_type = _list_of(items_type)
             elif field_type == "object":
                 python_type = create_pydantic_model_from_json_schema(
                     field_schema,
@@ -181,3 +181,16 @@ def create_pydantic_model_from_json_schema(
             fields[field_name] = (python_type, default)
 
     return create_model(model_name, **fields)
+
+
+def _list_of(item_type: Any) -> Any:
+    """Build ``list[item_type]`` from a type known only at runtime."""
+    return list[item_type]
+
+
+def _optional(base_type: Any) -> Any:
+    """Build ``Optional[base_type]`` from a type known only at runtime.
+
+    Kept as typing.Optional: ``X | None`` is not yet detected as optional downstream.
+    """
+    return Optional[base_type]  # noqa: UP045

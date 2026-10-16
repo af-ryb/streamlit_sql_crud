@@ -1,6 +1,7 @@
 import json
 import warnings
 from collections.abc import Callable
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -24,6 +25,9 @@ from streamlit_pydantic_crud.utils import (
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
 
+"""Per-column formatter accepted by pandas ``Styler.format``."""
+DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
+
 
 class SqlUi:
     """Show A CRUD interface in a Streamlit Page
@@ -43,7 +47,7 @@ class SqlUi:
         model: type[DeclarativeBase] | None = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
-        df_style_formatter: dict[str, str] | None = None,
+        df_style_formatter: DfStyleFormatter | None = None,
         read_use_container_width: bool = False,
         key: str | None = None,
         base_key: str | None = None,
@@ -66,7 +70,7 @@ class SqlUi:
             model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
-            df_style_formatter (dict[str, str]): a dictionary where each key is a column name and the associated value is the formatter arg of df.style.format method. See pandas docs for details.
+            df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
@@ -161,7 +165,7 @@ class SqlUi:
         self.conn = conn
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
-        self.df_style_formatter = df_style_formatter or {}
+        self.df_style_formatter: DfStyleFormatter = df_style_formatter or {}
         self.read_use_container_width = read_use_container_width
         self.show_delete_btn = show_delete_btn
         self.show_create_btn = show_create_btn
@@ -573,13 +577,13 @@ class SqlUi:
             column_order = list(self.read_schema.model_fields.keys())
 
         df_style = df.style
-        df_style = df_style.format(self.df_style_formatter)  # pyright: ignore
+        df_style = df_style.format(self.df_style_formatter)
         if self.style_fn is not None:
             df_style = df_style.apply(self.style_fn, axis=1)
 
         selection_state = self.data_container.dataframe(
             df_style,
-            width="stretch" if self.read_use_container_width else "content",  # pyright: ignore
+            width="stretch" if self.read_use_container_width else "content",
             height=650,
             hide_index=True,
             column_order=column_order,

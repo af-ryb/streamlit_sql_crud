@@ -127,7 +127,7 @@ class InputFields:
         input_value = stDatalist(
             col_name,
             list(opts),
-            index=val_index,  # pyright: ignore
+            index=val_index,
             key=key,
         )
         result = str(input_value)

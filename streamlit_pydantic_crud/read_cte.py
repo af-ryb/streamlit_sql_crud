@@ -316,7 +316,7 @@ def show_pagination(
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
     # Convert options to strings, replacing None with "Show All"
-    items_page_display = []
+    items_page_display: list[str] = []
     for item in opts_items_page:
         if item is None:
             items_page_display.append("Show All")
@@ -336,9 +336,11 @@ def show_pagination(
     else:
         default_value = items_page_display[0] if items_page_display else "50"
 
+    """sac.cascader expects a list of str | dict | CasItem (list is invariant)."""
+    cascader_items: list[str | dict | sac.CasItem] = list(items_page_display)
     with pag_col1:
         menu_cas = sac.cascader(
-            items=items_page_display,  # pyright: ignore
+            items=cascader_items,
             placeholder="Items per page",
             index=default_index,
             key=cascader_key,

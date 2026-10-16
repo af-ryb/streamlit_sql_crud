@@ -383,7 +383,7 @@ class UpdateRow:
     def show_dialog(self):
         pretty_name = get_pretty_name(self.model.__tablename__)
 
-        @st.dialog(f"Edit {pretty_name}", width="large")  # pyright: ignore
+        @st.dialog(f"Edit {pretty_name}", width="large")
         def wrap_show_update():
             set_state("stsql_updated", 0)
             updated_before = ss.stsql_updated

@@ -1,4 +1,3 @@
-import sys
 from typing import Literal
 
 import streamlit as st
@@ -29,8 +28,6 @@ def set_logging(disable_log: bool):
         return
 
     logger.enable("streamlit_pydantic_crud")
-    if not logger._core.handlers:  # pyright: ignore
-        logger.add(sys.stderr, level="INFO")
 
 
 def set_state(key: str, value):
