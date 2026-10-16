@@ -44,6 +44,15 @@ Most tests drive the real Streamlit runtime through `streamlit.testing.v1.AppTes
 models) and a `run_app` fixture that renders apps from `tests/_apps/` and clears
 `st.cache_data` between runs to prevent memoized queries leaking across tests.
 
+### Releasing
+Consumers install from git and pin by tag. Bump `version` in `pyproject.toml`, run
+`uv lock`, commit and push to `master`, then:
+```bash
+scripts/release.sh 0.6.0 --dry-run   # run every gate, no tag
+scripts/release.sh 0.6.0 --push      # tag v0.6.0 and push it (OR task release -- 0.6.0 --push)
+```
+Published tags never move; ship the next patch instead.
+
 ### Development Server
 This repo has no app of its own. To run a live UI, use the example project
 below (`./run.sh`).

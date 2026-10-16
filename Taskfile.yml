@@ -22,3 +22,8 @@ tasks:
         uv run -- ruff format --check && \
         uv run -- ty check && \
         uv run -- pytest
+
+  release:
+    desc: "Tag a release after running all gates (task release -- 0.6.0 [--push|--dry-run])"
+    cmds:
+      - scripts/release.sh {{.CLI_ARGS}}
