@@ -17,6 +17,8 @@ from streamlit_pydantic_crud import params
 from streamlit_pydantic_crud.filters import safe_python_type
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
 
+SHOW_ALL = "Show All"
+
 hash_funcs: dict[Any, Callable[[Any], Any]] = {
     pd.Series: lambda serie: serie.to_dict(),
     CTE: lambda sel: (str(sel), sel.compile().params),
@@ -314,7 +316,7 @@ def show_pagination(
     items_page_display: list[str] = []
     for item in opts_items_page:
         if item is None:
-            items_page_display.append("Show All")
+            items_page_display.append(SHOW_ALL)
         else:
             items_page_display.append(str(item))
 
@@ -343,11 +345,7 @@ def show_pagination(
     # Get selected value
     selected_str = menu_cas[0] if menu_cas else default_value
 
-    # Map back to actual value (None for "Show All", otherwise int)
-    if selected_str == "Show All":
-        items_per_page = count  # Show all items
-    else:
-        items_per_page = int(selected_str)
+    items_per_page = resolve_page_size(selected_str, count)
 
     # Key encodes page size and total so the widget remounts (and resets to
     # page 1) when either changes, picking up the new page-count display.
@@ -363,6 +361,16 @@ def show_pagination(
         )
 
     return (items_per_page, int(page))
+
+
+def resolve_page_size(selected: str | int, count: int) -> int:
+    """Map a page-size option to rows per page; "Show All" means all rows.
+
+    Never 0: the pagination frontend divides the total by the page size.
+    """
+    if selected == SHOW_ALL:
+        return max(count, 1)
+    return int(selected)
 
 
 def get_stmt_pag(
