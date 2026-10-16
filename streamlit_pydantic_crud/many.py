@@ -81,7 +81,9 @@ class ReadManyRel:
 
 
 @st.fragment
-def show_rel(conn: SQLConnection, model, model_id: int | str, rel: RelationshipProperty):
+def show_rel(
+    conn: SQLConnection, model, model_id: int | str, rel: RelationshipProperty
+):
     read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
@@ -107,7 +109,7 @@ def show_rel(conn: SQLConnection, model, model_id: int | str, rel: RelationshipP
         selection_state = st.dataframe(
             df,
             hide_index=True,
-            width='stretch',
+            width="stretch",
             selection_mode="multi-row",
             on_select="rerun",
             key=f"stsql_many_df_{read_many_rel.suffix_key}",

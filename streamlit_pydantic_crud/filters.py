@@ -1,4 +1,3 @@
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -6,12 +5,12 @@ from typing import Any
 
 import streamlit as st
 from dateutil.relativedelta import relativedelta
+from loguru import logger
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
-from loguru import logger
 
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
 
@@ -23,15 +22,16 @@ class FkOpt:
 
 
 class ExistingData:
-    def __init__(self,
-                 session: Session,
-                 Model: type[DeclarativeBase],
-                 default_values: dict,
-                 row: DeclarativeBase | None = None,
-                 foreign_key_options: dict | None = None,
-                 dt_filters: dict | None = None,
-                 no_dt_filters: dict | None = None,
-                 ) -> None:
+    def __init__(
+        self,
+        session: Session,
+        Model: type[DeclarativeBase],
+        default_values: dict,
+        row: DeclarativeBase | None = None,
+        foreign_key_options: dict | None = None,
+        dt_filters: dict | None = None,
+        no_dt_filters: dict | None = None,
+    ) -> None:
         self.session = session
         self.Model = Model
         self.default_values = default_values
@@ -53,7 +53,7 @@ class ExistingData:
         # logger.debug(f"apply_active_filters called for model: {model.__name__}")
         # logger.debug(f"dt_filters: {self.dt_filters}")
         # logger.debug(f"no_dt_filters: {self.no_dt_filters}")
-        
+
         # Apply date filters
         for col_name, date_range in self.dt_filters.items():
             logger.debug(f"Checking date filter: {col_name} on model {model.__name__}")
@@ -66,7 +66,9 @@ class ExistingData:
                 if end_date:
                     stmt = stmt.where(col <= end_date)
             else:
-                logger.debug(f"Model {model.__name__} does NOT have attribute {col_name}")
+                logger.debug(
+                    f"Model {model.__name__} does NOT have attribute {col_name}"
+                )
 
         # Apply non-date filters
         for col_name, value in self.no_dt_filters.items():
@@ -162,21 +164,21 @@ class ExistingData:
         """Get foreign key options using custom configuration"""
         # logger.debug(f"get_custom_foreign_opts called for col_name: {col_name}")
         # logger.debug(f"fk_config: {fk_config}")
-        
-        query = fk_config['query']
-        display_field = fk_config['display_field']
-        value_field = fk_config['value_field']
-        
+
+        query = fk_config["query"]
+        display_field = fk_config["display_field"]
+        value_field = fk_config["value_field"]
+
         # logger.debug(f"Original query: {query}")
 
         model_class = None
-        if hasattr(query, 'column_descriptions') and query.column_descriptions:
-            model_class = query.column_descriptions[0]['type']
-        elif hasattr(query, 'froms') and query.froms:
+        if hasattr(query, "column_descriptions") and query.column_descriptions:
+            model_class = query.column_descriptions[0]["type"]
+        elif hasattr(query, "froms") and query.froms:
             model_class = query.froms[0].entity_namespace
         else:
             logger.debug("Could not determine model class from query")
-        
+
         if model_class:
             # logger.debug(f"Applying active filters to query for model: {model_class}")
             filtered_query = self.apply_active_filters(query, model_class)
@@ -184,19 +186,19 @@ class ExistingData:
             query = filtered_query
         else:
             logger.debug("No model class found, skipping filter application")
-        
+
         # Execute query to get rows
         # logger.debug("Executing query to get foreign key options")
         rows = self.session.execute(query).scalars().all()
         # logger.debug(f"Query returned {len(rows)} rows: {[str(row) for row in rows]}")
-        
+
         # Create FkOpt objects with custom display and value fields
         opts = []
         for row in rows:
             value = getattr(row, value_field)
             display = getattr(row, display_field)
             opts.append(FkOpt(value, display))
-        
+
         # Add current row value if it exists and not in options
         if self.row is not None:
             current_value = getattr(self.row, col_name, None)
@@ -204,8 +206,14 @@ class ExistingData:
                 if not any(opt.idx == current_value for opt in opts):
                     try:
                         if model_class:
-                            current_row_query = select(model_class).where(getattr(model_class, value_field) == current_value)
-                            current_row = self.session.execute(current_row_query).scalars().first()
+                            current_row_query = select(model_class).where(
+                                getattr(model_class, value_field) == current_value
+                            )
+                            current_row = (
+                                self.session.execute(current_row_query)
+                                .scalars()
+                                .first()
+                            )
                             if current_row:
                                 current_display = getattr(current_row, display_field)
                                 opts.append(FkOpt(current_value, current_display))
@@ -223,16 +231,20 @@ class ExistingData:
         # TODO check, do we need caching, if so should be rewritten to match filter logic and reset cache after changing filter state
         fk_cols = [col for col in _self.cols if len(list(col.foreign_keys)) > 0]
         opts = {}
-        
+
         for col in fk_cols:
             if not col.description:
                 continue
-                
+
             col_name = col.description
-            
+
             if col_name in _self.foreign_key_options:
-                opts[col_name] = _self.get_custom_foreign_opts(col_name, _self.foreign_key_options[col_name])
+                opts[col_name] = _self.get_custom_foreign_opts(
+                    col_name, _self.foreign_key_options[col_name]
+                )
             else:
-                opts[col_name] = _self.get_foreign_opts(col, next(iter(col.foreign_keys)))
+                opts[col_name] = _self.get_foreign_opts(
+                    col, next(iter(col.foreign_keys))
+                )
 
         return opts

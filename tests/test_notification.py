@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 

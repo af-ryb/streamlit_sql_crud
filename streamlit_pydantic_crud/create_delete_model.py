@@ -1,11 +1,10 @@
-
-from typing import Optional, Type
 import streamlit as st
-from streamlit import session_state as ss
-from streamlit.connections.sql_connection import SQLConnection
+from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
+from streamlit import session_state as ss
+from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.input_fields import InputFields
@@ -16,25 +15,24 @@ from streamlit_pydantic_crud.lib import (
     log,
     set_state,
 )
-from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name
-from loguru import logger
 
 
 class CreateRow:
-    def __init__(self,
-                 conn: SQLConnection,
-                 model: type[DeclarativeBase],
-                 default_values: dict | None = None,
-                 key: str = "create",
-                 create_schema: Optional[Type[BaseModel]] = None,
-                 foreign_key_options: dict | None = None,
-                 many_to_many_fields: dict | None = None,
-                 initial_data: dict | None = None,
-                 dt_filters: dict | None = None,
-                 no_dt_filters: dict | None = None,
-                 ) -> None:
+    def __init__(
+        self,
+        conn: SQLConnection,
+        model: type[DeclarativeBase],
+        default_values: dict | None = None,
+        key: str = "create",
+        create_schema: type[BaseModel] | None = None,
+        foreign_key_options: dict | None = None,
+        many_to_many_fields: dict | None = None,
+        initial_data: dict | None = None,
+        dt_filters: dict | None = None,
+        no_dt_filters: dict | None = None,
+    ) -> None:
         self.conn = conn
         self.model = model
         self.create_schema = create_schema
@@ -51,21 +49,24 @@ class CreateRow:
 
         with conn.session as s:
             self.existing_data = ExistingData(
-                s, 
-                model, 
-                self.default_values, 
+                s,
+                model,
+                self.default_values,
                 foreign_key_options=self.foreign_key_options,
                 dt_filters=self.dt_filters,
                 no_dt_filters=self.no_dt_filters,
             )
             self.input_fields = InputFields(
-                model, key_prefix=self.key_prefix, default_values=self.default_values, existing_data=self.existing_data
+                model,
+                key_prefix=self.key_prefix,
+                default_values=self.default_values,
+                existing_data=self.existing_data,
             )
-            
+
         # Initialize PydanticUi if schema provided
         if self.create_schema:
             session_key = f"{self.key_prefix}_form_data"
-            
+
             # Pre-populate form with initial_data if provided (for "copy" action)
             if self.initial_data:
                 # Remove the primary key to avoid conflicts, as it's a new record
@@ -80,44 +81,44 @@ class CreateRow:
                 many_to_many_fields=self.many_to_many_fields,
                 pk_name=pk_name(self.model),
             )
-            
+
             # Set operation type to 'create' for proper empty value handling
-            self.pydantic_ui.set_operation_type('create')
-            
+            self.pydantic_ui.set_operation_type("create")
+
             # Load foreign key data for fields that need it
             self._load_foreign_key_data()
             self._load_many_to_many_data()
 
-
     def get_fields(self):
         if self.create_schema:
             return self.get_pydantic_fields()
-        else:
-            return self.get_sqlalchemy_fields()
-    
+        return self.get_sqlalchemy_fields()
+
     def get_pydantic_fields(self):
         """Generate fields using PydanticUi"""
         # Use PydanticUi to render the form with submit button
         form_data, submitted = self.pydantic_ui.render_with_submit("Save")
         return form_data if submitted else None
-    
+
     def _load_many_to_many_data(self):
         """Load many-to-many relationship data from the database."""
         for field_name, m2m_config in self.many_to_many_fields.items():
             try:
-                relationship_name = m2m_config['relationship']
-                display_field = m2m_config['display_field']
-                
+                relationship_name = m2m_config["relationship"]
+                display_field = m2m_config["display_field"]
+
                 # Get the related model from the relationship
-                related_model = getattr(self.model, relationship_name).property.mapper.class_
-                
+                related_model = getattr(
+                    self.model, relationship_name
+                ).property.mapper.class_
+
                 # Base query for the related model
                 query = select(related_model)
-                
+
                 # Apply optional filter
-                if 'filter' in m2m_config:
-                    query = m2m_config['filter'](query)
-                
+                if "filter" in m2m_config:
+                    query = m2m_config["filter"](query)
+
                 with self.conn.session as session:
                     rows = session.execute(query).scalars().all()
 
@@ -133,49 +134,53 @@ class CreateRow:
         """Load foreign key data from database for form fields using filtered options."""
         for field_name, fk_config in self.foreign_key_options.items():
             try:
-                display_field = fk_config['display_field']
-                value_field = fk_config['value_field']
-                
+                display_field = fk_config["display_field"]
+                value_field = fk_config["value_field"]
+
                 # Use filtered foreign key options from ExistingData instead of raw query
-                if hasattr(self.existing_data, 'fk') and field_name in self.existing_data.fk:
+                if (
+                    hasattr(self.existing_data, "fk")
+                    and field_name in self.existing_data.fk
+                ):
                     # logger.debug(f"Using filtered foreign key options for {field_name}")
                     fk_opts = self.existing_data.fk[field_name]
-                    
+
                     # Convert FkOpt objects to list of dicts for the input generator
                     options = []
                     for fk_opt in fk_opts:
-                        options.append({
-                            value_field: fk_opt.idx,
-                            display_field: fk_opt.name
-                        })
-                    
+                        options.append(
+                            {value_field: fk_opt.idx, display_field: fk_opt.name}
+                        )
+
                     # logger.debug(f"Converted {len(options)} filtered options for {field_name}: {options}")
                 else:
                     # Fallback to original logic if filtered options not available
                     # logger.debug(f"No filtered options found for {field_name}, using original query")
-                    query = fk_config['query']
-                    
+                    query = fk_config["query"]
+
                     with self.conn.session as session:
                         rows = session.execute(query).scalars().all()
-                        
+
                         # Convert to list of dicts for the input generator
                         options = []
                         for row in rows:
-                            options.append({
-                                value_field: getattr(row, value_field),
-                                display_field: getattr(row, display_field)
-                            })
-                
+                            options.append(
+                                {
+                                    value_field: getattr(row, value_field),
+                                    display_field: getattr(row, display_field),
+                                }
+                            )
+
                 # Set the options in the input generator
                 self.pydantic_ui.input_generator.set_foreign_key_options(
                     field_name, options, display_field, value_field
                 )
                 # logger.debug(f"Set foreign key options for {field_name} in input generator")
-                    
+
             except Exception:
                 # Log full traceback but continue - field falls back to text input
                 logger.exception(f"Failed to load foreign key data for {field_name}")
-    
+
     def get_sqlalchemy_fields(self):
         """Original SQLAlchemy field generation logic"""
         cols = self.model.__table__.columns
@@ -184,7 +189,7 @@ class CreateRow:
             col_name = col.description or col.name
             if col_name is None:
                 continue
-                
+
             default_value = self.default_values.get(col_name)
             initial_value = self.initial_data.get(col_name)
 
@@ -205,19 +210,18 @@ class CreateRow:
             created = self.get_pydantic_fields()
             if created:
                 return self.save_pydantic(created)
-            else:
-                return None, None
-        else:
-            # Use traditional form for SQLAlchemy-only mode
-            with st.form(f"create_model_form_{pretty_name}_{self.key_prefix}", border=False):
-                created = self.get_sqlalchemy_fields()
-                create_btn = st.form_submit_button("Save", type="primary")
+            return None, None
+        # Use traditional form for SQLAlchemy-only mode
+        with st.form(
+            f"create_model_form_{pretty_name}_{self.key_prefix}", border=False
+        ):
+            created = self.get_sqlalchemy_fields()
+            create_btn = st.form_submit_button("Save", type="primary")
 
-            if create_btn:
-                return self.save_sqlalchemy(created)
-            else:
-                return None, None
-    
+        if create_btn:
+            return self.save_sqlalchemy(created)
+        return None, None
+
     def save_pydantic(self, validated_data: BaseModel):
         """Save using pre-validated Pydantic data from PydanticUi"""
         try:
@@ -225,7 +229,7 @@ class CreateRow:
                 # Separate many-to-many fields from the main data
                 m2m_data = {}
                 main_data = validated_data.model_dump()
-                
+
                 for field_name in self.many_to_many_fields.keys():
                     if field_name in main_data:
                         m2m_data[field_name] = main_data.pop(field_name)
@@ -237,30 +241,38 @@ class CreateRow:
 
                 # Handle many-to-many relationships
                 for field_name, selected_options in m2m_data.items():
-                    relationship_name = self.many_to_many_fields[field_name]['relationship']
-                    related_model = getattr(self.model, relationship_name).property.mapper.class_
-                    
+                    relationship_name = self.many_to_many_fields[field_name][
+                        "relationship"
+                    ]
+                    related_model = getattr(
+                        self.model, relationship_name
+                    ).property.mapper.class_
+
                     # Get the related objects from the database
-                    related_objects = s.query(related_model).filter(pk_attr(related_model).in_(selected_options)).all()
+                    related_objects = (
+                        s.query(related_model)
+                        .filter(pk_attr(related_model).in_(selected_options))
+                        .all()
+                    )
 
                     # Append the related objects to the relationship
                     getattr(row, relationship_name).extend(related_objects)
 
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.model, '__tablename__', self.model.__name__)
+                table_name = getattr(self.model, "__tablename__", self.model.__name__)
                 log("CREATE", table_name, row)
-                
+
                 # Clear the form data after successful save
                 session_key = f"{self.key_prefix}_form_data"
                 if session_key in st.session_state:
                     del st.session_state[session_key]
-                    
+
                 return True, f"Created successfully {row}"
-                
+
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.model, '__tablename__', self.model.__name__)
+            table_name = getattr(self.model, "__tablename__", self.model.__name__)
             log("CREATE", table_name, validated_data.model_dump(), success=False)
             logger.exception(f"Create failed for {table_name}")
 
@@ -276,12 +288,12 @@ class CreateRow:
                 s.add(row)
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.model, '__tablename__', self.model.__name__)
+                table_name = getattr(self.model, "__tablename__", self.model.__name__)
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.model, '__tablename__', self.model.__name__)
+            table_name = getattr(self.model, "__tablename__", self.model.__name__)
             log("CREATE", table_name, created, success=False)
             logger.exception(f"Create failed for {table_name}")
 
@@ -309,12 +321,13 @@ class CreateRow:
 
 
 class DeleteRows:
-    def __init__(self,
-                 conn: SQLConnection,
-                 model: type[DeclarativeBase],
-                 rows_id: list[int],
-                 key: str
-                 ) -> None:
+    def __init__(
+        self,
+        conn: SQLConnection,
+        model: type[DeclarativeBase],
+        rows_id: list[int],
+        key: str,
+    ) -> None:
         self.conn = conn
         self.model = model
         self.rows_id = rows_id
@@ -351,12 +364,16 @@ class DeleteRows:
                     ss.stsql_updated += 1
                     qtty = len(self.rows_id)
                     lancs_str = ", ".join(lancs)
-                    table_name = getattr(self.model, '__tablename__', self.model.__name__)
+                    table_name = getattr(
+                        self.model, "__tablename__", self.model.__name__
+                    )
                     log("DELETE", table_name, lancs_str)
                     return True, f"Successfully deleted {qtty}"
                 except Exception as e:
                     ss.stsql_updated += 1
-                    table_name = getattr(self.model, '__tablename__', self.model.__name__)
+                    table_name = getattr(
+                        self.model, "__tablename__", self.model.__name__
+                    )
                     log("DELETE", table_name, "")
                     logger.exception(f"Delete failed for {table_name}")
                     return False, format_database_error(e)

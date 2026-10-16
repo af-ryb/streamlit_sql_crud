@@ -35,7 +35,7 @@ exclude = [".venv", "whitelist.py", "alembic", "alembic_dev"]
 line-length = 88
 
 [tool.ruff.lint]
-ignore = ["SIM108", "E501","PD901", "RET504", "PLR", "PTH123", "ISC001","ARG001","ARG002", "C901"]
+ignore = ["SIM108", "E501", "RET504", "PLR", "PTH123", "ISC001","ARG001","ARG002", "C901"]
 select = ["UP","YTT", "A", "EM", "ICN","I", "SIM", "E", "F", "C90", "B", "C4", "FA", "ISC", "INP", "PIE", "RET", "TID", "ARG", "PTH", "ERA", "PD", "PL", "FLY", "NPY", "PERF", "FURB", "RUF"]
 
 [tool.ruff.lint.pep8-naming]

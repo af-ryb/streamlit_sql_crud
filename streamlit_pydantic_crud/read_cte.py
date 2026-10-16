@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 import streamlit_antd_components as sac
+from loguru import logger
 from sqlalchemy import CTE, Select, distinct, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import KeyedColumnElement
@@ -14,14 +15,15 @@ from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
-from loguru import logger
-
 
 hash_funcs: dict[Any, Callable[[Any], Any]] = {
     pd.Series: lambda serie: serie.to_dict(),
     CTE: lambda sel: (str(sel), sel.compile().params),
     Select: lambda sel: (str(sel), sel.compile().params),
-    "streamlit_pydantic_crud.read_cte.ColFilter": lambda cl: (cl.dt_filters, cl.no_dt_filters),
+    "streamlit_pydantic_crud.read_cte.ColFilter": lambda cl: (
+        cl.dt_filters,
+        cl.no_dt_filters,
+    ),
 }
 
 
@@ -34,18 +36,27 @@ def get_existing_cond(col: KeyedColumnElement):
     fks = list(col.foreign_keys)
     has_fk = len(fks) > 0
     int_not_fk_cond = col.type.python_type is int and not has_fk
-    
+
     # Check for JSON column types that don't support SELECT DISTINCT in BigQuery
     is_json_type = False
     col_type_name = str(col.type).upper()
-    if 'JSON' in col_type_name or hasattr(col.type, '__class__') and 'JSON' in col.type.__class__.__name__.upper():
+    if "JSON" in col_type_name or (
+        hasattr(col.type, "__class__") and "JSON" in col.type.__class__.__name__.upper()
+    ):
         is_json_type = True
-    
-    # Also check for other unsupported types like ARRAY, STRUCT in BigQuery
-    unsupported_types = ['ARRAY', 'STRUCT', 'RECORD']
-    is_unsupported_type = any(unsupported in col_type_name for unsupported in unsupported_types)
 
-    cond = is_not_pk and not is_json_type and not is_unsupported_type and (is_str or is_bool or int_not_fk_cond or is_enum)
+    # Also check for other unsupported types like ARRAY, STRUCT in BigQuery
+    unsupported_types = ["ARRAY", "STRUCT", "RECORD"]
+    is_unsupported_type = any(
+        unsupported in col_type_name for unsupported in unsupported_types
+    )
+
+    cond = (
+        is_not_pk
+        and not is_json_type
+        and not is_unsupported_type
+        and (is_str or is_bool or int_not_fk_cond or is_enum)
+    )
     return cond
 
 
@@ -63,7 +74,12 @@ def get_existing_values(
 
     if len(available_col_filter) > 0:
         # Use col.name as fallback if description is None (common for joined columns)
-        cols = [col for col in cte.columns if (col.description or col.name) in available_col_filter and get_existing_cond(col)]
+        cols = [
+            col
+            for col in cte.columns
+            if (col.description or col.name) in available_col_filter
+            and get_existing_cond(col)
+        ]
     else:
         cols = [col for col in cte.columns if get_existing_cond(col)]
 
@@ -71,7 +87,9 @@ def get_existing_values(
     for col in cols:
         try:
             # For joined columns, we need to select from the CTE itself
-            stmt = select(distinct(cte.c[col.name])).order_by(cte.c[col.name]).limit(10000)
+            stmt = (
+                select(distinct(cte.c[col.name])).order_by(cte.c[col.name]).limit(10000)
+            )
             values = _session.execute(stmt).scalars().all()
             # Use col.name if description is None (common for joined columns)
             colname = col.description or col.name
@@ -79,7 +97,9 @@ def get_existing_values(
         except Exception as e:
             # Skip columns that cause errors (like JSON column type)
             colname = col.description or col.name
-            logger.warning(f"Skipping column '{colname}' for filter values due to error: {e}")
+            logger.warning(
+                f"Skipping column '{colname}' for filter values due to error: {e}"
+            )
             continue
 
     return result
@@ -100,10 +120,8 @@ class ColFilter:
         self.available_col_filter = available_col_filter or []
         self.key_prefix = f"{key}_create"
 
-
         self.dt_filters = self.get_dt_filters()
         self.no_dt_filters = self.get_no_dt_filters()
-        
 
     def __str__(self):
         dt_str = ", ".join(
@@ -231,7 +249,7 @@ class ColFilter:
 
 def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, str | None]):
     stmt = select(cte)
-    
+
     for colname, value in no_dt_filters.items():
         if value:
             # First try to get by description, then by name
@@ -240,7 +258,7 @@ def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, str | None]):
                 if c.description == colname or c.name == colname:
                     col = c
                     break
-            
+
             if col is not None:
                 stmt = stmt.where(col == value)
             else:
@@ -289,7 +307,12 @@ def pagination_widget_key(key: str, items_per_page: int, count: int) -> str:
     return f"{key}_pagination_{items_per_page}_{count}"
 
 
-def show_pagination(count: int, opts_items_page: tuple[int | None, ...], key: str = "", default_index: int = 0):
+def show_pagination(
+    count: int,
+    opts_items_page: tuple[int | None, ...],
+    key: str = "",
+    default_index: int = 0,
+):
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
     # Convert options to strings, replacing None with "Show All"
