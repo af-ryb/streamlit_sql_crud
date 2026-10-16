@@ -77,6 +77,11 @@ def _append_item(items: list[str], chars: list[str], quoted: bool) -> None:
         items.append(item)
 
 
+def tablename(model: type[DeclarativeBase]) -> str:
+    """Return the model's ``__tablename__``, or its class name when it has none."""
+    return getattr(model, "__tablename__", model.__name__)
+
+
 def pk_column(model: type[DeclarativeBase]) -> Column:
     """Return the single primary-key column of the model.
 

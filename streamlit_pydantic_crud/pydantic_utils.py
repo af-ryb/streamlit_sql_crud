@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy.orm import DeclarativeBase
 
-from streamlit_pydantic_crud.utils import parse_pg_array, unwrap_optional
+from streamlit_pydantic_crud.utils import parse_pg_array, tablename, unwrap_optional
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
 
 
@@ -57,7 +57,7 @@ class PydanticSQLAlchemyConverter:
                     and field_name not in relationships
                     and field_name not in properties
                 ):
-                    table_name = getattr(model, "__tablename__", model.__name__)
+                    table_name = tablename(model)
                     logger.warning(
                         f"Field '{field_name}' in {schema.__name__} not found in {table_name}"
                     )

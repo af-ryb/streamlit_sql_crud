@@ -17,7 +17,7 @@ from streamlit_pydantic_crud.lib import (
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.state import get_ui_state
-from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name
+from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name, tablename
 
 
 class CreateRow:
@@ -256,7 +256,7 @@ class CreateRow:
 
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.model, "__tablename__", self.model.__name__)
+                table_name = tablename(self.model)
                 log("CREATE", table_name, row)
 
                 # Clear the form data after successful save
@@ -268,7 +268,7 @@ class CreateRow:
 
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.model, "__tablename__", self.model.__name__)
+            table_name = tablename(self.model)
             log("CREATE", table_name, validated_data.model_dump(), success=False)
             logger.exception(f"Create failed for {table_name}")
 
@@ -284,12 +284,12 @@ class CreateRow:
                 s.add(row)
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.model, "__tablename__", self.model.__name__)
+                table_name = tablename(self.model)
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.model, "__tablename__", self.model.__name__)
+            table_name = tablename(self.model)
             log("CREATE", table_name, created, success=False)
             logger.exception(f"Create failed for {table_name}")
 
@@ -298,7 +298,7 @@ class CreateRow:
             return False, error_msg
 
     def show_dialog(self):
-        pretty_name = get_pretty_name(self.model.__tablename__)
+        pretty_name = get_pretty_name(tablename(self.model))
 
         @st.dialog(f"Create {pretty_name}", width="large")
         def wrap_show_update():
@@ -349,7 +349,7 @@ class DeleteRows:
     def show(self, pretty_name):
         st.subheader("Delete selected items?")
 
-        table_name = getattr(self.model, "__tablename__", self.model.__name__)
+        table_name = tablename(self.model)
         updated = ss.get("stsql_updated", 0)
         rows_str = self.get_rows_str(table_name, self.rows_id, updated)
         st.dataframe({pretty_name: rows_str}, hide_index=True)
@@ -387,7 +387,7 @@ class DeleteRows:
         return True, f"{msg}. {missing_msg}" if missing else msg
 
     def show_dialog(self):
-        pretty_name = get_pretty_name(self.model.__tablename__)
+        pretty_name = get_pretty_name(tablename(self.model))
 
         @st.dialog(f"Delete {pretty_name}", width="large")
         def wrap_show_update():

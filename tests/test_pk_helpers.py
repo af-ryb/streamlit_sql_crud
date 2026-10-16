@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
-from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name
+from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name, tablename
 
 
 class Base(DeclarativeBase):
@@ -84,3 +84,13 @@ def test_pk_helpers_drive_a_real_query() -> None:
 
         pk = pk_name(Product)
         assert getattr(found, pk) == "B2"
+
+
+def test_tablename_falls_back_to_class_name() -> None:
+    """Declarative models use __tablename__; anything else its class name."""
+
+    class Plain:
+        pass
+
+    assert tablename(Product) == "product"
+    assert tablename(Plain) == "Plain"  # ty: ignore[invalid-argument-type]

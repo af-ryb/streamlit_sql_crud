@@ -31,6 +31,7 @@ from streamlit_pydantic_crud.utils import (
     pk_attr,
     pk_name,
     row_to_python,
+    tablename,
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
@@ -217,45 +218,14 @@ class SqlUi:
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
 
-        # Validate schema compatibility if provided
-        if self.create_schema and not (
-            PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.create_schema, self.edit_create_model, "create"
-            )
+        """Fail fast when a Pydantic schema does not fit the edited model."""
+        for schema, operation in (
+            (self.create_schema, "create"),
+            (self.update_schema, "update"),
+            (self.read_schema, "read"),
         ):
-            table_name = getattr(
-                self.edit_create_model,
-                "__tablename__",
-                self.edit_create_model.__name__,
-            )
-            msg = f"Create schema {self.create_schema.__name__} is not compatible with {table_name}"
-            raise ValueError(msg)
-
-        if self.update_schema and not (
-            PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.update_schema, self.edit_create_model, "update"
-            )
-        ):
-            table_name = getattr(
-                self.edit_create_model,
-                "__tablename__",
-                self.edit_create_model.__name__,
-            )
-            msg = f"Update schema {self.update_schema.__name__} is not compatible with {table_name}"
-            raise ValueError(msg)
-
-        if self.read_schema and not (
-            PydanticSQLAlchemyConverter.validate_schema_compatibility(
-                self.read_schema, self.edit_create_model, "read"
-            )
-        ):
-            table_name = getattr(
-                self.edit_create_model,
-                "__tablename__",
-                self.edit_create_model.__name__,
-            )
-            msg = f"Read schema {self.read_schema.__name__} is not compatible with {table_name}"
-            raise ValueError(msg)
+            if schema is not None:
+                self._validate_schema(schema, operation)
 
         self.cte = self.get_cte()
 
@@ -286,6 +256,18 @@ class SqlUi:
         self.rows_selected = rows_selected
         self.qtty_rows = qtty_rows
 
+    def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
+        """Raise ValueError if `schema` is incompatible with the edited model."""
+        if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+            schema, self.edit_create_model, operation
+        ):
+            table_name = tablename(self.edit_create_model)
+            msg = (
+                f"{operation.capitalize()} schema {schema.__name__} "
+                f"is not compatible with {table_name}"
+            )
+            raise ValueError(msg)
+
     def set_initial_state(self):
         lib.set_state(UPDATED_KEY, 1)
 
@@ -294,10 +276,7 @@ class SqlUi:
         self.data_container = st.container()
         self.pag_container = st.container()
 
-        table_name = getattr(
-            self.edit_create_model, "__tablename__", self.edit_create_model.__name__
-        )
-        table_name = lib.get_pretty_name(table_name)
+        table_name = lib.get_pretty_name(tablename(self.edit_create_model))
         self.header_container.header(table_name, divider="orange")
 
         self.expander_container = self.header_container.expander(

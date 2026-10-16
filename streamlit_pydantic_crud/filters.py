@@ -14,6 +14,7 @@ from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
+from streamlit_pydantic_crud.utils import tablename
 
 
 def safe_python_type(col: ColumnElement[Any]) -> type | None:
@@ -58,7 +59,7 @@ class ExistingData:
             mapper.class_ for mapper in Model.registry.mappers
         ]
 
-        table_name = Model.__tablename__
+        table_name = tablename(Model)
         text = self.get_text(table_name, ss.stsql_updated, default_values)
         self.text = self.add_row_values(text)
         self.dt = self.get_dt(table_name, ss.stsql_updated)

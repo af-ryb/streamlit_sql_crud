@@ -23,6 +23,7 @@ from streamlit_pydantic_crud.utils import (
     pk_attr,
     pk_column,
     pk_name,
+    tablename,
 )
 
 
@@ -315,7 +316,7 @@ class UpdateRow:
                 s.add(row)
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.model, "__tablename__", self.model.__name__)
+                table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
 
                 # Clear the form data after successful save
@@ -326,7 +327,7 @@ class UpdateRow:
 
         except Exception as e:
             ss.stsql_updated += 1
-            table_name = getattr(self.model, "__tablename__", self.model.__name__)
+            table_name = tablename(self.model)
             log("UPDATE", table_name, validated_data.model_dump(), success=False)
             logger.exception(f"Update failed for {table_name}")
 
@@ -347,14 +348,14 @@ class UpdateRow:
                 s.add(row)
                 s.commit()
                 ss.stsql_updated += 1
-                table_name = getattr(self.model, "__tablename__", self.model.__name__)
+                table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"
             except Exception as e:
                 ss.stsql_updated += 1
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
-                table_name = getattr(self.model, "__tablename__", self.model.__name__)
+                table_name = tablename(self.model)
                 log("UPDATE", table_name, updated_str, success=False)
                 logger.exception(f"Update failed for {table_name}")
 
@@ -363,7 +364,7 @@ class UpdateRow:
                 return False, error_msg
 
     def show(self):
-        pretty_name = get_pretty_name(self.model.__tablename__)
+        pretty_name = get_pretty_name(tablename(self.model))
         st.subheader(pretty_name)
 
         if self.update_schema:
@@ -387,7 +388,7 @@ class UpdateRow:
         return None, None
 
     def show_dialog(self):
-        pretty_name = get_pretty_name(self.model.__tablename__)
+        pretty_name = get_pretty_name(tablename(self.model))
 
         @st.dialog(f"Edit {pretty_name}", width="large")
         def wrap_show_update():
