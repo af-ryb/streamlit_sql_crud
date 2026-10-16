@@ -44,11 +44,11 @@ def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
 
     # Get the primary key column type from the model
     python_type = pk_column(model).type.python_type
-    if python_type == int:
+    if python_type is int:
         return int(value)
-    if python_type == str:
+    if python_type is str:
         return str(value)
-    if python_type == float:
+    if python_type is float:
         return float(value)
 
     # Fallback: convert common numpy types to Python types

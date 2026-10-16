@@ -142,20 +142,16 @@ class CreateRow:
                     hasattr(self.existing_data, "fk")
                     and field_name in self.existing_data.fk
                 ):
-                    # logger.debug(f"Using filtered foreign key options for {field_name}")
                     fk_opts = self.existing_data.fk[field_name]
 
                     # Convert FkOpt objects to list of dicts for the input generator
-                    options = []
-                    for fk_opt in fk_opts:
-                        options.append(
-                            {value_field: fk_opt.idx, display_field: fk_opt.name}
-                        )
+                    options = [
+                        {value_field: fk_opt.idx, display_field: fk_opt.name}
+                        for fk_opt in fk_opts
+                    ]
 
-                    # logger.debug(f"Converted {len(options)} filtered options for {field_name}: {options}")
                 else:
                     # Fallback to original logic if filtered options not available
-                    # logger.debug(f"No filtered options found for {field_name}, using original query")
                     query = fk_config["query"]
 
                     with self.conn.session as session:
@@ -175,7 +171,6 @@ class CreateRow:
                 self.pydantic_ui.input_generator.set_foreign_key_options(
                     field_name, options, display_field, value_field
                 )
-                # logger.debug(f"Set foreign key options for {field_name} in input generator")
 
             except Exception:
                 # Log full traceback but continue - field falls back to text input
@@ -230,7 +225,7 @@ class CreateRow:
                 m2m_data = {}
                 main_data = validated_data.model_dump()
 
-                for field_name in self.many_to_many_fields.keys():
+                for field_name in self.many_to_many_fields:
                     if field_name in main_data:
                         m2m_data[field_name] = main_data.pop(field_name)
 

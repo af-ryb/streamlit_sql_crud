@@ -325,10 +325,9 @@ def show_pagination(
 
     # Initialize session state for cascader if not exists
     cascader_key = f"{key}_menu_cascader"
-    if cascader_key not in st.session_state:
+    if cascader_key not in st.session_state and default_index < len(items_page_display):
         # Set initial value in session state based on default_index
-        if default_index < len(items_page_display):
-            st.session_state[cascader_key] = [items_page_display[default_index]]
+        st.session_state[cascader_key] = [items_page_display[default_index]]
 
     # Determine default value
     if default_index < len(items_page_display):

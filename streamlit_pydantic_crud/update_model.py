@@ -59,7 +59,7 @@ class UpdateRow:
             if self.many_to_many_fields:
                 # Build options for eager loading
                 options = []
-                for field_name, config in self.many_to_many_fields.items():
+                for config in self.many_to_many_fields.values():
                     relationship_attr = getattr(self.model, config["relationship"])
                     options.append(selectinload(relationship_attr))
 
@@ -204,11 +204,10 @@ class UpdateRow:
                     fk_opts = self.existing_data.fk[field_name]
 
                     # Convert FkOpt objects to list of dicts for the input generator
-                    options = []
-                    for fk_opt in fk_opts:
-                        options.append(
-                            {value_field: fk_opt.idx, display_field: fk_opt.name}
-                        )
+                    options = [
+                        {value_field: fk_opt.idx, display_field: fk_opt.name}
+                        for fk_opt in fk_opts
+                    ]
 
                 else:
                     # Fallback to original logic if filtered options not available
@@ -263,7 +262,8 @@ class UpdateRow:
             return self.save_pydantic(updated)
         if isinstance(updated, dict):
             return self.save_sqlalchemy(updated)
-        raise ValueError(f"Invalid updated data type: {type(updated)}")
+        msg = f"Invalid updated data type: {type(updated)}"
+        raise ValueError(msg)
 
     def save_pydantic(self, validated_data: BaseModel):
         """Save using pre-validated Pydantic data from PydanticUi"""
@@ -279,7 +279,7 @@ class UpdateRow:
                 m2m_data = {}
                 main_data = validated_data.model_dump(exclude_unset=True)
 
-                for field_name in self.many_to_many_fields.keys():
+                for field_name in self.many_to_many_fields:
                     if field_name in main_data:
                         m2m_data[field_name] = main_data.pop(field_name)
 

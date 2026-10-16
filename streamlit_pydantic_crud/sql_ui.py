@@ -155,10 +155,11 @@ class SqlUi:
         else:
             # Legacy mode - require both parameters
             if read_instance is None or edit_create_model is None:
-                raise ValueError(
+                msg = (
                     "Either provide 'model' parameter (recommended) or both 'read_instance' and 'edit_create_model' parameters. "
                     "The 'model' parameter simplifies the API when using the same model for read and write operations."
                 )
+                raise ValueError(msg)
             self.read_instance = read_instance
             self.edit_create_model = edit_create_model
 
@@ -172,13 +173,11 @@ class SqlUi:
 
         # Validate items_per_page_default
         if not isinstance(items_per_page_default, int):
-            raise ValueError(
-                f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE) - 1}), got {type(items_per_page_default)}"
-            )
+            msg = f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE) - 1}), got {type(items_per_page_default)}"
+            raise ValueError(msg)
         if items_per_page_default < 0 or items_per_page_default >= len(OPTS_ITEMS_PAGE):
-            raise ValueError(
-                f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE) - 1}, got {items_per_page_default}"
-            )
+            msg = f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE) - 1}, got {items_per_page_default}"
+            raise ValueError(msg)
         self.items_per_page_default = items_per_page_default
 
         if key is not None and base_key is not None:
@@ -209,44 +208,44 @@ class SqlUi:
         self.many_to_many_fields = many_to_many_fields or {}
 
         # Validate schema compatibility if provided
-        if self.create_schema:
-            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+        if self.create_schema and not (
+            PydanticSQLAlchemyConverter.validate_schema_compatibility(
                 self.create_schema, self.edit_create_model, "create"
-            ):
-                table_name = getattr(
-                    self.edit_create_model,
-                    "__tablename__",
-                    self.edit_create_model.__name__,
-                )
-                raise ValueError(
-                    f"Create schema {self.create_schema.__name__} is not compatible with {table_name}"
-                )
+            )
+        ):
+            table_name = getattr(
+                self.edit_create_model,
+                "__tablename__",
+                self.edit_create_model.__name__,
+            )
+            msg = f"Create schema {self.create_schema.__name__} is not compatible with {table_name}"
+            raise ValueError(msg)
 
-        if self.update_schema:
-            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+        if self.update_schema and not (
+            PydanticSQLAlchemyConverter.validate_schema_compatibility(
                 self.update_schema, self.edit_create_model, "update"
-            ):
-                table_name = getattr(
-                    self.edit_create_model,
-                    "__tablename__",
-                    self.edit_create_model.__name__,
-                )
-                raise ValueError(
-                    f"Update schema {self.update_schema.__name__} is not compatible with {table_name}"
-                )
+            )
+        ):
+            table_name = getattr(
+                self.edit_create_model,
+                "__tablename__",
+                self.edit_create_model.__name__,
+            )
+            msg = f"Update schema {self.update_schema.__name__} is not compatible with {table_name}"
+            raise ValueError(msg)
 
-        if self.read_schema:
-            if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
+        if self.read_schema and not (
+            PydanticSQLAlchemyConverter.validate_schema_compatibility(
                 self.read_schema, self.edit_create_model, "read"
-            ):
-                table_name = getattr(
-                    self.edit_create_model,
-                    "__tablename__",
-                    self.edit_create_model.__name__,
-                )
-                raise ValueError(
-                    f"Read schema {self.read_schema.__name__} is not compatible with {table_name}"
-                )
+            )
+        ):
+            table_name = getattr(
+                self.edit_create_model,
+                "__tablename__",
+                self.edit_create_model.__name__,
+            )
+            msg = f"Read schema {self.read_schema.__name__} is not compatible with {table_name}"
+            raise ValueError(msg)
 
         self.cte = self.get_cte()
 
@@ -487,7 +486,7 @@ class SqlUi:
 
                     # Build options for eager loading
                     options = []
-                    for field_name, config in self.many_to_many_fields.items():
+                    for config in self.many_to_many_fields.values():
                         relationship_attr = getattr(
                             self.edit_create_model, config["relationship"]
                         )

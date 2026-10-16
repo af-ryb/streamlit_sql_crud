@@ -1,8 +1,6 @@
 from collections.abc import Callable
 from typing import (
     Any,
-    Generic,
-    TypeVar,
     cast,
 )
 
@@ -15,10 +13,8 @@ from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
 )
 
-T = TypeVar("T", bound=BaseModel)
 
-
-class PydanticUi(Generic[T]):
+class PydanticUi[T: BaseModel]:
     """Standalone Pydantic-based Streamlit form generator.
     Creates dynamic forms from Pydantic models with automatic validation,
     session state persistence, and flexible widget customization.
@@ -182,7 +178,7 @@ class PydanticUi(Generic[T]):
             del st.session_state[self.session_state_key]
 
         # Also clear individual widget keys
-        for field_name in self.schema.model_fields.keys():
+        for field_name in self.schema.model_fields:
             widget_key = f"{self.key}_{field_name}"
             if widget_key in st.session_state:
                 del st.session_state[widget_key]
@@ -203,7 +199,7 @@ class PydanticUi(Generic[T]):
                 data_dict = data
 
             # Clear existing widget keys first to avoid Streamlit error
-            for field_name in self.schema.model_fields.keys():
+            for field_name in self.schema.model_fields:
                 widget_key = f"{self.key}_{field_name}"
                 if widget_key in st.session_state:
                     del st.session_state[widget_key]
@@ -332,7 +328,7 @@ class PydanticUi(Generic[T]):
             return None
 
 
-class PydanticCrudUi(PydanticUi[T]):
+class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
     """Pydantic UI component with CRUD-specific functionality.
 
     Extends PydanticUi with foreign key support for SqlUi components.

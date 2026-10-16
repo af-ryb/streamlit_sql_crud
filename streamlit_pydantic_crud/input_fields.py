@@ -160,12 +160,6 @@ class InputFields:
         """Handle ARRAY column input with multiselect"""
         pretty_name = get_pretty_name(col_name)
 
-        # Get array element type
-        if hasattr(col_type, "item_type"):
-            item_type = col_type.item_type
-        else:
-            item_type = str  # fallback
-
         # Convert current value to list
         current_values = []
         if col_value is not None:

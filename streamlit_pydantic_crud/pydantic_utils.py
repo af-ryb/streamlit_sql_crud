@@ -1,3 +1,4 @@
+import contextlib
 import json
 import re
 from datetime import date, datetime
@@ -48,7 +49,7 @@ class PydanticSQLAlchemyConverter:
                     properties[attr_name] = attr
 
             # Check if all schema fields exist in the SQLAlchemy model
-            for field_name, field_info in schema_fields.items():
+            for field_name in schema_fields:
                 # Check if field exists as a column, relationship, or property
                 if (
                     field_name not in sqlalchemy_columns
@@ -160,7 +161,7 @@ class PydanticSQLAlchemyConverter:
                 if get_origin(field.annotation) is Union:
                     args = get_args(field.annotation)
                     if len(args) == 2 and type(None) in args:
-                        # This is Optional[T]
+                        # Optional field: a two-member Union with None
                         info["is_optional"] = True
                         non_none_type = next(
                             arg for arg in args if arg is not type(None)
@@ -251,9 +252,6 @@ class PydanticInputGenerator:
         self.pk_name = pk_name
         self.field_info = PydanticSQLAlchemyConverter.get_pydantic_field_info(schema)
 
-        # logger.debug(f"PydanticInputGenerator initialized with schema: {schema.__name__}, operation_type: {operation_type}")
-        # logger.debug(f"Many-to-many fields configured: {list(self.many_to_many_fields.keys())}")
-
         # For foreign key fields with preloaded options (no database connection needed)
         self.foreign_key_data = {}
         self.many_to_many_data = {}
@@ -288,10 +286,7 @@ class PydanticInputGenerator:
             return False  # Never exclude values in update operations
 
         # For create operations, exclude empty values (original behavior)
-        if field_value == "" or field_value == [] or field_value is None:
-            return True
-
-        return False
+        return bool(field_value == "" or field_value == [] or field_value is None)
 
     @logger.catch()
     def generate_form_data(
@@ -316,8 +311,6 @@ class PydanticInputGenerator:
             # Skip primary key fields to create operations
             if field_name == self.pk_name and existing_value is None:
                 continue
-
-            # logger.debug(f"Processing field: {field_name}, is_m2m: {field_name in self.many_to_many_fields}")
 
             # Get field annotation for better type detection
             annotation = field_info.get("annotation")
@@ -439,7 +432,6 @@ class PydanticInputGenerator:
 
         # Check for many-to-many fields
         if field_name in self.many_to_many_fields:
-            # logger.debug(f"Field {field_name} is a many-to-many field. Data loaded: {field_name in self.many_to_many_data}")
             if field_name in self.many_to_many_data:
                 return self._render_many_to_many_multiselect(
                     label, field_name, value, key
@@ -537,15 +529,11 @@ class PydanticInputGenerator:
         enum_values = [member.value for member in enum_type.__members__.values()]
         current_index = None
         if existing_value and hasattr(existing_value, "value"):
-            try:
+            with contextlib.suppress(ValueError):
                 current_index = enum_values.index(existing_value.value)
-            except ValueError:
-                pass
         elif existing_value in enum_values:
-            try:
+            with contextlib.suppress(ValueError):
                 current_index = enum_values.index(existing_value)
-            except ValueError:
-                pass
 
         return st.selectbox(label, enum_values, index=current_index, key=key)
 
@@ -739,7 +727,6 @@ class PydanticInputGenerator:
         # Extract custom configuration
         widget_type = json_schema_extra.get("widget")
         widget_kwargs = json_schema_extra.get("kw", {})
-        layout = json_schema_extra.get("layout")  # For future use
 
         # Resolve the Pydantic field default (None when unset / PydanticUndefined).
         field_default = field_info.get("default")
@@ -1126,9 +1113,8 @@ class PydanticInputGenerator:
         if isinstance(options, list) and options and isinstance(options[0], dict):
             # Options are dict objects - extract display and value mappings
             if not display_field or not value_field:
-                raise ValueError(
-                    "display_field and value_field required when options are dicts"
-                )
+                msg = "display_field and value_field required when options are dicts"
+                raise ValueError(msg)
 
             option_values = [item[value_field] for item in options]
             option_map = {item[value_field]: item[display_field] for item in options}
@@ -1195,7 +1181,6 @@ class PydanticInputGenerator:
             "display_field": display_field,
             "pk_name": pk_name,
         }
-        # logger.debug(f"Set many-to-many options for field {field_name}: {len(options)} options")
 
     def _render_many_to_many_multiselect(
         self, label: str, field_name: str, existing_value: Any, key: str
@@ -1218,7 +1203,6 @@ class PydanticInputGenerator:
         id_to_display = {
             getattr(option, pk): getattr(option, display_field) for option in options
         }
-        id_to_object = {getattr(option, pk): option for option in options}
 
         # Get the currently selected PKs
         current_selection_ids = []
@@ -1239,7 +1223,6 @@ class PydanticInputGenerator:
                             for name in existing_value
                             if name in name_to_id
                         ]
-                        # logger.debug(f"Converted display names to PKs for {field_name}: {existing_value} -> {current_selection_ids}")
                 elif hasattr(first_item, pk):
                     # List of objects from relationship
                     current_selection_ids = [getattr(obj, pk) for obj in existing_value]

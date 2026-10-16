@@ -8,10 +8,12 @@ their .value form match interchangeably.
 from enum import Enum
 from unittest.mock import MagicMock, patch
 
+from pydantic import BaseModel, Field
+
 from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator as G
 
 
-class StrColor(str, Enum):
+class StrColor(str, Enum):  # noqa: UP042 - exercises the str-mixin Enum case
     RED = "red"
     BLUE = "blue"
 
@@ -126,7 +128,6 @@ def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
 @patch("streamlit_pydantic_crud.pydantic_utils.st")
 def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) -> None:
     """End to end: a selectbox field with no session value selects its default."""
-    from pydantic import BaseModel, Field
 
     class Schema(BaseModel):
         color: str = Field(
