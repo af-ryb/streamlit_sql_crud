@@ -27,6 +27,12 @@ from streamlit_pydantic_crud.utils import (
 
 
 class UpdateRow:
+    """Edit dialog for one row.
+
+    ``dt_filters`` / ``no_dt_filters`` are accepted for compatibility but not
+    applied: editing lists all foreign-key options, unlike creating.
+    """
+
     def __init__(
         self,
         conn: SQLConnection,
@@ -81,8 +87,6 @@ class UpdateRow:
                 default_values=self.default_values,
                 row=self.row,
                 foreign_key_options=self.foreign_key_options,
-                dt_filters=self.dt_filters,
-                no_dt_filters=self.no_dt_filters,
             )
 
         self.input_fields = InputFields(

@@ -70,7 +70,7 @@ class SqlUi:
             conn (SQLConnection): A sqlalchemy connection created with st.connection("sql", url="<sqlalchemy url>")
             model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
-            available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all
+            available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
             df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details.
             read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
@@ -658,8 +658,6 @@ class SqlUi:
                 foreign_key_options=self.foreign_key_options,
                 many_to_many_fields=self.many_to_many_fields,
                 key=self.key,
-                dt_filters=self.col_filter.dt_filters,
-                no_dt_filters=self.col_filter.no_dt_filters,
             )
             update_row.show_dialog()
         elif action == "delete":
