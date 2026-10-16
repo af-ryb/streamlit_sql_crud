@@ -3,7 +3,7 @@ from functools import cached_property
 import pandas as pd
 import streamlit as st
 from sqlalchemy import func, select
-from sqlalchemy.orm import RelationshipProperty, Session
+from sqlalchemy.orm import RelationshipDirection, RelationshipProperty, Session
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud import lib, read_cte
@@ -27,7 +27,9 @@ class ReadManyRel:
     @cached_property
     def other_col(self):
         pairs = self.rel.local_remote_pairs
-        assert pairs is not None
+        if pairs is None:
+            msg = f"Relationship {self.rel} has no local/remote column pairs"
+            raise ValueError(msg)
         col = pairs[0][1]
         return col
 
@@ -144,7 +146,11 @@ def show_rel(
 
 
 def show_rels(conn: SQLConnection, model, model_id: int | str):
-    rels = [rel for rel in model.__mapper__.relationships if rel.direction.value == 1]
+    rels = [
+        rel
+        for rel in model.__mapper__.relationships
+        if rel.direction is RelationshipDirection.ONETOMANY
+    ]
 
     for rel in rels:
         show_rel(conn, model, model_id, rel)

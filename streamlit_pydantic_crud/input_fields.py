@@ -62,7 +62,9 @@ class InputFields:
         )
         if not input_value:
             return None
-        assert isinstance(input_value, FkOpt)
+        if not isinstance(input_value, FkOpt):
+            msg = f"Expected an FkOpt option for {col_name}, got {input_value!r}"
+            raise TypeError(msg)
         return input_value.idx
 
     def get_col_str_opts(self, col_name: str, value: str | None):
@@ -241,7 +243,9 @@ class InputFields:
 
     def get_input_value(self, col: KeyedColumnElement, col_value):
         col_name = col.description
-        assert col_name is not None
+        if col_name is None:
+            msg = "Column has no name; cannot build an input for it"
+            raise ValueError(msg)
         pretty_name = get_pretty_name(col_name)
         key = f"{self.key_prefix}_{col_name}"
 
