@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
 import streamlit as st
 from dateutil.relativedelta import relativedelta
@@ -41,13 +40,15 @@ class ExistingData:
         self.no_dt_filters = no_dt_filters or {}
 
         self.cols = Model.__table__.columns
-        reg_values: Any = Model.registry._class_registry.values()
-        self._models = [reg for reg in reg_values if hasattr(reg, "__tablename__")]
+        self._models: list[type[DeclarativeBase]] = [
+            mapper.class_ for mapper in Model.registry.mappers
+        ]
 
         table_name = Model.__tablename__
-        self.text = self.get_text(table_name, ss.stsql_updated)
+        text = self.get_text(table_name, ss.stsql_updated, default_values)
+        self.text = self.add_row_values(text)
         self.dt = self.get_dt(table_name, ss.stsql_updated)
-        self.fk = self.get_fk(table_name, ss.stsql_updated)
+        self.fk = self.get_fk()
 
     def apply_active_filters(self, stmt, model: type[DeclarativeBase]):
 
@@ -88,28 +89,39 @@ class ExistingData:
 
         return stmt
 
-    def _get_str_opts(self, column) -> Sequence[str]:
-        col_name = column.name
-        stmt = select(distinct(column)).select_from(self.Model).limit(10000)
-        stmt = self.add_default_where(stmt, self.Model)
-
-        opts = list(self.session.execute(stmt).scalars().all())
-        row_value = None
-        if self.row:
-            row_value: str | None = getattr(self.row, col_name)
-        if row_value is not None and row_value not in opts:
-            opts.append(row_value)
-
-        return opts
-
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
-    def get_text(_self, table_name: str, updated: int) -> dict[str, Sequence[str]]:
+    def get_text(
+        _self, table_name: str, updated: int, default_values: dict
+    ) -> dict[str, Sequence[str]]:
+        """Return distinct values of each string column, filtered by defaults.
+
+        Every input of the result is an argument so it is part of the cache key;
+        the current row's values are added afterwards by `add_row_values`.
+        """
         opts = {
             col.name: _self._get_str_opts(col)
             for col in _self.cols
             if col.type.python_type is str
         }
         return opts
+
+    def add_row_values(
+        self, text: dict[str, Sequence[str]]
+    ) -> dict[str, Sequence[str]]:
+        """Return a copy of `text` with the current row's values appended."""
+        result: dict[str, Sequence[str]] = {}
+        for col_name, opts in text.items():
+            row_value = getattr(self.row, col_name, None) if self.row else None
+            if row_value is not None and row_value not in opts:
+                result[col_name] = [*opts, row_value]
+            else:
+                result[col_name] = list(opts)
+        return result
+
+    def _get_str_opts(self, column) -> Sequence[str]:
+        stmt = select(distinct(column)).select_from(self.Model).limit(10000)
+        stmt = self.add_default_where(stmt, self.Model)
+        return list(self.session.execute(stmt).scalars().all())
 
     def _get_dt_col(self, column):
         min_default = date.today() - relativedelta(days=30)
@@ -131,11 +143,24 @@ class ExistingData:
         fk_opt = FkOpt(idx, str(row))
         return fk_opt
 
-    def get_foreign_opts(self, col, foreign_key: ForeignKey):
+    def get_foreign_opts(self, col, foreign_key: ForeignKey) -> list[FkOpt]:
+        """Return FK options; only the current value if the target is unmapped."""
         foreign_table_name = foreign_key.column.table.name
         model = next(
-            reg for reg in self._models if reg.__tablename__ == foreign_table_name
+            (
+                reg
+                for reg in self._models
+                if getattr(reg, "__tablename__", None) == foreign_table_name
+            ),
+            None,
         )
+        if model is None:
+            logger.warning(
+                f"No mapped model for table '{foreign_table_name}'; "
+                f"offering only the current value for '{col.name}'"
+            )
+            value = getattr(self.row, col.name, None) if self.row else None
+            return [] if value is None else [FkOpt(value, str(value))]
         fk_pk_name = foreign_key.column.description
         stmt = select(model).distinct()
 
@@ -211,11 +236,10 @@ class ExistingData:
 
         return opts
 
-    # @st.cache_data
-    def get_fk(_self, table_name: str, _updated: int):
-        # TODO check, do we need caching, if so should be rewritten to match filter logic and reset cache after changing filter state
-        fk_cols = [col for col in _self.cols if len(list(col.foreign_keys)) > 0]
-        opts = {}
+    def get_fk(self) -> dict[str, list[FkOpt]]:
+        """Return FK options per column (uncached: depends on live filters)."""
+        fk_cols = [col for col in self.cols if len(list(col.foreign_keys)) > 0]
+        opts: dict[str, list[FkOpt]] = {}
 
         for col in fk_cols:
             if not col.description:
@@ -223,12 +247,12 @@ class ExistingData:
 
             col_name = col.description
 
-            if col_name in _self.foreign_key_options:
-                opts[col_name] = _self.get_custom_foreign_opts(
-                    col_name, _self.foreign_key_options[col_name]
+            if col_name in self.foreign_key_options:
+                opts[col_name] = self.get_custom_foreign_opts(
+                    col_name, self.foreign_key_options[col_name]
                 )
             else:
-                opts[col_name] = _self.get_foreign_opts(
+                opts[col_name] = self.get_foreign_opts(
                     col, next(iter(col.foreign_keys))
                 )
 
