@@ -67,11 +67,11 @@ def test_enum_param_restored_on_reload(fresh: Callable[..., AppTest]) -> None:
 def test_keyed_instance_prefixes_params(fresh: Callable[..., AppTest]) -> None:
     at = fresh(key="k")
     at.selectbox(key=kind_key("k")).select_index(0).run()
-    at.date_input(key="k_create_date_filter_inicio_Born").set_value(
+    at.date_input(key="k_create_date_filter_start_Born").set_value(
         date(2000, 1, 3)
     ).run()
     assert at.query_params.get("k_kind") == ["ENG"]
-    assert at.query_params.get("k_born_inicio") == ["2000-01-03"]
+    assert at.query_params.get("k_born_start") == ["2000-01-03"]
     assert "kind" not in at.query_params
     assert ids(at) == "IDS=4"
 

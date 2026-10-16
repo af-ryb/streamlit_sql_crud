@@ -21,19 +21,19 @@ def param_name(prefix: str, name: str) -> str:
 
 
 def get_dt_param(colname: str, prefix: str = ""):
-    inicio_param = st.query_params.get(param_name(prefix, f"{colname}_inicio"), None)
-    if inicio_param == "":
-        inicio = None
+    start_param = st.query_params.get(param_name(prefix, f"{colname}_start"), None)
+    if start_param == "":
+        start = None
     else:
-        inicio = inicio_param
+        start = start_param
 
-    final_param = st.query_params.get(param_name(prefix, f"{colname}_final"), None)
-    if final_param == "":
-        final = None
+    end_param = st.query_params.get(param_name(prefix, f"{colname}_end"), None)
+    if end_param == "":
+        end = None
     else:
-        final = final_param
+        end = end_param
 
-    return inicio, final
+    return start, end
 
 
 def parse_date(value: str | None) -> date | None:

@@ -47,19 +47,19 @@ def test_set_dt_param_stores_date(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(params.st, "query_params", query)
     monkeypatch.setattr(params, "ss", {"k": date(2024, 5, 6)})
 
-    params.set_dt_param("born", "k", "inicio")
+    params.set_dt_param("born", "k", "start")
 
-    assert query == {"born_inicio": "2024-05-06"}
+    assert query == {"born_start": "2024-05-06"}
 
 
 def test_set_dt_param_cleared_input_drops_param(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A cleared date input (None) removes the query param, no crash."""
-    query = {"born_inicio": "2024-05-06"}
+    query = {"born_start": "2024-05-06"}
     monkeypatch.setattr(params.st, "query_params", query)
     monkeypatch.setattr(params, "ss", {"k": None})
 
-    params.set_dt_param("born", "k", "inicio")
+    params.set_dt_param("born", "k", "start")
 
     assert query == {}

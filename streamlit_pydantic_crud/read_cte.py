@@ -165,55 +165,55 @@ class ColFilter:
             colname = col.description or col.name
             label = get_pretty_name(colname)
             self.container.write(label)
-            inicio_c, final_c, btn_c = self.container.columns(
+            start_c, end_c, btn_c = self.container.columns(
                 [0.475, 0.475, 0.05], vertical_alignment="bottom"
             )
 
-            default_inicio, default_final = params.get_dt_param(colname, self.key)
+            default_start, default_end = params.get_dt_param(colname, self.key)
 
-            inicio_key = f"{self.key_prefix}_date_filter_inicio_{label}"
-            final_key = f"{self.key_prefix}_date_filter_final_{label}"
+            start_key = f"{self.key_prefix}_date_filter_start_{label}"
+            end_key = f"{self.key_prefix}_date_filter_end_{label}"
             """The URL only seeds the state: a passed value would stick in the
             browser widget after a cancel."""
-            if inicio_key not in ss:
-                ss[inicio_key] = params.parse_date(default_inicio)
-            if final_key not in ss:
-                ss[final_key] = params.parse_date(default_final)
+            if start_key not in ss:
+                ss[start_key] = params.parse_date(default_start)
+            if end_key not in ss:
+                ss[end_key] = params.parse_date(default_end)
 
-            inicio = inicio_c.date_input(
-                "Inicio",
+            start = start_c.date_input(
+                "Start",
                 value=None,
-                key=inicio_key,
-                args=(colname, inicio_key, "inicio", self.key),
+                key=start_key,
+                args=(colname, start_key, "start", self.key),
                 on_change=params.set_dt_param,
             )
 
-            final = final_c.date_input(
-                "Final",
+            end = end_c.date_input(
+                "End",
                 value=None,
-                key=final_key,
-                args=(colname, final_key, "final", self.key),
+                key=end_key,
+                args=(colname, end_key, "end", self.key),
                 on_change=params.set_dt_param,
             )
 
             btn_c.button(
                 "",
                 icon=":material/cancel:",
-                key=f"st_sql_{inicio_key}_{final_key}_cancel_btn",
+                key=f"st_sql_{start_key}_{end_key}_cancel_btn",
                 on_click=params.clear_filter,
                 args=(
-                    [inicio_key, final_key],
+                    [start_key, end_key],
                     [
-                        params.param_name(self.key, f"{colname}_inicio"),
-                        params.param_name(self.key, f"{colname}_final"),
+                        params.param_name(self.key, f"{colname}_start"),
+                        params.param_name(self.key, f"{colname}_end"),
                     ],
                 ),
             )
 
-            inicio_date = to_date(inicio)
-            final_date = to_date(final)
+            start_date = to_date(start)
+            end_date = to_date(end)
 
-            result[colname] = inicio_date, final_date
+            result[colname] = start_date, end_date
 
         return result
 
@@ -289,12 +289,12 @@ def get_stmt_no_pag(cte: CTE, col_filter: ColFilter) -> Select:
     """Select from `cte` with all filters of `col_filter` applied."""
     stmt = get_stmt_no_pag_dt(cte, col_filter.no_dt_filters)
 
-    for colname, (inicio, final) in col_filter.dt_filters.items():
+    for colname, (start, end) in col_filter.dt_filters.items():
         col = find_cte_col(cte, colname)
-        if inicio:
-            stmt = stmt.where(col >= inicio)
-        if final:
-            stmt = stmt.where(col <= final)
+        if start:
+            stmt = stmt.where(col >= start)
+        if end:
+            stmt = stmt.where(col <= end)
 
     return stmt
 
