@@ -1,8 +1,11 @@
+from collections.abc import Callable
 from typing import Literal
 
 import streamlit as st
 from loguru import logger
 from streamlit import session_state as ss
+
+from streamlit_pydantic_crud.state import get_ui_state
 
 # Default ttl for cached option/count queries so values added outside the
 # library (ETL, agents, direct writes) appear without an app restart.
@@ -33,6 +36,31 @@ def set_logging(disable_log: bool):
 def set_state(key: str, value):
     if key not in ss:
         ss[key] = value
+
+
+def show_crud_dialog(
+    title: str, key: str, show: Callable[[], tuple[bool | None, str | None]]
+) -> None:
+    """Open a dialog running `show` and store its result in the `key` UI state.
+
+    Reruns the page once `show` wrote to the database (stsql_updated grew).
+    """
+
+    @st.dialog(title, width="large")
+    def wrap_show() -> None:
+        set_state("stsql_updated", 0)
+        updated_before = ss.stsql_updated
+        status, msg = show()
+
+        ui_state = get_ui_state(key)
+        ui_state.update_ok = status
+        ui_state.update_message = msg
+        ui_state.opened = True
+
+        if ss.stsql_updated > updated_before:
+            st.rerun()
+
+    wrap_show()
 
 
 @st.cache_data

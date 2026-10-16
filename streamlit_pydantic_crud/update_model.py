@@ -15,9 +15,9 @@ from streamlit_pydantic_crud.lib import (
     get_pretty_name,
     log,
     set_state,
+    show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.state import get_ui_state
 from streamlit_pydantic_crud.utils import (
     convert_numpy_to_python,
     pk_attr,
@@ -387,24 +387,10 @@ class UpdateRow:
 
         return None, None
 
-    def show_dialog(self):
+    def show_dialog(self) -> None:
+        """Open the edit dialog."""
         pretty_name = get_pretty_name(tablename(self.model))
-
-        @st.dialog(f"Edit {pretty_name}", width="large")
-        def wrap_show_update():
-            set_state("stsql_updated", 0)
-            updated_before = ss.stsql_updated
-            status, msg = self.show()
-
-            ui_state = get_ui_state(self.key)
-            ui_state.update_ok = status
-            ui_state.update_message = msg
-            ui_state.opened = True
-
-            if ss.stsql_updated > updated_before:
-                st.rerun()
-
-        wrap_show_update()
+        show_crud_dialog(f"Edit {pretty_name}", self.key, self.show)
 
 
 def action_btns(

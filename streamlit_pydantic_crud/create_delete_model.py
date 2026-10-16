@@ -1,3 +1,5 @@
+from functools import partial
+
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
@@ -14,9 +16,9 @@ from streamlit_pydantic_crud.lib import (
     get_pretty_name,
     log,
     set_state,
+    show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.state import get_ui_state
 from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name, tablename
 
 
@@ -297,24 +299,12 @@ class CreateRow:
             error_msg = format_database_error(e)
             return False, error_msg
 
-    def show_dialog(self):
+    def show_dialog(self) -> None:
+        """Open the create dialog."""
         pretty_name = get_pretty_name(tablename(self.model))
-
-        @st.dialog(f"Create {pretty_name}", width="large")
-        def wrap_show_update():
-            set_state("stsql_updated", 0)
-            updated_before = ss.stsql_updated
-            status, msg = self.show(pretty_name)
-
-            ui_state = get_ui_state(self.key)
-            ui_state.update_ok = status
-            ui_state.update_message = msg
-            ui_state.opened = True
-
-            if ss.stsql_updated > updated_before:
-                st.rerun()
-
-        wrap_show_update()
+        show_crud_dialog(
+            f"Create {pretty_name}", self.key, partial(self.show, pretty_name)
+        )
 
 
 class DeleteRows:
@@ -386,21 +376,9 @@ class DeleteRows:
         msg = f"Successfully deleted {len(lancs)}"
         return True, f"{msg}. {missing_msg}" if missing else msg
 
-    def show_dialog(self):
+    def show_dialog(self) -> None:
+        """Open the delete dialog."""
         pretty_name = get_pretty_name(tablename(self.model))
-
-        @st.dialog(f"Delete {pretty_name}", width="large")
-        def wrap_show_update():
-            set_state("stsql_updated", 0)
-            updated_before = ss.stsql_updated
-            status, msg = self.show(pretty_name)
-
-            ui_state = get_ui_state(self.key)
-            ui_state.update_ok = status
-            ui_state.update_message = msg
-            ui_state.opened = True
-
-            if ss.stsql_updated > updated_before:
-                st.rerun()
-
-        wrap_show_update()
+        show_crud_dialog(
+            f"Delete {pretty_name}", self.key, partial(self.show, pretty_name)
+        )
