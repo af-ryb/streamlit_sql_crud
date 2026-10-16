@@ -261,7 +261,6 @@ class PydanticInputGenerator:
         # For create operations, exclude empty values (original behavior)
         return bool(field_value == "" or field_value == [] or field_value is None)
 
-    @logger.catch()
     def generate_form_data(
         self, existing_values: dict[str, Any] | None = None
     ) -> dict[str, Any]:
