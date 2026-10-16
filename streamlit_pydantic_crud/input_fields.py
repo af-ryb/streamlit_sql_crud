@@ -78,16 +78,28 @@ class InputFields:
             val_index = len(opts) - 1
             return val_index, opts
 
-    def input_enum(self, col_enum: SQLEnum, col_value=None):
-        col_name = col_enum.name
-        assert col_name is not None
-        opts = col_enum.enums
-        if col_value:
-            index = opts.index(col_value)
-        else:
-            index = None
-        input_value = st.selectbox(col_name, opts, index=index)
-        return input_value
+    def input_enum(
+        self, col_name: str, col_enum: SQLEnum, col_value: object = None
+    ) -> object:
+        """Render a selectbox for an Enum column and return the chosen option.
+
+        `Enum(PyEnum)` columns offer (and return) members; string enums offer
+        their literal values. A stored member name is mapped back to its member.
+        """
+        enum_class = col_enum.enum_class
+        opts: list = list(enum_class) if enum_class else list(col_enum.enums)
+
+        if enum_class and isinstance(col_value, str):
+            col_value = enum_class.__members__.get(col_value, col_value)
+        index = opts.index(col_value) if col_value in opts else None
+
+        return st.selectbox(
+            get_pretty_name(col_name),
+            opts,
+            index=index,
+            format_func=lambda opt: opt.name if enum_class else str(opt),
+            key=f"{self.key_prefix}_{col_name}",
+        )
 
     def input_str_enum(self, col_name: str, value=None):
         """Handle string columns that should be treated as enums using selectbox."""
@@ -232,7 +244,7 @@ class InputFields:
             # Fallback for ARRAY types that don't match isinstance check
             input_value = self.input_array(col_name, col.type, col_value)
         elif isinstance(col.type, SQLEnum):
-            input_value = self.input_enum(col.type, col_value)
+            input_value = self.input_enum(col_name, col.type, col_value)
         elif col.type.python_type is str:
             # Check if string column should be treated as enum
             if self.is_string_enum_candidate(col_name):
