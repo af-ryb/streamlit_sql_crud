@@ -7,6 +7,7 @@ from typing import Any, get_args, get_origin
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 from sqlalchemy.orm import DeclarativeBase
 
 from streamlit_pydantic_crud.utils import parse_pg_array, unwrap_optional
@@ -144,7 +145,7 @@ class PydanticSQLAlchemyConverter:
             for field_name, field in schema.model_fields.items():
                 info = {
                     "annotation": field.annotation,
-                    "default": field.default,
+                    "default": _resolved_default(field),
                     "is_required": field.is_required(),
                     "description": field.description,
                     "constraints": {},
@@ -357,10 +358,7 @@ class PydanticInputGenerator:
     ) -> Any:
         """Render the appropriate Streamlit input for a field based on its type"""
 
-        # Resolve the Pydantic field default (None when unset / PydanticUndefined).
         field_default = field_info.get("default")
-        if field_default is not None and repr(field_default) == "PydanticUndefined":
-            field_default = None
 
         # Ensure label is always a string
         description = field_info.get("description")
@@ -481,8 +479,7 @@ class PydanticInputGenerator:
 
     def _render_id_field(self, label: str, existing_value: Any, key: str) -> Any:
         """Render ID field specially based on operation type"""
-        # Determine operation type based on key prefix and existing value
-        is_update = self.key_prefix == "update" or (
+        is_update = self.operation_type == "update" or (
             existing_value is not None and existing_value != ""
         )
 
@@ -490,7 +487,7 @@ class PydanticInputGenerator:
             # Update operation: show ID as disabled text input (visible but not editable)
             return st.text_input(
                 label,
-                value=str(existing_value),
+                value="" if existing_value is None else str(existing_value),
                 disabled=True,
                 key=key,
                 help="ID field (read-only)",
@@ -619,10 +616,7 @@ class PydanticInputGenerator:
         widget_type = json_schema_extra.get("widget")
         widget_kwargs = json_schema_extra.get("kw", {})
 
-        # Resolve the Pydantic field default (None when unset / PydanticUndefined).
         field_default = field_info.get("default")
-        if field_default is not None and repr(field_default) == "PydanticUndefined":
-            field_default = None
         # Value widgets fall back to the default; selection widgets resolve
         # precedence themselves (session > explicit kw > default).
         value = existing_value if existing_value is not None else field_default
@@ -1136,3 +1130,10 @@ class PydanticInputGenerator:
         )
 
         return selected_ids
+
+
+def _resolved_default(field: FieldInfo) -> Any:
+    """Return the field default, calling ``default_factory``; None if required."""
+    if field.is_required():
+        return None
+    return field.get_default(call_default_factory=True, validated_data={})
