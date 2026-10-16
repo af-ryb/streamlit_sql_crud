@@ -367,7 +367,8 @@ class UpdateRow:
                 return self.save_pydantic(updated)
         else:
             # Use traditional form for SQLAlchemy-only mode
-            with st.form(f"update_model_form_{pretty_name}", border=False):
+            form_key = f"update_model_form_{pretty_name}_{self.key_prefix}"
+            with st.form(form_key, border=False):
                 updated = self.get_sqlalchemy_updates()
                 update_btn = st.form_submit_button("Save")
 

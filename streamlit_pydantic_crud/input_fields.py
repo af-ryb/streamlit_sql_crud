@@ -54,7 +54,7 @@ class InputFields:
 
         index = next((i for i, opt in enumerate(opts) if opt.idx == value), None)
         input_value = st.selectbox(
-            col_name,
+            get_pretty_name(col_name),
             options=opts,
             format_func=lambda opt: opt.name,
             index=index,
@@ -158,13 +158,21 @@ class InputFields:
             value_dec = value_dec.quantize(Decimal(str(step)))
         return value_dec
 
-    def input_numeric(self, col_name, scale: int | None, value=None):
+    def input_numeric(
+        self, col_name: str, scale: int | None, value: object = None
+    ) -> Decimal | None:
+        """Render a number input for a Numeric column and return a Decimal."""
         step = None
         if scale:
             step = 10 ** (scale * -1)
 
-        value_float = float(value) if value is not None else None
-        input_value = st.number_input(col_name, value=value_float, step=step)
+        value_float = float(str(value)) if value is not None else None
+        input_value = st.number_input(
+            get_pretty_name(col_name),
+            value=value_float,
+            step=step,
+            key=f"{self.key_prefix}_{col_name}",
+        )
 
         return self.coerce_decimal(input_value, step)
 
@@ -221,7 +229,7 @@ class InputFields:
             options=options,
             default=current_values,
             accept_new_options=True,
-            key=f"{col_name}_multiselect",
+            key=f"{self.key_prefix}_{col_name}",
             help="Select existing options or type new ones"
             if not enum_options
             else f"Select from: {', '.join(enum_options)}",
@@ -233,12 +241,13 @@ class InputFields:
         col_name = col.description
         assert col_name is not None
         pretty_name = get_pretty_name(col_name)
+        key = f"{self.key_prefix}_{col_name}"
 
         if col.primary_key:
             input_value = col_value
         elif len(col.foreign_keys) > 0:
             input_value = self.input_fk(col_name, col_value)
-        elif ARRAY and isinstance(col.type, ARRAY):
+        elif isinstance(col.type, ARRAY):
             input_value = self.input_array(col_name, col.type, col_value)
         elif "ARRAY" in str(col.type).upper():
             # Fallback for ARRAY types that don't match isinstance check
@@ -252,18 +261,20 @@ class InputFields:
             else:
                 input_value = self.input_str(col_name, col_value)
         elif col.type.python_type is int:
-            input_value = st.number_input(pretty_name, value=col_value, step=1)
+            input_value = st.number_input(pretty_name, value=col_value, step=1, key=key)
         elif col.type.python_type is float:
-            input_value = st.number_input(pretty_name, value=col_value, step=0.1)
+            input_value = st.number_input(
+                pretty_name, value=col_value, step=0.1, key=key
+            )
         elif isinstance(col.type, Numeric):
             scale = col.type.scale
-            input_value = self.input_numeric(pretty_name, scale, col_value)
+            input_value = self.input_numeric(col_name, scale, col_value)
         elif col.type.python_type is datetime:
-            input_value = st.datetime_input(pretty_name, value=col_value)
+            input_value = st.datetime_input(pretty_name, value=col_value, key=key)
         elif col.type.python_type is date:
-            input_value = st.date_input(pretty_name, value=col_value)
+            input_value = st.date_input(pretty_name, value=col_value, key=key)
         elif col.type.python_type is bool:
-            input_value = st.checkbox(pretty_name, value=col_value)
+            input_value = st.checkbox(pretty_name, value=col_value, key=key)
         else:
             input_value = None
 

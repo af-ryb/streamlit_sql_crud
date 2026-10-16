@@ -9,7 +9,7 @@ from datetime import date
 from enum import Enum as PyEnum
 
 import streamlit as st
-from sqlalchemy import ARRAY, Numeric, String, create_engine
+from sqlalchemy import ARRAY, ForeignKey, Numeric, String, create_engine
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -34,6 +34,18 @@ class Status(PyEnum):
     INACTIVE = "inactive"
 
 
+class Owner(Base):
+    """Parent table referenced by Task through a foreign key."""
+
+    __tablename__ = "owner"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column()
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Task(Base):
     """Table covering enum, string, numeric, date and boolean columns."""
 
@@ -48,6 +60,7 @@ class Task(Base):
     ratio: Mapped[float] = mapped_column(default=0.0)
     due: Mapped[date | None] = mapped_column()
     amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("owner.id"))
 
     def __str__(self) -> str:
         return f"Task {self.id}"
@@ -58,6 +71,7 @@ Base.metadata.create_all(eng)
 with Session(eng) as s:
     if not s.query(Task).first():
         """More than ten distinct notes keep `note` a free-text input."""
+        s.add(Owner(id=1, name="Ann"))
         s.add_all(
             Task(
                 id=i,
