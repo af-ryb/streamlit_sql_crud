@@ -60,6 +60,11 @@ From reading (verify with a test first):
 
 ## Step 3 — Code cleanliness
 
+- [ ] Filter values are mirrored to URL query params named by column (global): two
+  `SqlUi` instances filtering a same-named column share the filter — prefix with `key`
+- [ ] `stDatalist` labels use the raw column name (no-schema mode)
+- [ ] Unify the array parser in `input_fields.input_array` with `utils.parse_pg_array`
+
 - [ ] IDE `deprecated_instance_property` on `model_fields`: one typed helper
   `model_fields(schema) -> dict[str, FieldInfo]`
 - [ ] Make `_render_field_input` public (`render_field`) — used by `PydanticUi` and tests
