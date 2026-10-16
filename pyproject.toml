@@ -19,7 +19,7 @@ sort_by_size = true
 verbose = false
 
 [tool.ruff]
-exclude = [".venv", "whitelist.py", "alembic", "alembic_dev"]
+exclude = [".venv", ".claude", "whitelist.py", "alembic", "alembic_dev"]
 line-length = 88
 
 [tool.ruff.lint]
