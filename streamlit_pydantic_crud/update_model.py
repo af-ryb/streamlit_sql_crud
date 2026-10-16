@@ -9,6 +9,7 @@ from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import many
 from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.form_options import load_form_options
 from streamlit_pydantic_crud.input_fields import InputFields
 from streamlit_pydantic_crud.lib import (
     format_database_error,
@@ -82,20 +83,21 @@ class UpdateRow:
             else:
                 self.row = s.get_one(model, row_id)
 
-            self.existing_data = ExistingData(
-                s,
-                model,
-                default_values=self.default_values,
-                row=self.row,
-                foreign_key_options=self.foreign_key_options,
-            )
-
-        self.input_fields = InputFields(
-            model,
-            key_prefix=self.key_prefix,
-            default_values=self.default_values,
-            existing_data=self.existing_data,
-        )
+            if not self.update_schema:
+                """SQLAlchemy-mode inputs; Pydantic forms never read them."""
+                self.existing_data = ExistingData(
+                    s,
+                    model,
+                    default_values=self.default_values,
+                    row=self.row,
+                    foreign_key_options=self.foreign_key_options,
+                )
+                self.input_fields = InputFields(
+                    model,
+                    key_prefix=self.key_prefix,
+                    default_values=self.default_values,
+                    existing_data=self.existing_data,
+                )
 
         # Initialize PydanticUi if schema provided
         if self.update_schema:
@@ -147,9 +149,14 @@ class UpdateRow:
             # Set operation type to 'update' for proper null value handling
             self.pydantic_ui.set_operation_type("update")
 
-            # Load foreign key data for fields that need it
-            self._load_foreign_key_data()
-            self._load_many_to_many_data()
+            load_form_options(
+                self.pydantic_ui,
+                conn,
+                model,
+                self.foreign_key_options,
+                self.many_to_many_fields,
+                row=self.row,
+            )
 
     @property
     def get_session_key(self):
@@ -165,82 +172,6 @@ class UpdateRow:
         # Use PydanticUi to render the form with submit button
         form_data, submitted = self.pydantic_ui.render_with_submit("Save")
         return form_data if submitted else None
-
-    def _load_many_to_many_data(self):
-        """Load many-to-many relationship data from the database."""
-        for field_name, m2m_config in self.many_to_many_fields.items():
-            try:
-                relationship_name = m2m_config["relationship"]
-                display_field = m2m_config["display_field"]
-
-                # Get the related model from the relationship
-                related_model = getattr(
-                    self.model, relationship_name
-                ).property.mapper.class_
-
-                # Base query for the related model
-                query = select(related_model)
-
-                # Apply optional filter
-                if "filter" in m2m_config:
-                    query = m2m_config["filter"](query)
-
-                with self.conn.session as session:
-                    rows = session.execute(query).scalars().all()
-
-                    # Set options in PydanticUi's input generator
-                    self.pydantic_ui.input_generator.set_many_to_many_options(
-                        field_name, list(rows), display_field, pk_name(related_model)
-                    )
-
-            except Exception:
-                logger.exception(f"Failed to load many-to-many data for {field_name}")
-
-    def _load_foreign_key_data(self):
-        """Load foreign key data from database for form fields using filtered options."""
-        for field_name, fk_config in self.foreign_key_options.items():
-            try:
-                display_field = fk_config["display_field"]
-                value_field = fk_config["value_field"]
-
-                # Use filtered foreign key options from ExistingData instead of raw query
-                if (
-                    hasattr(self.existing_data, "fk")
-                    and field_name in self.existing_data.fk
-                ):
-                    fk_opts = self.existing_data.fk[field_name]
-
-                    # Convert FkOpt objects to list of dicts for the input generator
-                    options = [
-                        {value_field: fk_opt.idx, display_field: fk_opt.name}
-                        for fk_opt in fk_opts
-                    ]
-
-                else:
-                    # Fallback to original logic if filtered options not available
-                    query = fk_config["query"]
-
-                    with self.conn.session as session:
-                        rows = session.execute(query).scalars().all()
-
-                        # Convert to list of dicts for the input generator
-                        options = []
-                        for row in rows:
-                            options.append(
-                                {
-                                    value_field: getattr(row, value_field),
-                                    display_field: getattr(row, display_field),
-                                }
-                            )
-
-                # Set the options in the input generator
-                self.pydantic_ui.input_generator.set_foreign_key_options(
-                    field_name, options, display_field, value_field
-                )
-
-            except Exception:
-                # Log full traceback but continue - field falls back to text input
-                logger.exception(f"Failed to load foreign key data for {field_name}")
 
     def get_sqlalchemy_updates(self):
         """Original SQLAlchemy update logic"""
