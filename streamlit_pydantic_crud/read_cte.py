@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 import streamlit_antd_components as sac
 from loguru import logger
-from sqlalchemy import CTE, Select, distinct, func, select
+from sqlalchemy import CTE, Select, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
@@ -93,7 +93,10 @@ def get_existing_values(
         try:
             # For joined columns, we need to select from the CTE itself
             stmt = (
-                select(distinct(cte.c[col.name])).order_by(cte.c[col.name]).limit(10000)
+                select(cte.c[col.name])
+                .distinct()
+                .order_by(cte.c[col.name])
+                .limit(10000)
             )
             values = _session.execute(stmt).scalars().all()
             # Use col.name if description is None (common for joined columns)

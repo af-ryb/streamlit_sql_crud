@@ -6,7 +6,7 @@ from typing import Any
 import streamlit as st
 from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy import distinct, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.elements import ColumnElement
@@ -133,7 +133,7 @@ class ExistingData:
         return result
 
     def _get_str_opts(self, column) -> Sequence[str]:
-        stmt = select(distinct(column)).select_from(self.Model).limit(10000)
+        stmt = select(column).distinct().select_from(self.Model).limit(10000)
         stmt = self.add_default_where(stmt, self.Model)
         return list(self.session.execute(stmt).scalars().all())
 
