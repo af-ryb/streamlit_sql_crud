@@ -18,7 +18,7 @@ def log(
     table: str,
     row,
     success: bool = True,
-):
+) -> None:
     message = "| Action={} | Table={} | Row={}"
     if success:
         logger.info(message, action, table, str(row))
@@ -26,7 +26,7 @@ def log(
         logger.error(message, action, table, str(row))
 
 
-def set_logging(disable_log: bool):
+def set_logging(disable_log: bool) -> None:
     if disable_log:
         logger.disable("streamlit_pydantic_crud")
         return
@@ -34,7 +34,7 @@ def set_logging(disable_log: bool):
     logger.enable("streamlit_pydantic_crud")
 
 
-def set_state(key: str, value):
+def set_state(key: str, value) -> None:
     if key not in ss:
         ss[key] = value
 

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from streamlit.connections.sql_connection import SQLConnection
 
+from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import custom_foreign_opts
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.utils import pk_name
@@ -18,8 +19,8 @@ def load_form_options(
     form: PydanticCrudUi,
     conn: SQLConnection,
     model: type[DeclarativeBase],
-    foreign_key_options: dict,
-    many_to_many_fields: dict,
+    foreign_key_options: ForeignKeyOptions,
+    many_to_many_fields: ManyToManyFields,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,
@@ -39,7 +40,7 @@ def load_foreign_key_options(
     form: PydanticCrudUi,
     conn: SQLConnection,
     model: type[DeclarativeBase],
-    foreign_key_options: dict,
+    foreign_key_options: ForeignKeyOptions,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,
@@ -86,7 +87,7 @@ def load_many_to_many_options(
     form: PydanticCrudUi,
     conn: SQLConnection,
     model: type[DeclarativeBase],
-    many_to_many_fields: dict,
+    many_to_many_fields: ManyToManyFields,
 ) -> None:
     """Set the multiselect options of every ``many_to_many_fields`` field."""
     for field_name, m2m_config in many_to_many_fields.items():

@@ -1,3 +1,5 @@
+from typing import Any, Literal
+
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
@@ -8,6 +10,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import many
+from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.form_options import load_form_options
 from streamlit_pydantic_crud.input_fields import InputFields
@@ -43,8 +46,8 @@ class UpdateRow:
         default_values: dict | None = None,
         update_show_many: bool = False,
         update_schema: type[BaseModel] | None = None,
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
         key: str = "update",
         dt_filters: dict | None = None,
         no_dt_filters: dict | None = None,
@@ -159,16 +162,16 @@ class UpdateRow:
             )
 
     @property
-    def get_session_key(self):
+    def get_session_key(self) -> str:
         return f"{self.key_prefix}_form_data"
 
-    def get_pydantic_updates(self):
+    def get_pydantic_updates(self) -> BaseModel | None:
         """Generate updates using PydanticUi"""
         # Use PydanticUi to render the form with submit button
         form_data, submitted = self.pydantic_ui.render_with_submit("Save")
         return form_data if submitted else None
 
-    def get_sqlalchemy_updates(self):
+    def get_sqlalchemy_updates(self) -> dict[str, Any]:
         """Original SQLAlchemy update logic"""
         cols = self.model.__table__.columns
         updated = {}
@@ -189,7 +192,7 @@ class UpdateRow:
 
         return updated
 
-    def save_pydantic(self, validated_data: BaseModel):
+    def save_pydantic(self, validated_data: BaseModel) -> tuple[bool, str]:
         """Save using pre-validated Pydantic data from PydanticUi"""
         try:
             with self.conn.session as s:
@@ -253,7 +256,7 @@ class UpdateRow:
             error_msg = format_database_error(e)
             return False, error_msg
 
-    def save_sqlalchemy(self, updated: dict):
+    def save_sqlalchemy(self, updated: dict) -> tuple[bool, str]:
         """Original SQLAlchemy save logic"""
         with self.conn.session as s:
             try:
@@ -281,7 +284,7 @@ class UpdateRow:
                 error_msg = format_database_error(e)
                 return False, error_msg
 
-    def show(self):
+    def show(self) -> tuple[bool | None, str | None]:
         pretty_name = get_pretty_name(tablename(self.model))
         st.subheader(pretty_name)
 
@@ -318,7 +321,7 @@ def action_btns(
     show_create_btn: bool,
     show_delete_btn: bool,
     key: str,
-):
+) -> Literal["copy", "add", "edit", "delete"] | None:
     disabled_add = (qtty_selected > 1) or not show_create_btn
     disabled_edit = qtty_selected != 1
     disabled_delete = (qtty_selected == 0) or not show_delete_btn

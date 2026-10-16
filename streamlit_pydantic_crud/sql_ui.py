@@ -19,6 +19,7 @@ from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
+from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.pydantic_utils import (
     PydanticSQLAlchemyConverter,
     model_fields,
@@ -68,12 +69,12 @@ class SqlUi:
         create_schema: type[BaseModel] | None = None,
         update_schema: type[BaseModel] | None = None,
         read_schema: type[BaseModel] | None = None,
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
         items_per_page_default: int = 0,
-    ):
+    ) -> None:
         """The CRUD interface will be displayes just by initializing the class
 
         Arguments:
@@ -268,10 +269,10 @@ class SqlUi:
             )
             raise ValueError(msg)
 
-    def set_initial_state(self):
+    def set_initial_state(self) -> None:
         lib.set_state(UPDATED_KEY, 1)
 
-    def set_structure(self):
+    def set_structure(self) -> None:
         self.header_container = st.container()
         self.data_container = st.container()
         self.pag_container = st.container()
@@ -288,7 +289,7 @@ class SqlUi:
 
         self.btns_container = self.header_container.container()
 
-    def notification(self):
+    def notification(self) -> None:
         if self.state.update_ok is True:
             self.header_container.success(
                 self.state.update_message, icon=":material/thumb_up:"
@@ -301,7 +302,7 @@ class SqlUi:
         self.state.update_ok = None
         self.state.update_message = None
 
-    def get_cte(self):
+    def get_cte(self) -> CTE:
         if isinstance(self.read_instance, Select):
             cte = self.read_instance.cte()
         elif isinstance(self.read_instance, CTE):
@@ -331,7 +332,7 @@ class SqlUi:
                         return True
         return False
 
-    def filter(self):
+    def filter(self) -> read_cte.ColFilter:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
@@ -357,7 +358,9 @@ class SqlUi:
 
         return col_filter
 
-    def pagination(self, qtty_rows: int, col_filter: read_cte.ColFilter):
+    def pagination(
+        self, qtty_rows: int, col_filter: read_cte.ColFilter
+    ) -> tuple[int, int]:
         with self.pag_container:
             items_per_page, page = read_cte.show_pagination(
                 qtty_rows,
@@ -373,7 +376,7 @@ class SqlUi:
 
         return items_per_page, page
 
-    def convert_arrow(self, df: pd.DataFrame):
+    def convert_arrow(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = self.cte.columns
         for col in cols:
             col_name = col.name
@@ -410,7 +413,7 @@ class SqlUi:
     def get_df(
         self,
         stmt_pag: Select,
-    ):
+    ) -> pd.DataFrame:
         # Check if we have ORM options but explicit column selection (incompatible combination)
         has_orm_options = self._stmt_has_orm_options(stmt_pag)
         has_explicit_columns = self._stmt_has_explicit_columns(stmt_pag)
@@ -440,7 +443,7 @@ class SqlUi:
 
         return df
 
-    def _execute_with_pydantic_schema(self, stmt: Select):
+    def _execute_with_pydantic_schema(self, stmt: Select) -> pd.DataFrame:
         """Execute query using ORM execution for many-to-many or selectinload support"""
         with self.conn.session as s:
             has_orm_options = self._stmt_has_orm_options(stmt)
@@ -540,7 +543,7 @@ class SqlUi:
             df = pd.DataFrame(validated_rows)
             return df
 
-    def show_df(self, df: pd.DataFrame):
+    def show_df(self, df: pd.DataFrame) -> DataframeState | None:
         if df.empty:
             st.header(":red[Table is Empty]")
             return None
@@ -578,7 +581,7 @@ class SqlUi:
         return f"{self.key}_df_sql_ui_{ss.stsql_updated}"
 
     @staticmethod
-    def get_rows_selected(selection_state: DataframeState | None):
+    def get_rows_selected(selection_state: DataframeState | None) -> list[int]:
         """Get rows selected from Streamlit dataframe selection state"""
         rows_pos = []
         if (
@@ -590,7 +593,7 @@ class SqlUi:
 
         return rows_pos
 
-    def crud(self, df: pd.DataFrame, rows_selected: list[int]):
+    def crud(self, df: pd.DataFrame, rows_selected: list[int]) -> None:
         qtty_rows = len(rows_selected)
         action = update_model.action_btns(
             self.btns_container,

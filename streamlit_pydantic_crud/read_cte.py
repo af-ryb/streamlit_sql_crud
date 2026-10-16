@@ -68,7 +68,7 @@ def get_existing_values(
     cte: CTE,
     updated: int,
     available_col_filter: list[str] | None = None,
-):
+) -> dict[str, Any]:
     if not available_col_filter:
         available_col_filter = []
 
@@ -129,12 +129,11 @@ class ColFilter:
         self.dt_filters = self.get_dt_filters()
         self.no_dt_filters = self.get_no_dt_filters()
 
-    def __str__(self):
+    def __str__(self) -> str:
         dt_str = ", ".join(
             f"{k}: {dt.strftime('%d/%m/%Y')}"
             for k, v in self.dt_filters.items()
             for dt in v
-            if v
             if dt
         )
         no_dt_str = ", ".join(
@@ -151,7 +150,7 @@ class ColFilter:
 
         return filter_str
 
-    def get_dt_filters(self):
+    def get_dt_filters(self) -> dict[str, tuple[date | None, date | None]]:
         cols = [
             col
             for col in self.cte.columns
@@ -217,7 +216,7 @@ class ColFilter:
 
         return result
 
-    def get_no_dt_filters(self):
+    def get_no_dt_filters(self) -> dict[str, Any]:
         cols = [
             col
             for col in self.cte.columns
@@ -312,7 +311,7 @@ def find_cte_col(cte: CTE, colname: str) -> KeyedColumnElement:
 
 
 @st.cache_data(hash_funcs=hash_funcs, ttl=CACHE_TTL_SECONDS)
-def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int):
+def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int) -> int:
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:
         qtty = s.execute(stmt).scalar_one()
@@ -334,7 +333,7 @@ def show_pagination(
     opts_items_page: tuple[int | None, ...],
     key: str = "",
     default_index: int = 0,
-):
+) -> tuple[int, int]:
     pag_col1, pag_col2 = st.columns([0.2, 0.8])
 
     # Convert options to strings, replacing None with "Show All"
@@ -403,7 +402,7 @@ def get_stmt_pag(
     limit: int,
     page: int,
     order_by: KeyedColumnElement | None = None,
-):
+) -> Select[Any]:
     offset = (page - 1) * limit
     stmt = stmt_no_pag
     # A deterministic ORDER BY keeps rows from jumping between pages.

@@ -13,6 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from streamlit.testing.v1 import AppTest
 
+from streamlit_pydantic_crud.config_types import ForeignKeyOptions
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.input_fields import InputFields
 from tests.conftest import Base, Department, Employee
@@ -53,7 +54,7 @@ def _app(db: str, schema: bool) -> None:
 
     set_state("stsql_updated", 0)
     conn = st.connection("sql", url=f"sqlite:///{db}")
-    fk = {
+    fk: ForeignKeyOptions = {
         "department_id": {
             "query": select(Department),
             "display_field": "name",

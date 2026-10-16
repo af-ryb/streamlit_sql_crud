@@ -15,6 +15,11 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.pool import StaticPool
 
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyConfig,
+    ForeignKeyOptions,
+    ManyToManyFields,
+)
 from streamlit_pydantic_crud.form_options import (
     foreign_key_column_names,
     load_form_options,
@@ -74,7 +79,11 @@ class FakeConn:
         return Session(self.engine)
 
 
-AUTHOR_FK = {"query": select(Author), "display_field": "name", "value_field": "id"}
+AUTHOR_FK: ForeignKeyConfig = {
+    "query": select(Author),
+    "display_field": "name",
+    "value_field": "id",
+}
 
 
 @pytest.fixture
@@ -101,7 +110,7 @@ def test_foreign_key_column_names() -> None:
 def test_fk_column_options_follow_filters_and_keep_row_value(conn: Any) -> None:
     """FK columns are filtered, yet the edited row's current value stays listed."""
     form = MagicMock()
-    fk = {"author_id": AUTHOR_FK}
+    fk: ForeignKeyOptions = {"author_id": AUTHOR_FK}
     row = Post(id=1, title="p", author_id=3)
 
     load_form_options(form, conn, Post, fk, {}, row=row, no_dt_filters={"name": "A1"})
@@ -114,7 +123,7 @@ def test_fk_column_options_follow_filters_and_keep_row_value(conn: Any) -> None:
 def test_non_fk_field_runs_raw_query(conn: Any) -> None:
     """A configured field that is not an FK column ignores the page filters."""
     form = MagicMock()
-    fk = {"writer": AUTHOR_FK}
+    fk: ForeignKeyOptions = {"writer": AUTHOR_FK}
 
     load_form_options(form, conn, Post, fk, {}, no_dt_filters={"name": "A1"})
 
@@ -124,7 +133,7 @@ def test_non_fk_field_runs_raw_query(conn: Any) -> None:
 
 def test_many_to_many_options_apply_filter(conn: Any) -> None:
     form = MagicMock()
-    m2m = {
+    m2m: ManyToManyFields = {
         "tag_ids": {
             "relationship": "tags",
             "display_field": "label",
@@ -143,7 +152,7 @@ def test_many_to_many_options_apply_filter(conn: Any) -> None:
 def test_failing_field_is_logged_not_raised(conn: Any) -> None:
     """A broken config leaves the other fields loaded."""
     form = MagicMock()
-    m2m = {
+    m2m: ManyToManyFields = {
         "bad": {"relationship": "missing", "display_field": "label"},
         "tag_ids": {"relationship": "tags", "display_field": "label"},
     }

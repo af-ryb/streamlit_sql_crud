@@ -13,6 +13,11 @@ from pydantic.fields import FieldInfo
 from sqlalchemy.orm import DeclarativeBase
 from streamlit.delta_generator import DeltaGenerator
 
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    OperationType,
+)
 from streamlit_pydantic_crud.utils import parse_pg_array, tablename, unwrap_optional
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
 
@@ -171,11 +176,11 @@ class PydanticInputGenerator:
         self,
         schema: type[BaseModel],
         key_prefix: str = "",
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
-        operation_type: str = "create",
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
+        operation_type: OperationType = "create",
         pk_name: str = "id",
-    ):
+    ) -> None:
         self.schema = schema
         self.key_prefix = key_prefix
         self.foreign_key_options = foreign_key_options or {}
@@ -984,7 +989,7 @@ class PydanticInputGenerator:
         options: list,
         display_field: str | None = None,
         value_field: str | None = None,
-    ):
+    ) -> None:
         """Set foreign key options for a field with preloaded data.
 
         Args:
@@ -1057,7 +1062,7 @@ class PydanticInputGenerator:
 
     def set_many_to_many_options(
         self, field_name: str, options: list, display_field: str, pk_name: str = "id"
-    ):
+    ) -> None:
         """Set many-to-many options for a field with preloaded data."""
         self.many_to_many_data[field_name] = {
             "options": options,

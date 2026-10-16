@@ -13,6 +13,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 
+from streamlit_pydantic_crud.config_types import ForeignKeyConfig, ForeignKeyOptions
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
 from streamlit_pydantic_crud.utils import tablename
 
@@ -42,7 +43,7 @@ class ExistingData:
         Model: type[DeclarativeBase],
         default_values: dict,
         row: DeclarativeBase | None = None,
-        foreign_key_options: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
         dt_filters: dict | None = None,
         no_dt_filters: dict | None = None,
     ) -> None:
@@ -65,7 +66,7 @@ class ExistingData:
         self.dt = self.get_dt(table_name, ss.stsql_updated)
         self.fk = self.get_fk()
 
-    def add_default_where(self, stmt, model: type[DeclarativeBase]):
+    def add_default_where(self, stmt, model: type[DeclarativeBase]) -> Any:
         cols = model.__table__.columns
         default_values = {
             colname: value
@@ -113,7 +114,7 @@ class ExistingData:
         stmt = self.add_default_where(stmt, self.Model)
         return list(self.session.execute(stmt).scalars().all())
 
-    def _get_dt_col(self, column):
+    def _get_dt_col(self, column) -> tuple[date, date]:
         min_default = date.today() - relativedelta(days=30)
         min_dt: date = self.session.query(func.min(column)).scalar() or min_default
         max_dt: date = self.session.query(func.max(column)).scalar() or date.today()
@@ -128,7 +129,7 @@ class ExistingData:
         }
         return opts
 
-    def get_foreign_opt(self, row, fk_pk_name: str):
+    def get_foreign_opt(self, row, fk_pk_name: str) -> FkOpt:
         idx = getattr(row, fk_pk_name)
         fk_opt = FkOpt(idx, str(row))
         return fk_opt
@@ -203,7 +204,7 @@ class ExistingData:
 def custom_foreign_opts(
     session: Session,
     col_name: str,
-    fk_config: dict,
+    fk_config: ForeignKeyConfig,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,

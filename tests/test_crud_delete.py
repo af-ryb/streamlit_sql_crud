@@ -102,6 +102,7 @@ def test_delete_skips_rows_already_gone(
     status, msg = DeleteRows(conn, Department, [1, 999], key="d").show("Dept")
 
     assert status is True
+    assert msg is not None
     assert "999" in msg
     session.expire_all()
     assert session.get(Department, 1) is None
@@ -117,4 +118,5 @@ def test_delete_with_no_rows_left_fails_gracefully(
     status, msg = DeleteRows(conn, Department, [999], key="d").show("Dept")
 
     assert status is False
+    assert msg is not None
     assert "999" in msg

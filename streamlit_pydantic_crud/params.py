@@ -20,7 +20,7 @@ def param_name(prefix: str, name: str) -> str:
     return f"{prefix}_{name}" if prefix else name
 
 
-def get_dt_param(colname: str, prefix: str = ""):
+def get_dt_param(colname: str, prefix: str = "") -> tuple[str | None, str | None]:
     start_param = st.query_params.get(param_name(prefix, f"{colname}_start"), None)
     if start_param == "":
         start = None
@@ -79,7 +79,7 @@ def display_value(value: Any) -> str:
     return str(value)
 
 
-def set_dt_param(colname: str, key: str, suffix: str, prefix: str = ""):
+def set_dt_param(colname: str, key: str, suffix: str, prefix: str = "") -> None:
     query_key = param_name(prefix, f"{colname}_{suffix}")
     value = ss[key]
     if isinstance(value, date):
@@ -89,7 +89,7 @@ def set_dt_param(colname: str, key: str, suffix: str, prefix: str = ""):
         st.query_params.pop(query_key, None)
 
 
-def set_no_dt_param(colname: str, key: str, prefix: str = ""):
+def set_no_dt_param(colname: str, key: str, prefix: str = "") -> None:
     name = param_name(prefix, colname)
     value = ss[key]
     if value is None:

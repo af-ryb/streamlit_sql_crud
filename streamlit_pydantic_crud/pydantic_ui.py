@@ -8,6 +8,11 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    OperationType,
+)
 from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator, model_fields
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
@@ -26,7 +31,7 @@ class PydanticUi[T: BaseModel]:
         key: str,
         session_state_key: str | None = None,
         pk_name: str = "id",
-    ):
+    ) -> None:
         """Initialize PydanticUi.
 
         Args:
@@ -99,7 +104,7 @@ class PydanticUi[T: BaseModel]:
             session_state_key=session_state_key,
         )
 
-    def _init_session_state(self):
+    def _init_session_state(self) -> None:
         """Initialize session state for form data persistence."""
         if self.session_state_key not in st.session_state:
             st.session_state[self.session_state_key] = {}
@@ -129,7 +134,7 @@ class PydanticUi[T: BaseModel]:
         description = model_fields(self.schema)[field_name].description
         return description or field_name.replace("_", " ").title()
 
-    def _display_validation_errors(self, error: ValidationError):
+    def _display_validation_errors(self, error: ValidationError) -> None:
         """Display validation errors in a user-friendly format."""
         st.error("Validation errors:")
         for err in error.errors():
@@ -157,7 +162,7 @@ class PydanticUi[T: BaseModel]:
             logger.exception("Error getting session data")
             return None
 
-    def clear_session_data(self):
+    def clear_session_data(self) -> None:
         """Clear session state data for this form."""
         if self.session_state_key in st.session_state:
             del st.session_state[self.session_state_key]
@@ -168,7 +173,7 @@ class PydanticUi[T: BaseModel]:
             if widget_key in st.session_state:
                 del st.session_state[widget_key]
 
-    def update_session_data(self, data: dict[str, Any] | BaseModel | None):
+    def update_session_data(self, data: dict[str, Any] | BaseModel | None) -> None:
         """Update session state with new data.
 
         Args:
@@ -309,10 +314,10 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
         schema: type[T],
         key: str,
         session_state_key: str | None = None,
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
         pk_name: str = "id",
-    ):
+    ) -> None:
         """Initialize PydanticCrudUi for CRUD operations.
 
         Args:
@@ -347,7 +352,7 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
 
         self._init_session_state()
 
-    def set_operation_type(self, operation_type: str):
+    def set_operation_type(self, operation_type: OperationType) -> None:
         """Update the operation type for the input generator.
 
         Args:

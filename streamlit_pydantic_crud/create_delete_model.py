@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Any
 
 import streamlit as st
 from loguru import logger
@@ -8,6 +9,7 @@ from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
+from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.form_options import load_form_options
 from streamlit_pydantic_crud.input_fields import InputFields
@@ -31,8 +33,8 @@ class CreateRow:
         default_values: dict | None = None,
         key: str = "create",
         create_schema: type[BaseModel] | None = None,
-        foreign_key_options: dict | None = None,
-        many_to_many_fields: dict | None = None,
+        foreign_key_options: ForeignKeyOptions | None = None,
+        many_to_many_fields: ManyToManyFields | None = None,
         initial_data: dict | None = None,
         dt_filters: dict | None = None,
         no_dt_filters: dict | None = None,
@@ -101,13 +103,13 @@ class CreateRow:
             no_dt_filters=self.no_dt_filters,
         )
 
-    def get_pydantic_fields(self):
+    def get_pydantic_fields(self) -> BaseModel | None:
         """Generate fields using PydanticUi"""
         # Use PydanticUi to render the form with submit button
         form_data, submitted = self.pydantic_ui.render_with_submit("Save")
         return form_data if submitted else None
 
-    def get_sqlalchemy_fields(self):
+    def get_sqlalchemy_fields(self) -> dict[str, Any]:
         """Original SQLAlchemy field generation logic"""
         cols = self.model.__table__.columns
         created = {}
@@ -127,7 +129,7 @@ class CreateRow:
 
         return created
 
-    def show(self, pretty_name: str):
+    def show(self, pretty_name: str) -> tuple[bool | None, str | None]:
         st.subheader(pretty_name)
 
         if self.create_schema:
@@ -147,7 +149,7 @@ class CreateRow:
             return self.save_sqlalchemy(created)
         return None, None
 
-    def save_pydantic(self, validated_data: BaseModel):
+    def save_pydantic(self, validated_data: BaseModel) -> tuple[bool, str]:
         """Save using pre-validated Pydantic data from PydanticUi"""
         try:
             with self.conn.session as s:
@@ -205,7 +207,7 @@ class CreateRow:
             error_msg = format_database_error(e)
             return False, error_msg
 
-    def save_sqlalchemy(self, created: dict):
+    def save_sqlalchemy(self, created: dict) -> tuple[bool, str]:
         """Original SQLAlchemy save logic"""
         try:
             row = self.model(**created)
@@ -249,7 +251,9 @@ class DeleteRows:
         self.key_prefix = f"{key}_delete"
 
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
-    def get_rows_str(_self, table_name: str, rows_id: list[int], updated: int):
+    def get_rows_str(
+        _self, table_name: str, rows_id: list[int], updated: int
+    ) -> list[str]:
         """Return the string form of the rows to delete.
 
         `table_name` and the `updated` counter are cache-key inputs only.
@@ -263,7 +267,7 @@ class DeleteRows:
 
         return rows_str
 
-    def show(self, pretty_name):
+    def show(self, pretty_name) -> tuple[bool | None, str | None]:
         st.subheader("Delete selected items?")
 
         table_name = tablename(self.model)

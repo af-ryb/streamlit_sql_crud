@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 import streamlit as st
 from sqlalchemy import ARRAY, Numeric
@@ -48,7 +49,7 @@ class InputFields:
         self.existing_data = existing_data
         self.string_enum_threshold = string_enum_threshold
 
-    def input_fk(self, col_name: str, value: int | None):
+    def input_fk(self, col_name: str, value: int | None) -> int | None:
         key = f"{self.key_prefix}_{col_name}"
         opts = self.existing_data.fk[col_name]
 
@@ -67,7 +68,9 @@ class InputFields:
             raise TypeError(msg)
         return input_value.idx
 
-    def get_col_str_opts(self, col_name: str, value: str | None):
+    def get_col_str_opts(
+        self, col_name: str, value: str | None
+    ) -> tuple[int | None, list[str]]:
         opts = list(self.existing_data.text[col_name])
         if value is None:
             return None, opts
@@ -103,7 +106,7 @@ class InputFields:
             key=f"{self.key_prefix}_{col_name}",
         )
 
-    def input_str_enum(self, col_name: str, value=None):
+    def input_str_enum(self, col_name: str, value=None) -> str | None:
         """Handle string columns that should be treated as enums using selectbox."""
         key = f"{self.key_prefix}_{col_name}"
         pretty_name = get_pretty_name(col_name)
@@ -142,7 +145,7 @@ class InputFields:
         input_value = stDatalist(
             get_pretty_name(col_name),
             list(opts),
-            index=val_index,
+            index=val_index,  # ty: ignore[invalid-argument-type]
             key=key,
         )
         if input_value is None or input_value == "":
@@ -200,7 +203,7 @@ class InputFields:
 
         return self.coerce_decimal(input_value, step)
 
-    def input_array(self, col_name: str, col_type, col_value=None):
+    def input_array(self, col_name: str, col_type, col_value=None) -> list[Any]:
         """Handle ARRAY column input with multiselect"""
         pretty_name = get_pretty_name(col_name)
 
@@ -241,7 +244,7 @@ class InputFields:
 
         return selected_values
 
-    def get_input_value(self, col: KeyedColumnElement, col_value):
+    def get_input_value(self, col: KeyedColumnElement, col_value) -> Any:
         col_name = col.description
         if col_name is None:
             msg = "Column has no name; cannot build an input for it"
