@@ -122,6 +122,7 @@ class ColFilter:
         self.cte = cte
         self.existing_values = existing_values
         self.available_col_filter = available_col_filter or []
+        self.key = key
         self.key_prefix = f"{key}_create"
 
         self.dt_filters = self.get_dt_filters()
@@ -135,7 +136,11 @@ class ColFilter:
             if v
             if dt
         )
-        no_dt_str = ", ".join(f"{k}: {v}" for k, v in self.no_dt_filters.items() if v)
+        no_dt_str = ", ".join(
+            f"{k}: {params.display_value(v)}"
+            for k, v in self.no_dt_filters.items()
+            if v
+        )
 
         filter_str = ""
         if dt_str != "":
@@ -163,14 +168,14 @@ class ColFilter:
                 [0.475, 0.475, 0.05], vertical_alignment="bottom"
             )
 
-            default_inicio, default_final = params.get_dt_param(colname)
+            default_inicio, default_final = params.get_dt_param(colname, self.key)
 
             inicio_key = f"{self.key_prefix}_date_filter_inicio_{label}"
             inicio = inicio_c.date_input(
                 "Inicio",
                 value=default_inicio,
                 key=inicio_key,
-                args=(colname, inicio_key, "inicio"),
+                args=(colname, inicio_key, "inicio", self.key),
                 on_change=params.set_dt_param,
             )
 
@@ -179,7 +184,7 @@ class ColFilter:
                 "Final",
                 value=default_final,
                 key=final_key,
-                args=(colname, final_key, "final"),
+                args=(colname, final_key, "final", self.key),
                 on_change=params.set_dt_param,
             )
 
@@ -190,7 +195,10 @@ class ColFilter:
                 on_click=params.clear_filter,
                 args=(
                     [inicio_key, final_key],
-                    [f"{colname}_inicio", f"{colname}_final"],
+                    [
+                        params.param_name(self.key, f"{colname}_inicio"),
+                        params.param_name(self.key, f"{colname}_final"),
+                    ],
                 ),
             )
 
@@ -221,7 +229,7 @@ class ColFilter:
 
             label = get_pretty_name(colname)
             key = f"{self.key_prefix}_no_dt_filter_{label}"
-            index = params.get_no_dt_param(col, existing_value)
+            index = params.get_no_dt_param(col, existing_value, self.key)
             col1, col2 = self.container.columns(
                 [0.95, 0.05], vertical_alignment="bottom"
             )
@@ -230,7 +238,8 @@ class ColFilter:
                 options=self.existing_values[colname],
                 index=index,
                 key=key,
-                args=(colname, key),
+                format_func=params.display_value,
+                args=(colname, key, self.key),
                 on_change=params.set_no_dt_param,
             )
             col2.button(
@@ -238,7 +247,7 @@ class ColFilter:
                 icon=":material/cancel:",
                 key=f"{key}_btn",
                 on_click=params.clear_filter,
-                args=([key], [colname]),
+                args=([key], [params.param_name(self.key, colname)]),
             )
 
             result[colname] = value

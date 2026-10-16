@@ -60,7 +60,7 @@ From reading (verify with a test first):
 
 ## Step 3 — Code cleanliness
 
-- [ ] Filter values are mirrored to URL query params named by column (global): two
+- [x] Filter values are mirrored to URL query params named by column (global): two
   `SqlUi` instances filtering a same-named column share the filter — prefix with `key`
 - [ ] `stDatalist` labels use the raw column name (no-schema mode)
 - [ ] Unify the array parser in `input_fields.input_array` with `utils.parse_pg_array`
