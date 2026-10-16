@@ -586,9 +586,16 @@ class SqlUi:
             column_order=column_order,
             on_select="rerun",
             selection_mode="multi-row" if self.show_delete_btn else "single-row",
-            key=f"{self.key}_df_sql_ui",
+            key=self.df_key(),
         )
         return selection_state
+
+    def df_key(self) -> str:
+        """Return the dataframe key, renewed by every write (stsql_updated).
+
+        The selection holds row positions; a new key drops it once rows shift.
+        """
+        return f"{self.key}_df_sql_ui_{ss.stsql_updated}"
 
     @staticmethod
     def get_rows_selected(selection_state: DataframeState | None):
