@@ -111,27 +111,27 @@ Leftovers:
 
 - [ ] Remove deprecated `base_key` and `read_instance` + `edit_create_model` (before 1.0?)
 
-## Step 5 — Module reorganization
+## Step 5 — Module reorganization (done)
 
 - [x] Stage 1: core helper modules — `typing_helpers`, `sa_model`, `values`, `display`;
   constants and `set_state` in `state`; `utils.py` dissolved, duplicates merged
 - [x] Stage 2: dissolve `lib`/`read_cte`/`filters`/`many` into `query.py`,
   `pagination.py`, `filter_ui.py`, `form_options.py`, `one_to_many.py`; `lib` split
   into `logs.py`, `dialogs.py`, `db_errors.py`
-- [ ] Drop third-party Streamlit components: `st.pagination` + `st.selectbox` (0.7.0),
-  as its own PR after stage 2: replace the `streamlit_antd_components` pagination in
-  `table/pagination.py` with `st.pagination` (Streamlit ≥1.58); page size via
-  `st.selectbox` instead of `sac.cascader`, then drop the `streamlit_antd_components`
-  dependency (used only in `table/pagination.py`); `num_pages = max(1, ceil(count / size))`;
-  remove the `pagination_widget_key` remount trick — reset/clamp the page through
-  `st.session_state[key]` when filters, page size or row count change; total via
-  `st.caption`; consider `bind="query-params"` for the page; raise the `streamlit`
-  floor to `>=1.58`; also replace `stDatalist` in `InputFields.input_str`
-  (`forms/sa_fields.py`, no-schema free-text string input with suggestions) with
-  `st.selectbox(..., accept_new_options=True, index=None)` and drop the
-  `streamlit_datalist` dependency (removes the `ty: ignore[invalid-argument-type]`);
-  keep empty → None and saving a new value not in the list; browser-verify (pagination
-  pages, and the string input on No-Schema Numbers)
+- [x] Drop third-party Streamlit components (0.7.0): `table/pagination.py` uses
+  `st.selectbox` (page size, "Show All" kept) + `st.pagination` with stable keys
+  `{key}_page_size` / `{key}_pagination`; the remount trick is gone — the page goes
+  to 1 on a filter or page-size change and is clamped to the last page when rows
+  disappear, through `st.session_state`; the row range is an `st.caption`. Not
+  `bind="query-params"`: the page param would be named by the widget key and share
+  the `{key}_{column}` namespace of the filter params, a page is meaningless without
+  the page size and filters, and the one-to-many panels live in dialogs.
+  `InputFields.input_str` uses `st.selectbox(accept_new_options=True)`; nullable
+  string columns seed their state and pass `index=None` so a stored value stays
+  clearable (an index hides the clear button), NULL is no longer offered as a
+  "None" option; `streamlit_antd_components` and `streamlit_datalist` dropped,
+  `streamlit>=1.58` (lock: 1.66; AppTest tests adapted). Browser-verified on the
+  example (pagination, panels, No-Schema string inputs, JSON clear)
 - [x] Stage 3: `dialogs/` package (`frame`, `create`, `edit`, `delete`, `persist.py`
   with the shared M2M save + error block); `action_btns` → `sql_ui`;
   `create_delete_model.py`, `update_model.py`, `dialogs.py` removed
@@ -197,8 +197,10 @@ Side findings (stage 4, not fixed — behavior-preserving refactor):
 - [ ] The M2M fallback (options not loaded) logs two warnings; the second ("not found
   in foreign_key_options") always fires there and is misleading. Loguru records of
   the moved warnings now come from `pydantic_form.*` / `schema_check`
-- [ ] Clearing an optional JSON field on edit stores JSON `null`, not SQL NULL
-  (SQLAlchemy `JSON` without `none_as_null=True`), seen on `metadata_json`
+- [x] Clearing an optional JSON field on edit stores JSON `null`, not SQL NULL
+  (SQLAlchemy `JSON` without `none_as_null=True`), seen on `metadata_json` — fixed
+  in 0.7.0: `dialogs.persist.json_none_as_sql_null` writes `null()` on every save
+  path (not for an attribute already None on the edited row: no needless UPDATE)
 - [ ] Example "Session State Demo": after `update_session_data` the text inputs and
   selectbox show stale/blank values while session data holds the loaded record
   (number inputs update); same on the stage 3 base
@@ -229,10 +231,22 @@ Side findings (code review, not fixed):
 - [ ] One-to-many panel Create tab ignores `CreateRow.show()`'s result: no success
   or error message (a NOT NULL failure shows only in the server log); its Read tab
   stays stale until the dialog is reopened (example: Departments → Projects)
-- [ ] No-schema forms turn a string column with ≤ `string_enum_threshold` (10)
+- [x] No-schema forms turn a string column with ≤ `string_enum_threshold` (10)
   distinct values into a selectbox of existing values, so a new value can't be
-  typed (example: project name in the one-to-many Create tab)
+  typed (example: project name in the one-to-many Create tab) — 0.7.0:
+  `input_str_enum` accepts new options too (a String column is not an Enum)
 - [ ] `st.dataframe` logs an Arrow conversion traceback when a JSON column holds
   mixed-type lists (`convert_arrow` leaves list JSON as Python objects)
 - [ ] Unconfirmed: a ticket saved `opened_on` 2025-12-07 while the date widget showed
   12-31 after an earlier attempt in the same dialog (may be a browser-tool artefact)
+
+Side findings (0.7.0, not fixed):
+- [ ] Count/option caches are keyed by `stsql_updated`, which every new session
+  restarts at 1, so a reloaded page can show a stale row count from another
+  session for up to `CACHE_TTL_SECONDS` (seen twice: tickets after delete + reload,
+  and Departments showing `1-5 / 5` with 4 rows right after a delete)
+- [ ] Filter date inputs keep Streamlit's default range (today ± 10 years), so older
+  dates cannot be picked (Streamlit ≥1.58 also rejects them server-side)
+- [ ] Moving the page through session state logs Streamlit's one-time "created with
+  a default value but also had its value set via the Session State API" warning
+  (with stack) once per server process; harmless, `st.pagination` always has a default
