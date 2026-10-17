@@ -11,7 +11,13 @@ from streamlit_pydantic_crud.pydantic_utils import (
     PydanticInputGenerator,
     PydanticSQLAlchemyConverter,
 )
-from streamlit_pydantic_crud.utils import unwrap_optional
+from streamlit_pydantic_crud.typing_helpers import (
+    is_enum_annotation,
+    is_enum_list_annotation,
+    is_list_annotation,
+    list_item_type,
+    unwrap_optional,
+)
 
 
 class Color(Enum):
@@ -74,22 +80,20 @@ def test_input_type_typing_optional_list() -> None:
 
 
 def test_enum_detection_pep604() -> None:
-    gen = PydanticInputGenerator(Pep604)
-    assert gen._is_enum_field(Color | None)
-    assert gen._is_enum_field(Color)
-    assert not gen._is_enum_field(int | None)
+    assert is_enum_annotation(Color | None)
+    assert is_enum_annotation(Color)
+    assert not is_enum_annotation(int | None)
 
 
 def test_list_detection_pep604() -> None:
-    assert PydanticInputGenerator._is_list_field(list[str] | None)
-    assert not PydanticInputGenerator._is_list_field(int | None)
+    assert is_list_annotation(list[str] | None)
+    assert not is_list_annotation(int | None)
 
 
 def test_enum_list_detection_pep604() -> None:
-    gen = PydanticInputGenerator(Pep604)
-    assert gen._is_enum_list_field(list[Color] | None)
-    assert not gen._is_enum_list_field(list[str] | None)
-    assert gen._extract_enum_from_list_annotation(list[Color] | None) is Color
+    assert is_enum_list_annotation(list[Color] | None)
+    assert not is_enum_list_annotation(list[str] | None)
+    assert list_item_type(list[Color] | None) is Color
 
 
 def test_render_enum_input_pep604() -> None:

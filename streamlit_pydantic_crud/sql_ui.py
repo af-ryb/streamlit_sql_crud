@@ -20,11 +20,9 @@ from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
-from streamlit_pydantic_crud.pydantic_utils import (
-    PydanticSQLAlchemyConverter,
-    model_fields,
-)
+from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
+from streamlit_pydantic_crud.typing_helpers import model_fields
 from streamlit_pydantic_crud.utils import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,

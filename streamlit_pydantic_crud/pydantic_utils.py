@@ -4,7 +4,7 @@ from contextlib import AbstractContextManager, nullcontext
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, get_args, get_origin
+from typing import Any, get_origin
 
 import streamlit as st
 from loguru import logger
@@ -18,11 +18,19 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
+from streamlit_pydantic_crud.typing_helpers import (
+    enum_member,
+    is_enum_annotation,
+    is_enum_list_annotation,
+    is_list_annotation,
+    list_item_type,
+    model_fields,
+    unwrap_optional,
+)
 from streamlit_pydantic_crud.utils import (
     keep_unchanged_datetime,
     parse_pg_array,
     tablename,
-    unwrap_optional,
 )
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
 
@@ -378,35 +386,19 @@ class PydanticInputGenerator:
             return self._render_foreign_key_input(label, field_name, value, key=key)
 
         # Check for enum types - simplified detection based on streamlit-pydantic approach
-        if self._is_enum_field(annotation):
+        if is_enum_annotation(annotation):
             return self._render_enum_input(label, annotation, value, key=key)
 
         # Check for a list of enums
-        if self._is_enum_list_field(annotation):
+        if is_enum_list_annotation(annotation):
             return self._render_enum_list_input(label, annotation, value, key=key)
 
         # Check for regular lists
-        if self._is_list_field(annotation):
+        if is_list_annotation(annotation):
             return self._render_list_input(label, annotation, value, key=key)
 
         # Fall back to basic type detection
         return self._render_basic_input(label, field_info, value, key=key)
-
-    def _is_enum_field(self, annotation: Any) -> bool:
-        """Check if field is a single enum or an optional enum"""
-        inner, _ = unwrap_optional(annotation)
-        return is_enum_type(inner)
-
-    def _is_enum_list_field(self, annotation: Any) -> bool:
-        """Check if field is a list of enums (optionally wrapped in Optional)"""
-        item = self._extract_enum_from_list_annotation(annotation)
-        return is_enum_type(item)
-
-    @staticmethod
-    def _is_list_field(annotation: Any) -> bool:
-        """Check if specified field is a list, optionally wrapped in Optional"""
-        inner, _ = unwrap_optional(annotation)
-        return get_origin(inner) is list
 
     @staticmethod
     def _render_enum_input(
@@ -464,7 +456,7 @@ class PydanticInputGenerator:
     ) -> Any:
         """Render multiselect for list of enums"""
         # Extract enum type
-        enum_type = self._extract_enum_from_list_annotation(annotation)
+        enum_type = list_item_type(annotation)
 
         if not enum_type:
             return st.multiselect(label, [], key=key, accept_new_options=True)
@@ -512,14 +504,6 @@ class PydanticInputGenerator:
             elif options[idx] not in result:
                 result.append(options[idx])
         return result
-
-    def _extract_enum_from_list_annotation(self, annotation: Any) -> Any:
-        """Extract the item type from List[T] or Optional[List[T]]"""
-        inner, _ = unwrap_optional(annotation)
-        args = get_args(inner)
-        if get_origin(inner) is list and args:
-            return args[0]
-        return None
 
     def _render_list_input(
         self, label: str, annotation: Any, existing_value: Any, key: str
@@ -1146,25 +1130,6 @@ class PydanticInputGenerator:
         return selected_ids
 
 
-def enum_member(value: Any, enum_type: type[Enum]) -> Enum | None:
-    """Resolve a member from itself, its value, its name or ``"Cls.NAME"``.
-
-    Returns None for None and for anything matching no member.
-    """
-    if value is None:
-        return None
-    if isinstance(value, enum_type):
-        return value
-    raw = value.value if isinstance(value, Enum) else value
-    for member in enum_type:
-        if member.value == raw:
-            return member
-    if isinstance(raw, str):
-        name = raw.rsplit(".", 1)[-1]
-        return enum_type.__members__.get(name)
-    return None
-
-
 def _resolved_default(field: FieldInfo) -> Any:
     """Return the field default, calling ``default_factory``; None if required."""
     if field.is_required():
@@ -1172,19 +1137,8 @@ def _resolved_default(field: FieldInfo) -> Any:
     return field.get_default(call_default_factory=True, validated_data={})
 
 
-def model_fields(schema: type[BaseModel] | BaseModel) -> dict[str, FieldInfo]:
-    """Return a schema's fields, reading them from the class even for instances."""
-    cls = schema if isinstance(schema, type) else type(schema)
-    return cls.model_fields
-
-
 def is_optional_field(field_info: dict[str, Any]) -> bool:
     """Return True when extracted field info marks the field optional."""
     return bool(field_info.get("is_optional")) or not field_info.get(
         "is_required", True
     )
-
-
-def is_enum_type(tp: Any) -> bool:
-    """Return True when ``tp`` is an ``Enum`` subclass (not an unwrapped Optional)."""
-    return isinstance(tp, type) and issubclass(tp, Enum)
