@@ -249,8 +249,6 @@ Side findings (0.7.0, not fixed):
   — 0.7.1: keyed by a process-wide, thread-safe data version (`state.DATA_VERSION`)
   bumped by every write attempt (`record_write`); `stsql_updated` stays per session
   for dataframe keys and dialog reruns (`tests/test_shared_cache.py`)
-- [ ] Filter date inputs keep Streamlit's default range (today ± 10 years), so older
-  dates cannot be picked (Streamlit ≥1.58 also rejects them server-side)
 - [ ] Moving the page through session state logs Streamlit's one-time "created with
   a default value but also had its value set via the Session State API" warning
   (with stack) once per server process; harmless, `st.pagination` always has a default
