@@ -9,25 +9,16 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
-from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.config_types import ForeignKeyConfig, ForeignKeyOptions
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
-from streamlit_pydantic_crud.utils import tablename
-
-
-def safe_python_type(col: ColumnElement[Any]) -> type | None:
-    """Return the column's Python type, or None when the type has none.
-
-    `NullType` (e.g. `literal_column`, untyped `func.*`) and some custom types
-    raise NotImplementedError; callers treat such columns as not filterable.
-    """
-    try:
-        return col.type.python_type
-    except NotImplementedError:
-        return None
+from streamlit_pydantic_crud.sa_model import (
+    model_by_tablename,
+    safe_python_type,
+    tablename,
+)
 
 
 @dataclass
@@ -56,9 +47,6 @@ class ExistingData:
         self.no_dt_filters = no_dt_filters or {}
 
         self.cols = Model.__table__.columns
-        self._models: list[type[DeclarativeBase]] = [
-            mapper.class_ for mapper in Model.registry.mappers
-        ]
 
         table_name = tablename(Model)
         text = self.get_text(table_name, ss.stsql_updated, default_values)
@@ -137,14 +125,7 @@ class ExistingData:
     def get_foreign_opts(self, col, foreign_key: ForeignKey) -> list[FkOpt]:
         """Return FK options; only the current value if the target is unmapped."""
         foreign_table_name = foreign_key.column.table.name
-        model = next(
-            (
-                reg
-                for reg in self._models
-                if getattr(reg, "__tablename__", None) == foreign_table_name
-            ),
-            None,
-        )
+        model = model_by_tablename(self.Model, foreign_table_name)
         if model is None:
             logger.warning(
                 f"No mapped model for table '{foreign_table_name}'; "

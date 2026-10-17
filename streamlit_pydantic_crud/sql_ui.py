@@ -21,16 +21,20 @@ from streamlit.elements.arrow import DataframeState
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
+    is_array_type,
+    is_json_type,
+    pk_attr,
+    pk_name,
+    tablename,
+)
 from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
 from streamlit_pydantic_crud.typing_helpers import model_fields
 from streamlit_pydantic_crud.utils import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
-    is_json_type,
-    pk_attr,
-    pk_name,
     row_to_python,
-    tablename,
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
@@ -331,7 +335,7 @@ class SqlUi:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
-            filter_cols_name = [col.description or col.name for col in self.cte.columns]
+            filter_cols_name = [column_label(col) for col in self.cte.columns]
 
         with self.conn.session as s:
             existing = read_cte.get_existing_values(
@@ -391,7 +395,7 @@ class SqlUi:
                             else None
                         )
                     )
-                elif "ARRAY" in str(col.type).upper():
+                elif is_array_type(col.type):
                     # Handle ARRAY columns for display
                     df[col_name] = df[col_name].apply(
                         lambda x: (

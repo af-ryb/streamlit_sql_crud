@@ -15,9 +15,13 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
-from streamlit_pydantic_crud.filters import safe_python_type
 from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
-from streamlit_pydantic_crud.utils import is_json_type
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
+    is_array_type,
+    is_json_type,
+    safe_python_type,
+)
 
 SHOW_ALL = "Show All"
 
@@ -48,9 +52,8 @@ def get_existing_cond(col: KeyedColumnElement) -> bool:
     is_json = is_json_type(col.type)
 
     # Also check for other unsupported types like ARRAY, STRUCT in BigQuery
-    unsupported_types = ["ARRAY", "STRUCT", "RECORD"]
-    is_unsupported_type = any(
-        unsupported in col_type_name for unsupported in unsupported_types
+    is_unsupported_type = is_array_type(col.type) or any(
+        unsupported in col_type_name for unsupported in ("STRUCT", "RECORD")
     )
 
     cond = (
@@ -79,8 +82,7 @@ def get_existing_values(
         cols = [
             col
             for col in cte.columns
-            if (col.description or col.name) in available_col_filter
-            and get_existing_cond(col)
+            if column_label(col) in available_col_filter and get_existing_cond(col)
         ]
     else:
         cols = [col for col in cte.columns if get_existing_cond(col)]
@@ -96,12 +98,11 @@ def get_existing_values(
                 .limit(10000)
             )
             values = _session.execute(stmt).scalars().all()
-            # Use col.name if description is None (common for joined columns)
-            colname = col.description or col.name
+            colname = column_label(col)
             result[colname] = values
         except Exception as e:
             # Skip columns that cause errors (like JSON column type)
-            colname = col.description or col.name
+            colname = column_label(col)
             logger.warning(
                 f"Skipping column '{colname}' for filter values due to error: {e}"
             )
@@ -154,14 +155,13 @@ class ColFilter:
         cols = [
             col
             for col in self.cte.columns
-            if (col.description or col.name) in self.available_col_filter
+            if column_label(col) in self.available_col_filter
             and safe_python_type(col) is date
         ]
 
         result: dict[str, tuple[date | None, date | None]] = {}
         for col in cols:
-            # Use col.name as fallback for joined columns
-            colname = col.description or col.name
+            colname = column_label(col)
             label = get_pretty_name(colname)
             self.container.write(label)
             start_c, end_c, btn_c = self.container.columns(
@@ -220,14 +220,13 @@ class ColFilter:
         cols = [
             col
             for col in self.cte.columns
-            if (col.description or col.name) in self.available_col_filter
+            if column_label(col) in self.available_col_filter
             and safe_python_type(col) not in (None, date)
         ]
 
         result: dict[str, Any] = {}
         for col in cols:
-            # Use col.name as fallback for joined columns
-            colname = col.description or col.name
+            colname = column_label(col)
 
             existing_value = self.existing_values.get(colname)
 

@@ -18,6 +18,8 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
+from streamlit_pydantic_crud.sa_model import pk_name as get_pk_name
+from streamlit_pydantic_crud.sa_model import tablename
 from streamlit_pydantic_crud.typing_helpers import (
     enum_member,
     is_enum_annotation,
@@ -30,9 +32,7 @@ from streamlit_pydantic_crud.typing_helpers import (
 from streamlit_pydantic_crud.utils import (
     keep_unchanged_datetime,
     parse_pg_array,
-    tablename,
 )
-from streamlit_pydantic_crud.utils import pk_name as get_pk_name
 
 
 class PydanticSQLAlchemyConverter:

@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import func, literal_column, select
 
 from streamlit_pydantic_crud import params, read_cte
-from streamlit_pydantic_crud.filters import safe_python_type
+from streamlit_pydantic_crud.sa_model import safe_python_type
 from tests.conftest import Department
 
 UNTYPED_CTE = select(

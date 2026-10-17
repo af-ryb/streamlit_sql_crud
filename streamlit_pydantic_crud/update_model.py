@@ -22,13 +22,14 @@ from streamlit_pydantic_crud.lib import (
     show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.utils import (
-    convert_numpy_to_python,
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
     pk_attr,
     pk_column,
     pk_name,
     tablename,
 )
+from streamlit_pydantic_crud.utils import convert_numpy_to_python
 
 
 class UpdateRow:
@@ -107,7 +108,7 @@ class UpdateRow:
             # Get current row values for pre-populating form
             self.current_values = {}
             for col in self.model.__table__.columns:
-                col_name = col.description or col.name
+                col_name = column_label(col)
                 if col_name and hasattr(self.row, col_name):
                     value = getattr(self.row, col_name)
                     # Convert certain types for proper display
@@ -177,7 +178,7 @@ class UpdateRow:
         updated = {}
 
         for col in cols:
-            col_name = col.description or col.name
+            col_name = column_label(col)
             if col_name is None:
                 continue
 

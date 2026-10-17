@@ -5,16 +5,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import JSON, Column
-from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
-from sqlalchemy.types import TypeDecorator, TypeEngine
+from sqlalchemy.orm import DeclarativeBase
 
-
-def is_json_type(col_type: TypeEngine[Any]) -> bool:
-    """Return True for JSON-like SQLAlchemy types (``JSON``, ``JSONB``, wrappers)."""
-    if isinstance(col_type, TypeDecorator):
-        return is_json_type(col_type.impl_instance)
-    return isinstance(col_type, JSON)
+from streamlit_pydantic_crud.sa_model import pk_column
 
 
 def keep_unchanged_datetime(new: Any, original: Any) -> Any:
@@ -68,33 +61,6 @@ def _append_item(items: list[str], chars: list[str], quoted: bool) -> None:
         item = item.strip()
     if quoted or item:
         items.append(item)
-
-
-def tablename(model: type[DeclarativeBase]) -> str:
-    """Return the model's ``__tablename__``, or its class name when it has none."""
-    return getattr(model, "__tablename__", model.__name__)
-
-
-def pk_column(model: type[DeclarativeBase]) -> Column:
-    """Return the single primary-key column of the model.
-
-    Composite primary keys are out of scope and raise NotImplementedError.
-    """
-    primary_key = model.__mapper__.primary_key
-    if len(primary_key) != 1:
-        msg = "composite primary keys are not supported"
-        raise NotImplementedError(msg)
-    return primary_key[0]
-
-
-def pk_name(model: type[DeclarativeBase]) -> str:
-    """Return the primary-key column name of the model."""
-    return pk_column(model).key
-
-
-def pk_attr(model: type[DeclarativeBase]) -> InstrumentedAttribute:
-    """Return the mapped primary-key attribute, for `== x` / `.in_(...)` clauses."""
-    return getattr(model, pk_name(model))
 
 
 def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:

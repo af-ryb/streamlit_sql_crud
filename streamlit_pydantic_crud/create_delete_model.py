@@ -22,7 +22,13 @@ from streamlit_pydantic_crud.lib import (
     show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name, tablename
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
+    pk_attr,
+    pk_column,
+    pk_name,
+    tablename,
+)
 
 
 class CreateRow:
@@ -114,7 +120,7 @@ class CreateRow:
         cols = self.model.__table__.columns
         created = {}
         for col in cols:
-            col_name = col.description or col.name
+            col_name = column_label(col)
             if col_name is None:
                 continue
 

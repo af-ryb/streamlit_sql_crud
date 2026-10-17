@@ -10,8 +10,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import TypeDecorator
 
 from streamlit_pydantic_crud.pydantic_utils import is_optional_field
+from streamlit_pydantic_crud.sa_model import is_json_type
 from streamlit_pydantic_crud.typing_helpers import is_enum_type, model_fields
-from streamlit_pydantic_crud.utils import is_json_type
 
 
 class Color(Enum):

@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any, Final
 
 import streamlit as st
-from sqlalchemy import ARRAY, Numeric
+from sqlalchemy import Numeric
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
@@ -11,6 +11,7 @@ from streamlit_datalist import stDatalist
 
 from streamlit_pydantic_crud.filters import ExistingData, FkOpt
 from streamlit_pydantic_crud.lib import get_pretty_name
+from streamlit_pydantic_crud.sa_model import column_label, is_array_type
 from streamlit_pydantic_crud.utils import keep_unchanged_datetime, parse_pg_array
 
 NO_INPUT: Final = object()
@@ -263,10 +264,7 @@ class InputFields:
             input_value = col_value
         elif len(col.foreign_keys) > 0:
             input_value = self.input_fk(col_name, col_value)
-        elif isinstance(col.type, ARRAY):
-            input_value = self.input_array(col_name, col.type, col_value)
-        elif "ARRAY" in str(col.type).upper():
-            # Fallback for ARRAY types that don't match isinstance check
+        elif is_array_type(col.type):
             input_value = self.input_array(col_name, col.type, col_value)
         elif isinstance(col.type, SQLEnum):
             input_value = self.input_enum(col_name, col.type, col_value)
@@ -302,6 +300,6 @@ class InputFields:
         The next render then re-seeds each widget from its `value` argument.
         """
         for col in self.model.__table__.columns:
-            key = f"{self.key_prefix}_{col.description or col.name}"
+            key = f"{self.key_prefix}_{column_label(col)}"
             if key in st.session_state:
                 del st.session_state[key]
