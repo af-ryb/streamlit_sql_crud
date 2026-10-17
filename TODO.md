@@ -226,3 +226,13 @@ Side findings (code review, not fixed):
   `filter_container`, `btns_container`; IDE: "defined outside `__init__`"). Root
   cause: `__init__` renders the whole UI; declare them in `__init__` (or have
   `set_structure` return a containers dataclass) so the class shape is explicit
+- [ ] One-to-many panel Create tab ignores `CreateRow.show()`'s result: no success
+  or error message (a NOT NULL failure shows only in the server log); its Read tab
+  stays stale until the dialog is reopened (example: Departments → Projects)
+- [ ] No-schema forms turn a string column with ≤ `string_enum_threshold` (10)
+  distinct values into a selectbox of existing values, so a new value can't be
+  typed (example: project name in the one-to-many Create tab)
+- [ ] `st.dataframe` logs an Arrow conversion traceback when a JSON column holds
+  mixed-type lists (`convert_arrow` leaves list JSON as Python objects)
+- [ ] Unconfirmed: a ticket saved `opened_on` 2025-12-07 while the date widget showed
+  12-31 after an earlier attempt in the same dialog (may be a browser-tool artefact)
