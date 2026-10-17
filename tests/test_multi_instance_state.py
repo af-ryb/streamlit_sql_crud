@@ -37,8 +37,9 @@ def make_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MakeApp:
 
 def test_filter_in_one_instance_keeps_other_page(make_app: MakeApp) -> None:
     """A filter set in "a" must not reset the page of "b" on each rerun."""
-    at = make_app(PAGE_b=2)
+    at = make_app()
     at.run()
+    at.pagination(key="b_pagination").set_value(2).run()
     at.selectbox(key="a_create_no_dt_filter_Grp").set_value("x").run()
 
     for _ in range(3):

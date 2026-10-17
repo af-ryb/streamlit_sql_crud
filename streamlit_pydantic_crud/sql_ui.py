@@ -357,20 +357,19 @@ class SqlUi:
     def pagination(
         self, qtty_rows: int, col_filter: filter_ui.ColFilter
     ) -> tuple[int, int]:
+        """A filter change sends the pager back to page 1."""
+        filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
+        filters_changed = filters != self.state.filters
+        self.state.filters = filters
+
         with self.pag_container:
-            items_per_page, page = pagination.show_pagination(
+            return pagination.show_pagination(
                 qtty_rows,
                 pagination.OPTS_ITEMS_PAGE,
                 self.key,
                 self.items_per_page_default,
+                reset=filters_changed,
             )
-
-        filters = {**col_filter.no_dt_filters, **col_filter.dt_filters}
-        if filters != self.state.filters:
-            page = 1
-            self.state.filters = filters
-
-        return items_per_page, page
 
     def get_df(
         self,

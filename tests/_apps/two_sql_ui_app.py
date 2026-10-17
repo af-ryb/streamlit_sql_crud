@@ -1,19 +1,15 @@
 """Two SqlUi instances with different keys on one page.
 
 Instance "a" shows a small filterable table, instance "b" a table large enough
-to paginate. `sac.pagination` is stubbed to return the page stored under
-`PAGE_<key>` in session state, standing in for the frontend widget. The
+to paginate; tests pick its page through the `b_pagination` widget key. The
 render order follows CRUD_TEST_ORDER ("ab" by default). While
 session state `DIALOG_a` is true the create dialog of "a" is rendered on
 every run, standing in for the dialog fragment Streamlit reruns on its own.
 """
 
 import os
-from typing import Any
-from unittest.mock import patch
 
 import streamlit as st
-import streamlit_antd_components as sac
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -66,12 +62,6 @@ with Session(eng) as s:
 conn = st.connection("sql", url=f"sqlite:///{DB}")
 
 
-def fake_pagination(**kwargs: Any) -> int:
-    """Return the page chosen by the test for the instance owning the widget."""
-    instance_key = kwargs["key"].split("_")[0]
-    return st.session_state.get(f"PAGE_{instance_key}", 1)
-
-
 def render(key: str) -> None:
     """Render instance `key` inside its own expander and print its row ids."""
     with st.expander(f"Instance {key}"):
@@ -94,9 +84,8 @@ def render(key: str) -> None:
         st.write(f"IDS_{key}=" + ",".join(str(v) for v in ui.df["id"].tolist()))
 
 
-with patch.object(sac, "pagination", side_effect=fake_pagination):
-    for instance in ORDER:
-        render(instance)
+for instance in ORDER:
+    render(instance)
 
 if st.session_state.get("DIALOG_a"):
     CreateRow(conn, Fruit, key="a").show_dialog()

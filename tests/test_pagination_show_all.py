@@ -1,7 +1,7 @@
-""" "Show All" must never hand a zero page size to the pagination widget.
+""" "Show All" must never yield a zero page size.
 
-With an empty result, page_size=count=0 reaches sac.pagination, whose antd
-frontend divides total by page size to compute the page count.
+With an empty result the page size would be count=0; the page count and the
+OFFSET of the page query divide by it.
 """
 
 from streamlit_pydantic_crud.table.pagination import SHOW_ALL, resolve_page_size
@@ -25,4 +25,5 @@ def test_sql_ui_show_all_on_empty_table(run_app) -> None:
 
     assert not at.exception
     assert any(m.value == "QTTY=0" for m in at.markdown)
-    assert any(m.value == "PAGE_SIZE_OK" for m in at.markdown)
+    assert at.pagination[0].proto.num_pages == 1
+    assert any(c.value == "0 / 0" for c in at.caption)
