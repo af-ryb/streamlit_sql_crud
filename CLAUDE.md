@@ -76,8 +76,19 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    - These three classes are the public API (`streamlit_pydantic_crud.__init__`)
 
 3. **Core Modules**:
-   - `input_fields.py` - Custom Streamlit input widgets with Pydantic integration
-   - `pydantic_utils.py` - Utilities for Pydantic-SQLAlchemy conversion
+   - `input_fields.py` - `InputFields`: widgets for plain (no-schema) forms,
+     one per SQLAlchemy column
+   - `pydantic_form/` - Pydantic form generation; `__init__` re-exports nothing,
+     import submodules directly:
+     - `generator.py` - `PydanticInputGenerator`: routes fields to widgets and
+       builds the form data (used by `PydanticUi`)
+     - `widgets.py` - Streamlit renderers per widget kind, FK/M2M data passed in;
+       `nullable_number_input` (shared with `input_fields`)
+     - `field_info.py` - Field analysis (`get_pydantic_field_info`,
+       `get_streamlit_input_type`, `is_optional_field`)
+     - `option_resolve.py` - UI-free default/option resolution (`match_option`,
+       `resolve_select_index`, `known_defaults`, `enum_list_defaults`)
+   - `schema_check.py` - `validate_schema_compatibility` (schema vs model, `SqlUi`)
    - `schema_builder.py` - Dynamic Pydantic model creation from JSON schemas
    - `query.py` - Read statements: CTE wrapping, filters, row count, paging
      (`to_cte`, `get_stmt_no_pag`, `get_qtty_rows`, `apply_active_filters`)
@@ -95,7 +106,8 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
        options, form session key, `handle_save_error`
    - `db_errors.py` - User-friendly database error messages
    - `logs.py` - CRUD action logging, `set_logging`
-   - `state.py` - Per-instance UI state, `UPDATED_KEY`, cache TTL, `set_state`
+   - `state.py` - Per-instance UI state, `UPDATED_KEY`, cache TTL, `set_state`,
+     `clear_state_keys`
 
 4. **Core helpers** (leaf modules, no Streamlit state; import only each other):
    - `typing_helpers.py` - Annotation inspection (Optional, enum, list, `model_fields`)
