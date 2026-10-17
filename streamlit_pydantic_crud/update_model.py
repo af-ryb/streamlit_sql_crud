@@ -13,7 +13,7 @@ from streamlit_pydantic_crud import many
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.form_options import load_form_options
-from streamlit_pydantic_crud.input_fields import InputFields
+from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.lib import (
     format_database_error,
     get_pretty_name,
@@ -188,7 +188,8 @@ class UpdateRow:
             else:
                 input_value = self.input_fields.get_input_value(col, col_value)
 
-            updated[col_name] = input_value
+            if input_value is not NO_INPUT:
+                updated[col_name] = input_value
 
         return updated
 

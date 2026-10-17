@@ -12,7 +12,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.form_options import load_form_options
-from streamlit_pydantic_crud.input_fields import InputFields
+from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.lib import (
     CACHE_TTL_SECONDS,
     format_database_error,
@@ -125,7 +125,8 @@ class CreateRow:
             else:
                 input_value = self.input_fields.get_input_value(col, initial_value)
 
-            created[col_name] = input_value
+            if input_value is not NO_INPUT:
+                created[col_name] = input_value
 
         return created
 
