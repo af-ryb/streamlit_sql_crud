@@ -219,3 +219,10 @@ Side findings (stage 5, not fixed — behavior-preserving refactor):
 - [ ] A local `uv build` leaves `streamlit_pydantic_crud.egg-info/` in the tree; its
   stale `SOURCES.txt` makes a later sdist→wheel build ship files the config would
   not (it masked the packaging bug), hence the clean-copy build in the guards
+
+Side findings (code review, not fixed):
+- [ ] `SqlUi.set_structure` creates instance attributes outside `__init__`
+  (`header_container`, `data_container`, `pag_container`, `expander_container`,
+  `filter_container`, `btns_container`; IDE: "defined outside `__init__`"). Root
+  cause: `__init__` renders the whole UI; declare them in `__init__` (or have
+  `set_structure` return a containers dataclass) so the class shape is explicit
