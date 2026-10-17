@@ -75,46 +75,67 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    - Session state management for form persistence
    - These three classes are the public API (`streamlit_pydantic_crud.__init__`)
 
-3. **Core Modules**:
-   - `input_fields.py` - `InputFields`: widgets for plain (no-schema) forms,
-     one per SQLAlchemy column
-   - `pydantic_form/` - Pydantic form generation; `__init__` re-exports nothing,
-     import submodules directly:
-     - `generator.py` - `PydanticInputGenerator`: routes fields to widgets and
-       builds the form data (used by `PydanticUi`)
-     - `widgets.py` - Streamlit renderers per widget kind, FK/M2M data passed in;
-       `nullable_number_input` (shared with `input_fields`)
-     - `field_info.py` - Field analysis (`get_pydantic_field_info`,
-       `get_streamlit_input_type`, `is_optional_field`)
-     - `option_resolve.py` - UI-free default/option resolution (`match_option`,
-       `resolve_select_index`, `known_defaults`, `enum_list_defaults`)
-   - `schema_check.py` - `validate_schema_compatibility` (schema vs model, `SqlUi`)
-   - `schema_builder.py` - Dynamic Pydantic model creation from JSON schemas
-   - `query.py` - Read statements: CTE wrapping, filters, row count, paging
-     (`to_cte`, `get_stmt_no_pag`, `get_qtty_rows`, `apply_active_filters`)
-   - `pagination.py` - Page-size selector and pager, `OPTS_ITEMS_PAGE` tuples
-   - `filter_ui.py` - `ColFilter` widgets, cached filter values, `hash_funcs`
-   - `form_options.py` - FK / M2M options for Pydantic forms (`load_form_options`)
-     and plain forms (`ExistingData`, `FkOpt`, `custom_foreign_opts`)
-   - `params.py` - Mirror filter values to URL query params and restore them
-   - `one_to_many.py` - One-to-many relationship panels in the edit dialog
-   - `dialogs/` - CRUD dialogs; `__init__` has no eager imports (`edit` →
-     `one_to_many` → `create`/`delete` would cycle), import submodules directly:
-     - `frame.py` - Shared dialog wrapper (`show_crud_dialog`)
-     - `create.py` / `edit.py` / `delete.py` - `CreateRow` / `UpdateRow` / `DeleteRows`
-     - `persist.py` - Shared save helpers: M2M split/load, `selectinload`
-       options, form session key, `handle_save_error`
-   - `db_errors.py` - User-friendly database error messages
-   - `logs.py` - CRUD action logging, `set_logging`
-   - `state.py` - Per-instance UI state, `UPDATED_KEY`, cache TTL, `set_state`,
-     `clear_state_keys`
+3. **Package layout** — the root holds only the public classes and shared state:
+   ```
+   streamlit_pydantic_crud/
+   ├── __init__.py        # public API: SqlUi, PydanticUi, PydanticCrudUi
+   ├── sql_ui.py          # SqlUi; action buttons
+   ├── pydantic_ui.py     # PydanticUi / PydanticCrudUi
+   ├── config_types.py    # ForeignKeyOptions, ManyToManyFields, OperationType
+   ├── state.py           # per-instance UI state, UPDATED_KEY, cache TTL,
+   │                      #   set_state, clear_state_keys
+   ├── helpers/           # leaf modules, no Streamlit state
+   │   ├── typing.py      # annotation inspection (Optional, enum, list, model_fields)
+   │   ├── sa_model.py    # SQLAlchemy introspection (PK, table name, column
+   │   │                  #   label/types, related_model)
+   │   ├── values.py      # value coercion (PG arrays, numpy/DataFrame cells, enum, JSON)
+   │   ├── display.py     # labels and table formatting (get_pretty_name, convert_arrow)
+   │   ├── logs.py        # CRUD action logging, set_logging
+   │   └── db_errors.py   # user-friendly database error messages
+   ├── table/             # read side of SqlUi
+   │   ├── query.py       # CTE wrapping, filters, row count, paging (to_cte,
+   │   │                  #   get_stmt_no_pag, get_qtty_rows, apply_active_filters)
+   │   ├── filter_ui.py   # ColFilter widgets, cached filter values, hash_funcs
+   │   ├── params.py      # mirror filter values to URL query params and restore them
+   │   └── pagination.py  # page-size selector and pager, OPTS_ITEMS_PAGE tuples
+   ├── forms/             # form fields in both modes
+   │   ├── sa_fields.py   # InputFields: plain (no-schema) widgets, one per column
+   │   ├── options.py     # FK / M2M options: load_form_options (Pydantic forms),
+   │   │                  #   ExistingData, FkOpt, custom_foreign_opts (plain forms)
+   │   ├── schema_builder.py  # dynamic Pydantic models from JSON schemas
+   │   ├── schema_check.py    # validate_schema_compatibility (schema vs model)
+   │   └── pydantic/      # Pydantic form generation
+   │       ├── generator.py       # PydanticInputGenerator: routes fields to
+   │       │                      #   widgets, builds form data (PydanticUi)
+   │       ├── widgets.py         # renderers per widget kind; nullable_number_input
+   │       ├── field_info.py      # get_pydantic_field_info, get_streamlit_input_type,
+   │       │                      #   is_optional_field
+   │       └── option_resolve.py  # UI-free default/option resolution (match_option,
+   │                              #   resolve_select_index, known_defaults, ...)
+   └── dialogs/           # CRUD dialogs
+       ├── frame.py       # shared dialog wrapper (show_crud_dialog)
+       ├── create.py / edit.py / delete.py  # CreateRow / UpdateRow / DeleteRows
+       ├── persist.py     # M2M split/load, selectinload options, form session
+       │                  #   key, handle_save_error
+       └── one_to_many.py # related-rows panels in the edit dialog (opens
+                          #   create/delete dialogs, reads via table/)
+   ```
+   - **Sub-package `__init__.py` files are docstring-only** — no imports, no
+     re-exports; import submodules directly (`from streamlit_pydantic_crud.table
+     import query`). Eager imports there would create cycles.
+   - `helpers/typing.py` is always imported absolutely
+     (`from streamlit_pydantic_crud.helpers.typing import ...`); it does not
+     shadow the stdlib `typing`.
 
-4. **Core helpers** (leaf modules, no Streamlit state; import only each other):
-   - `typing_helpers.py` - Annotation inspection (Optional, enum, list, `model_fields`)
-   - `sa_model.py` - SQLAlchemy introspection (PK, table name, column label/types,
-     `related_model`)
-   - `values.py` - Value coercion (PG arrays, numpy/DataFrame cells, enum, JSON)
-   - `display.py` - Labels and table formatting (`get_pretty_name`, `convert_arrow`)
+4. **Layering rule** (enforced by `tests/test_import_layers.py`): a module may
+   import its own layer or a lower one, never a higher one, and the module graph
+   has no cycles. Lowest first:
+   `state`, `config_types` < `helpers/` < `table/`, `forms/` (peers) <
+   `pydantic_ui` < `dialogs/` < `sql_ui` < `__init__`.
+   `pydantic_ui` sits below `dialogs/` because the dialogs build `PydanticCrudUi`
+   forms. Type-only imports go under `if TYPE_CHECKING:` (not runtime edges),
+   e.g. `forms/options.py` annotating `PydanticCrudUi`. A new top-level module or
+   sub-package must be added to `LAYERS` in that test.
 
 ### Key Architectural Patterns
 

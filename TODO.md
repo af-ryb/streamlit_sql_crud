@@ -120,14 +120,14 @@ Leftovers:
   into `logs.py`, `dialogs.py`, `db_errors.py`
 - [ ] Drop third-party Streamlit components: `st.pagination` + `st.selectbox` (0.7.0),
   as its own PR after stage 2: replace the `streamlit_antd_components` pagination in
-  `pagination.py` with `st.pagination` (Streamlit ≥1.58); page size via
+  `table/pagination.py` with `st.pagination` (Streamlit ≥1.58); page size via
   `st.selectbox` instead of `sac.cascader`, then drop the `streamlit_antd_components`
-  dependency (used only in `pagination.py`); `num_pages = max(1, ceil(count / size))`;
+  dependency (used only in `table/pagination.py`); `num_pages = max(1, ceil(count / size))`;
   remove the `pagination_widget_key` remount trick — reset/clamp the page through
   `st.session_state[key]` when filters, page size or row count change; total via
   `st.caption`; consider `bind="query-params"` for the page; raise the `streamlit`
   floor to `>=1.58`; also replace `stDatalist` in `InputFields.input_str`
-  (`input_fields.py`, no-schema free-text string input with suggestions) with
+  (`forms/sa_fields.py`, no-schema free-text string input with suggestions) with
   `st.selectbox(..., accept_new_options=True, index=None)` and drop the
   `streamlit_datalist` dependency (removes the `ty: ignore[invalid-argument-type]`);
   keep empty → None and saving a new value not in the list; browser-verify (pagination
@@ -139,19 +139,19 @@ Leftovers:
   option_resolve, widgets, generator); `validate_schema_compatibility` →
   `schema_check.py`; `PydanticSQLAlchemyConverter` and `pydantic_utils.py` removed;
   `state.clear_state_keys` and `widgets.nullable_number_input` shared
-- [ ] Stage 5 — group modules into sub-packages so the public classes stand out (pure
-  `git mv` + import updates, own PR after stage 4). Root keeps only `__init__.py`,
-  `sql_ui.py`, `pydantic_ui.py`, `config_types.py`, `state.py`.
-  - `helpers/` — leaf modules: `typing.py` (← `typing_helpers.py`), `sa_model.py`,
-    `values.py`, `display.py`, `logs.py`, `db_errors.py`
-  - `table/` — read side: `query.py`, `filter_ui.py`, `params.py`, `pagination.py`,
-    `one_to_many.py`
-  - `forms/` — form fields in both modes: `sa_fields.py` (← `input_fields.py`),
-    `options.py` (← `form_options.py`), `schema_builder.py`, `pydantic/`
-    (← `pydantic_form/`), plus `schema_check.py`
-  - `dialogs/` — unchanged
-  - Dependency direction helpers → table/forms → dialogs → sql_ui; add an
-    import-graph test enforcing it. Update test imports and every string patch target.
+- [x] Stage 5: sub-packages so the public classes stand out; root keeps only
+  `__init__`, `sql_ui`, `pydantic_ui`, `config_types`, `state`. `helpers/` (`typing`
+  ← `typing_helpers`, `sa_model`, `values`, `display`, `logs`, `db_errors`), `table/`
+  (`query`, `filter_ui`, `params`, `pagination`), `forms/` (`sa_fields` ←
+  `input_fields`, `options` ← `form_options`, `schema_builder`, `schema_check`,
+  `pydantic/` ← `pydantic_form/`), `dialogs/` (+ `one_to_many`: it opens the
+  create/delete dialogs, so in `table/` it was a back-edge). Sub-package `__init__`
+  files are docstring-only. `tests/test_import_layers.py` enforces state/config_types
+  < helpers < table, forms < pydantic_ui < dialogs < sql_ui and no cycles
+  (`pydantic_ui` sits below `dialogs/`, which build `PydanticCrudUi`;
+  `forms/options` imports it only under `TYPE_CHECKING`). Packaging fixed first: the
+  wheel shipped no sub-packages (`tests/test_packaging.py` + a wheel install/import
+  gate in `scripts/release.sh`)
 
 Side findings (stage 1, not fixed — behavior-preserving refactor):
 - [ ] `update_model.py` (~line 115) applies the PK-typed `convert_numpy_to_python` to
@@ -205,3 +205,17 @@ Side findings (stage 4, not fixed — behavior-preserving refactor):
 - [ ] `render_field` takes `annotation` separately though `field_info["annotation"]`
   holds it; `foreign_key_data` / `many_to_many_data` are untyped dicts
 - [ ] `pydantic_ui.py` comments still use `#` instead of the triple-quoted style
+
+Side findings (stage 5, not fixed — behavior-preserving refactor):
+- [ ] `table/` and `forms/` are peers only because `table/params` uses
+  `forms.options.FkOpt` while `forms/options` uses `table.query`; moving `FkOpt`
+  (a two-field dataclass) to `helpers/` or `config_types` would allow table < forms
+- [ ] Loguru records of moved modules now carry the new module paths
+  (`streamlit_pydantic_crud.helpers.logs`, …); `logger.disable` is prefix-based, so
+  `set_logging` is unaffected
+- [ ] Example project: `test_slider_interaction.py`, `test_number_input_widget.py`,
+  `test_integration_null_fix.py` import removed modules (`pydantic_utils`,
+  `update_model`, `create_delete_model`) — broken since stages 3–4
+- [ ] A local `uv build` leaves `streamlit_pydantic_crud.egg-info/` in the tree; its
+  stale `SOURCES.txt` makes a later sdist→wheel build ship files the config would
+  not (it masked the packaging bug), hence the clean-copy build in the guards
