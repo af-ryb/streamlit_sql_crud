@@ -56,6 +56,7 @@ class Task(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     note: Mapped[str | None] = mapped_column()
     kind: Mapped[str | None] = mapped_column()
+    code: Mapped[str] = mapped_column(default="c1")
     status: Mapped[Status] = mapped_column(SQLEnum(Status, name="status_type"))
     priority: Mapped[str] = mapped_column(SQLEnum("low", "high", name="prio_type"))
     done: Mapped[bool] = mapped_column(default=False)

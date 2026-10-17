@@ -70,6 +70,27 @@ def seeded_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SeededRun:
     return _run
 
 
+@pytest.mark.parametrize("name", COLUMNS)
+def test_nullable_prefilled_string_stays_clearable(
+    run_mode: RunMode, name: str
+) -> None:
+    """A computed index hides the selectbox's clear button in the browser."""
+    at = run_mode("fields_row")
+    box = at.selectbox(key=f"r_{name}")
+
+    assert not box.proto.HasField("default")
+    assert box.value in ("n1", "bug")
+
+
+def test_required_string_keeps_its_index(run_mode: RunMode) -> None:
+    """A NOT NULL string column cannot be cleared to None."""
+    at = run_mode("fields_row")
+    box = at.selectbox(key="r_code")
+
+    assert box.proto.HasField("default")
+    assert box.value == "c1"
+
+
 def test_null_is_not_offered_as_an_option(run_mode: RunMode) -> None:
     """A NULL among the stored values must not show up as a "None" option."""
     at = run_mode("fields")

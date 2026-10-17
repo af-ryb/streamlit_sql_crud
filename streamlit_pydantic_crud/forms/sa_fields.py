@@ -114,14 +114,19 @@ class InputFields:
             key=f"{self.key_prefix}_{col_name}",
         )
 
-    def input_str_enum(self, col_name: str, value: str | None = None) -> str | None:
+    def input_str_enum(
+        self, col_name: str, value: str | None = None, nullable: bool = True
+    ) -> str | None:
         """Render a short string column: its few stored values, or a new one.
 
         Unlike a real Enum the column takes any string, so typing is allowed.
         """
         count = len(self.existing_data.text[col_name])
         return self.select_or_type_str(
-            col_name, value, f"Select one of {count} values or type a new one"
+            col_name,
+            value,
+            f"Select one of {count} values or type a new one",
+            nullable,
         )
 
     def is_string_enum_candidate(self, col_name: str) -> bool:
@@ -130,25 +135,33 @@ class InputFields:
         # Treat as enum if there are threshold or fewer unique values
         return len(opts) <= self.string_enum_threshold and len(opts) > 0
 
-    def input_str(self, col_name: str, value: str | None = None) -> str | None:
+    def input_str(
+        self, col_name: str, value: str | None = None, nullable: bool = True
+    ) -> str | None:
         """Render a free-text input suggesting stored values; None when empty."""
         return self.select_or_type_str(
-            col_name, value, "Select a stored value or type a new one"
+            col_name, value, "Select a stored value or type a new one", nullable
         )
 
     def select_or_type_str(
-        self, col_name: str, value: str | None, help_text: str
+        self, col_name: str, value: str | None, help_text: str, nullable: bool
     ) -> str | None:
         """Render a selectbox of stored values that accepts a typed new one.
 
-        Returns None when nothing is selected or the text is empty.
+        Returns None when nothing is selected or the text is empty. A nullable
+        column seeds its state and passes no index, which keeps it clearable.
         """
+        key = f"{self.key_prefix}_{col_name}"
         val_index, opts = self.get_col_str_opts(col_name, value)
+        if nullable:
+            if key not in st.session_state:
+                st.session_state[key] = value
+            val_index = None
         input_value = st.selectbox(
             get_pretty_name(col_name),
             options=opts,
             index=val_index,
-            key=f"{self.key_prefix}_{col_name}",
+            key=key,
             help=help_text,
             accept_new_options=True,
         )
@@ -255,9 +268,9 @@ class InputFields:
         elif col.type.python_type is str:
             # Check if string column should be treated as enum
             if self.is_string_enum_candidate(col_name):
-                input_value = self.input_str_enum(col_name, col_value)
+                input_value = self.input_str_enum(col_name, col_value, col.nullable)
             else:
-                input_value = self.input_str(col_name, col_value)
+                input_value = self.input_str(col_name, col_value, col.nullable)
         elif col.type.python_type is int:
             input_value = self.input_number(col_name, col_value, 1, col.nullable)
         elif col.type.python_type is float:
