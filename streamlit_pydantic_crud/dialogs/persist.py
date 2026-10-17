@@ -6,13 +6,12 @@ from loguru import logger
 from sqlalchemy import JSON, inspect, null
 from sqlalchemy.orm import DeclarativeBase, Session, selectinload
 from sqlalchemy.orm.interfaces import LoaderOption
-from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.config_types import ManyToManyFields
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
 from streamlit_pydantic_crud.helpers.logs import log
 from streamlit_pydantic_crud.helpers.sa_model import pk_attr, related_model, tablename
-from streamlit_pydantic_crud.state import UPDATED_KEY
+from streamlit_pydantic_crud.state import record_write
 
 
 def form_data_key(key_prefix: str) -> str:
@@ -84,7 +83,7 @@ def handle_save_error(
 
     Call it from an ``except`` block so the traceback is logged.
     """
-    ss[UPDATED_KEY] += 1
+    record_write()
     table_name = tablename(model)
     log(action, table_name, row, success=False)
     logger.exception(f"{action.capitalize()} failed for {table_name}")

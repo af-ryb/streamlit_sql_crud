@@ -17,13 +17,13 @@ def df_id(at: AppTest) -> str:
 
 
 def test_dataframe_remounts_after_write(run_app: Callable[[str], AppTest]) -> None:
-    """Every write bumps stsql_updated; a new id drops the browser selection."""
+    """A write of this session renews the key; a new id drops the selection."""
     at = run_app("sql_ui_app.py")
     before = df_id(at)
     at.run()
     assert df_id(at) == before
 
-    at.session_state[UPDATED_KEY] += 1
+    at.session_state[UPDATED_KEY] = 1
     at.run()
 
     assert not at.exception

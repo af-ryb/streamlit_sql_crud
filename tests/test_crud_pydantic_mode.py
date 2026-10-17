@@ -44,7 +44,6 @@ def _app(db: str, schema: bool) -> None:
         CreateRow,
     )
     from streamlit_pydantic_crud.dialogs.edit import UpdateRow  # noqa: PLC0415
-    from streamlit_pydantic_crud.state import UPDATED_KEY, set_state  # noqa: PLC0415
     from tests.conftest import Department, Employee  # noqa: PLC0415
     from tests.test_crud_pydantic_mode import (  # noqa: PLC0415
         FILTERS,
@@ -52,7 +51,6 @@ def _app(db: str, schema: bool) -> None:
         EmployeeUpdate,
     )
 
-    set_state(UPDATED_KEY, 0)
     conn = st.connection("sql", url=f"sqlite:///{db}")
     fk: ForeignKeyOptions = {
         "department_id": {

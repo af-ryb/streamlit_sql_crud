@@ -14,7 +14,7 @@ from streamlit_pydantic_crud.dialogs.persist import (
     pop_m2m_data,
 )
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
-from streamlit_pydantic_crud.state import UPDATED_KEY
+from streamlit_pydantic_crud.state import UPDATED_KEY, data_version
 from tests.conftest import Department
 
 PERSIST = "streamlit_pydantic_crud.dialogs.persist"
@@ -40,11 +40,12 @@ def test_pop_m2m_data_moves_only_configured_fields() -> None:
 
 
 def test_handle_save_error_counts_logs_and_formats() -> None:
-    """A failed save bumps the counter, logs a failure and formats the error."""
+    """A failed save counts as a write, logs a failure and formats the error."""
     state = {UPDATED_KEY: 3}
+    version = data_version()
     error = RuntimeError("boom")
     with (
-        patch(f"{PERSIST}.ss", state),
+        patch("streamlit_pydantic_crud.state.ss", state),
         patch(f"{PERSIST}.log") as mock_log,
         patch(f"{PERSIST}.logger") as mock_logger,
     ):
@@ -55,6 +56,7 @@ def test_handle_save_error_counts_logs_and_formats() -> None:
 
     assert result == (False, format_database_error(error))
     assert state[UPDATED_KEY] == 4
+    assert data_version() == version + 1
     mock_log.assert_called_once_with("UPDATE", "department", {"id": 1}, success=False)
     mock_logger.exception.assert_called_once_with("Update failed for department")
 

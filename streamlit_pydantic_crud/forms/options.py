@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.schema import ForeignKey
-from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import (
@@ -31,7 +30,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     safe_python_type,
     tablename,
 )
-from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY
+from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, data_version
 from streamlit_pydantic_crud.table.query import apply_active_filters
 
 if TYPE_CHECKING:
@@ -178,7 +177,7 @@ class ExistingData:
         self.cols = Model.__table__.columns
 
         table_name = tablename(Model)
-        text = self.get_text(table_name, ss[UPDATED_KEY], default_values)
+        text = self.get_text(table_name, data_version(), default_values)
         self.text = self.add_row_values(text)
         self.fk = self.get_fk()
 
@@ -198,7 +197,7 @@ class ExistingData:
 
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_text(
-        _self, table_name: str, updated: int, default_values: dict
+        _self, table_name: str, version: int, default_values: dict
     ) -> dict[str, Sequence[str]]:
         """Return distinct values of each string column, filtered by defaults.
 

@@ -82,7 +82,7 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    ├── sql_ui.py          # SqlUi; action buttons
    ├── pydantic_ui.py     # PydanticUi / PydanticCrudUi
    ├── config_types.py    # ForeignKeyOptions, ManyToManyFields, OperationType
-   ├── state.py           # per-instance UI state, UPDATED_KEY, cache TTL,
+   ├── state.py           # per-instance UI state, data version, cache TTL,
    │                      #   set_state, clear_state_keys
    ├── helpers/           # leaf modules, no Streamlit state
    │   ├── typing.py      # annotation inspection (Optional, enum, list, model_fields)

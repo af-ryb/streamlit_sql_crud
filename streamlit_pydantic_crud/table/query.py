@@ -88,8 +88,8 @@ def find_cte_col(cte: CTE, colname: str) -> KeyedColumnElement:
 
 
 @st.cache_data(hash_funcs=SQL_HASH_FUNCS, ttl=CACHE_TTL_SECONDS)
-def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, updated: int) -> int:
-    """Count the rows of `stmt_no_pag`; cached per statement and `updated`."""
+def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, version: int) -> int:
+    """Count the rows of `stmt_no_pag`; cached per statement and data `version`."""
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:
         qtty = s.execute(stmt).scalar_one()
