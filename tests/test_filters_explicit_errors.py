@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import select
 
-from streamlit_pydantic_crud import params, read_cte
+from streamlit_pydantic_crud import params, query
 from tests.conftest import Department
 
 CTE = select(Department).cte()
@@ -20,14 +20,14 @@ CTE = select(Department).cte()
 def test_unknown_no_dt_filter_column_raises_value_error() -> None:
     """A non-date filter on a column missing from the CTE is a ValueError."""
     with pytest.raises(ValueError, match="ghost"):
-        read_cte.get_stmt_no_pag_dt(CTE, {"ghost": "x"})
+        query.get_stmt_no_pag_dt(CTE, {"ghost": "x"})
 
 
 def test_unknown_dt_filter_column_raises_value_error() -> None:
     """A date filter on a column missing from the CTE is a ValueError."""
     col_filter = MagicMock(no_dt_filters={}, dt_filters={"ghost": (None, None)})
     with pytest.raises(ValueError, match="ghost"):
-        read_cte.get_stmt_no_pag(CTE, col_filter)
+        query.get_stmt_no_pag(CTE, col_filter)
 
 
 def test_known_filter_columns_build_where() -> None:
@@ -36,7 +36,7 @@ def test_known_filter_columns_build_where() -> None:
         no_dt_filters={"name": "Dept 1"},
         dt_filters={"id": (1, 3)},
     )
-    sql = str(read_cte.get_stmt_no_pag(CTE, col_filter))
+    sql = str(query.get_stmt_no_pag(CTE, col_filter))
     assert "WHERE" in sql
     assert sql.count("anon_1.id") >= 2
 

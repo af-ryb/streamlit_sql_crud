@@ -13,6 +13,7 @@ from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.config_types import ForeignKeyConfig, ForeignKeyOptions
+from streamlit_pydantic_crud.query import apply_active_filters
 from streamlit_pydantic_crud.sa_model import (
     model_by_tablename,
     safe_python_type,
@@ -237,27 +238,3 @@ def custom_foreign_opts(
             opts.append(FkOpt(current_value, str(current_value)))
 
     return opts
-
-
-def apply_active_filters(
-    stmt: Any, model: type[DeclarativeBase], dt_filters: dict, no_dt_filters: dict
-) -> Any:
-    """Narrow `stmt` by the page filters on columns that `model` also has."""
-    for col_name, date_range in dt_filters.items():
-        logger.debug(f"Checking date filter: {col_name} on model {model.__name__}")
-        if hasattr(model, col_name):
-            col = getattr(model, col_name)
-            start_date, end_date = date_range
-            if start_date:
-                stmt = stmt.where(col >= start_date)
-            if end_date:
-                stmt = stmt.where(col <= end_date)
-        else:
-            logger.debug(f"Model {model.__name__} does NOT have attribute {col_name}")
-
-    for col_name, value in no_dt_filters.items():
-        if value and hasattr(model, col_name):
-            col = getattr(model, col_name)
-            stmt = stmt.where(col == value)
-
-    return stmt

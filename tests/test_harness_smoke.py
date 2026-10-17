@@ -3,7 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from streamlit_pydantic_crud import read_cte
+from streamlit_pydantic_crud import query
 from tests.conftest import Department
 
 
@@ -16,6 +16,6 @@ def test_session_fixture_is_seeded(session: Session) -> None:
 def test_get_stmt_pag_applies_offset_and_limit(session: Session) -> None:
     """get_stmt_pag paginates an ordered statement deterministically."""
     stmt = select(Department.id).order_by(Department.id)
-    paged = read_cte.get_stmt_pag(stmt, limit=2, page=2)
+    paged = query.get_stmt_pag(stmt, limit=2, page=2)
     ids = session.execute(paged).scalars().all()
     assert ids == [3, 4]

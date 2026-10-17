@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from streamlit_pydantic_crud import SqlUi
-from streamlit_pydantic_crud.sql_ui import OPTS_ITEMS_PAGE
+from streamlit_pydantic_crud.pagination import OPTS_ITEMS_PAGE
 
 DB = os.environ["CRUD_TEST_DB"]
 
