@@ -1,7 +1,7 @@
 """Load foreign-key and many-to-many options into a Pydantic CRUD form.
 
 Shared by CreateRow and UpdateRow; failures are logged per field, shown once
-per script run as an ``st.warning``, and that field falls back to a plain input.
+as an ``st.warning``, and that field falls back to a plain input.
 """
 
 import streamlit as st
@@ -9,16 +9,11 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from streamlit.connections.sql_connection import SQLConnection
-from streamlit.runtime.scriptrunner_utils.script_run_context import (
-    get_script_run_ctx,
-)
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import custom_foreign_opts
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.utils import pk_name
-
-WARNED_FIELDS_KEY = "_streamlit_pydantic_crud_option_warnings"
 
 
 def load_form_options(
@@ -117,36 +112,13 @@ def load_many_to_many_options(
 
 
 def handle_option_load_error(kind: str, field_name: str) -> None:
-    """Log the current exception and warn the user once per run for the field.
+    """Log the current exception and warn the user about the field.
 
     Must be called from an ``except`` block. ``kind`` is ``"foreign key"`` or
     ``"many-to-many"``; the warning stays visible even with ``disable_log``.
     """
     logger.exception(f"Failed to load {kind} data for {field_name}")
-    if not mark_warned(kind, field_name):
-        return
     st.warning(f"Could not load {kind} options for '{field_name}'.")
-
-
-def mark_warned(kind: str, field_name: str) -> bool:
-    """Record the field as warned in this script run; False if it already was.
-
-    The per-run ``widget_ids_this_run`` set identifies the run, since Streamlit
-    replaces it on every rerun.
-    """
-    ctx = get_script_run_ctx()
-    if ctx is None:
-        return True
-    run_marker = ctx.widget_ids_this_run
-    stored = st.session_state.get(WARNED_FIELDS_KEY)
-    if stored is None or stored[0] is not run_marker:
-        stored = (run_marker, set())
-        st.session_state[WARNED_FIELDS_KEY] = stored
-    warned: set[tuple[str, str]] = stored[1]
-    if (kind, field_name) in warned:
-        return False
-    warned.add((kind, field_name))
-    return True
 
 
 def foreign_key_column_names(model: type[DeclarativeBase]) -> set[str]:

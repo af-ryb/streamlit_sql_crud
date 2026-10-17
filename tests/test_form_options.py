@@ -218,7 +218,6 @@ def _warning_app(db: str, disable_log: bool) -> None:
         CreateRow,
     )
     from streamlit_pydantic_crud.lib import set_logging  # noqa: PLC0415
-    from streamlit_pydantic_crud.update_model import UpdateRow  # noqa: PLC0415
     from tests.test_form_options import (  # noqa: PLC0415
         Author,
         Post,
@@ -255,14 +254,6 @@ def _warning_app(db: str, disable_log: bool) -> None:
         foreign_key_options=fk,
         many_to_many_fields=m2m,
     )
-    UpdateRow(
-        conn,
-        Post,
-        1,
-        update_schema=PostForm,
-        foreign_key_options=fk,
-        many_to_many_fields=m2m,
-    )
     st.write("RENDERED")
 
 
@@ -282,10 +273,10 @@ def form_db(tmp_path: Path) -> Iterator[str]:
 
 
 @pytest.mark.parametrize("disable_log", [False, True])
-def test_option_load_failure_shows_one_warning_per_field(
+def test_option_load_failure_shows_warning_per_field(
     form_db: str, logged: list[str], disable_log: bool
 ) -> None:
-    """Both forms fail on the same fields, yet each field warns once per run."""
+    """Each failing field shows a warning, also with logging disabled."""
     kwargs = {"db": form_db, "disable_log": disable_log}
     at = AppTest.from_function(_warning_app, kwargs=kwargs)
 
@@ -298,6 +289,5 @@ def test_option_load_failure_shows_one_warning_per_field(
             "Could not load many-to-many options for 'bad'.",
         ]
 
-    """Two runs x two forms x two fields are logged, but warned only once each."""
     failures = [m for m in logged if m.startswith("Failed to load")]
-    assert len(failures) == (0 if disable_log else 8)
+    assert len(failures) == (0 if disable_log else 4)
