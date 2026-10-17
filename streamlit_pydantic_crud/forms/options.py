@@ -226,7 +226,14 @@ class ExistingData:
         return result
 
     def _get_str_opts(self, column) -> Sequence[str]:
-        stmt = select(column).distinct().select_from(self.Model).limit(10000)
+        """Return the distinct non-NULL values of a string column."""
+        stmt = (
+            select(column)
+            .distinct()
+            .select_from(self.Model)
+            .where(column.is_not(None))
+            .limit(10000)
+        )
         stmt = self.add_default_where(stmt, self.Model)
         return list(self.session.execute(stmt).scalars().all())
 

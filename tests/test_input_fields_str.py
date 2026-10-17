@@ -70,6 +70,13 @@ def seeded_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SeededRun:
     return _run
 
 
+def test_null_is_not_offered_as_an_option(run_mode: RunMode) -> None:
+    """A NULL among the stored values must not show up as a "None" option."""
+    at = run_mode("fields")
+
+    assert at.selectbox(key="f_kind").options == ["bug", "chore"]
+
+
 @pytest.mark.parametrize("name", COLUMNS)
 def test_string_input_accepts_new_value(seeded_run: SeededRun, name: str) -> None:
     at = seeded_run(f"r_{name}", "brand new")

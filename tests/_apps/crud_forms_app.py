@@ -3,7 +3,7 @@
 The DB path comes from CRUD_TEST_DB and the scenario from CRUD_TEST_MODE, so
 one app covers enum editing, default values and widget key collisions.
 Seeding more than ten distinct notes keeps `note` a free-text input; `kind`
-holds two values, so it is a short-string (string-enum) column.
+holds two values and a NULL, so it is a short-string (string-enum) column.
 """
 
 import os
@@ -81,7 +81,7 @@ with Session(eng) as s:
             Task(
                 id=i,
                 note=f"n{i}",
-                kind="bug" if i % 2 else "chore",
+                kind=None if i == 12 else "bug" if i % 2 else "chore",
                 status=Status.ACTIVE,
                 priority="high",
                 done=True,
