@@ -19,7 +19,6 @@ from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
 from streamlit_pydantic_crud.forms.options import ExistingData
 from streamlit_pydantic_crud.forms.sa_fields import InputFields
-from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 
 DB = os.environ["CRUD_TEST_DB"]
 MODE = os.environ.get("CRUD_TEST_MODE", "fields")
@@ -98,7 +97,6 @@ with Session(eng) as s:
         s.commit()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
-set_state(UPDATED_KEY, 0)
 
 
 def render_fields(prefix: str, with_row: bool) -> None:

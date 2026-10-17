@@ -6,7 +6,6 @@ from typing import Any
 import streamlit as st
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
-from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
@@ -28,7 +27,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     tablename,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
+from streamlit_pydantic_crud.state import record_write, set_state
 
 
 class CreateRow:
@@ -59,8 +58,6 @@ class CreateRow:
         self.default_values = default_values or {}
         self.key = key
         self.key_prefix = f"{key}_create"
-
-        set_state(UPDATED_KEY, 0)
 
         if not self.create_schema:
             """SQLAlchemy-mode inputs; Pydantic forms never read them."""
@@ -185,7 +182,7 @@ class CreateRow:
                     getattr(row, relationship_name).extend(related_objects)
 
                 s.commit()
-                ss[UPDATED_KEY] += 1
+                record_write()
                 table_name = tablename(self.model)
                 log("CREATE", table_name, row)
 
@@ -208,7 +205,7 @@ class CreateRow:
             with self.conn.session as s:
                 s.add(row)
                 s.commit()
-                ss[UPDATED_KEY] += 1
+                record_write()
                 table_name = tablename(self.model)
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"

@@ -45,9 +45,8 @@ def clicked() -> Iterator[MagicMock]:
     state = FakeState({UPDATED_KEY: 0})
     with (
         patch(f"{target}.st") as mock_st,
-        patch(f"{target}.ss", state),
+        patch("streamlit_pydantic_crud.state.ss", state),
         patch(f"{target}.log") as mock_log,
-        patch(f"{persist}.ss", state),
         patch(f"{persist}.log", mock_log),
         patch.object(DeleteRows, "get_rows_str", return_value=[]),
     ):
@@ -75,7 +74,7 @@ def test_rows_preview_is_per_table(engine: Engine, session: Session) -> None:
 
 
 def test_rows_preview_reflects_edits(engine: Engine, session: Session) -> None:
-    """The preview is refreshed once the update counter moves."""
+    """The preview is refreshed once the data version moves."""
     st.cache_data.clear()
     conn = as_conn(FakeConn(engine))
     rows = DeleteRows(conn, Department, [1], key="d")

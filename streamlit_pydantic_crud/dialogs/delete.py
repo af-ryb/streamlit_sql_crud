@@ -5,7 +5,6 @@ from functools import partial
 import streamlit as st
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
-from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
@@ -13,7 +12,11 @@ from streamlit_pydantic_crud.dialogs.persist import handle_save_error
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.logs import log
 from streamlit_pydantic_crud.helpers.sa_model import pk_column, tablename
-from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY
+from streamlit_pydantic_crud.state import (
+    CACHE_TTL_SECONDS,
+    data_version,
+    record_write,
+)
 
 
 class DeleteRows:
@@ -34,11 +37,11 @@ class DeleteRows:
 
     @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_rows_str(
-        _self, table_name: str, rows_id: list[int], updated: int
+        _self, table_name: str, rows_id: list[int], version: int
     ) -> list[str]:
         """Return the string form of the rows to delete.
 
-        `table_name` and the `updated` counter are cache-key inputs only.
+        `table_name` and the data `version` are cache-key inputs only.
         """
         id_col = pk_column(_self.model)
         stmt = select(_self.model).where(id_col.in_(rows_id))
@@ -53,8 +56,7 @@ class DeleteRows:
         st.subheader("Delete selected items?")
 
         table_name = tablename(self.model)
-        updated = ss.get(UPDATED_KEY, 0)
-        rows_str = self.get_rows_str(table_name, self.rows_id, updated)
+        rows_str = self.get_rows_str(table_name, self.rows_id, data_version())
         st.dataframe({pretty_name: rows_str}, hide_index=True)
 
         btn = st.button("Delete", key=f"{self.key_prefix}_del_btn")
@@ -74,7 +76,7 @@ class DeleteRows:
                     s.delete(lanc)
 
                 s.commit()
-                ss[UPDATED_KEY] += 1
+                record_write()
             except Exception as e:
                 return handle_save_error("DELETE", self.model, self.rows_id, e)
 

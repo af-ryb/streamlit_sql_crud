@@ -197,12 +197,12 @@ silently break it (a string key must match its qualified name)."""
 def get_existing_values(
     _session: Session,
     cte: CTE,
-    updated: int,
+    version: int,
     available_col_filter: list[str] | None = None,
 ) -> dict[str, Any]:
     """Return the distinct values of each filterable column of `cte`.
 
-    Cached per CTE, `updated` and column list; failing columns are skipped.
+    Cached per CTE, data `version` and column list; failing columns are skipped.
     """
     if not available_col_filter:
         available_col_filter = []

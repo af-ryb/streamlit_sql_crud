@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud import SqlUi
-from streamlit_pydantic_crud.state import UPDATED_KEY
+from streamlit_pydantic_crud.state import record_write
 
 DB = os.environ["CRUD_TEST_DB"]
 ROWS = 150
@@ -45,7 +45,7 @@ with Session(eng) as s:
     if keep is not None and s.query(Row).count() > keep:
         s.execute(delete(Row).where(Row.id > keep))
         s.commit()
-        st.session_state[UPDATED_KEY] = st.session_state.get(UPDATED_KEY, 1) + 1
+        record_write()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
 ui = SqlUi(

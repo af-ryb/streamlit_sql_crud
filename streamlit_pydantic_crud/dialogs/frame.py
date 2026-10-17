@@ -3,9 +3,8 @@
 from collections.abc import Callable
 
 import streamlit as st
-from streamlit import session_state as ss
 
-from streamlit_pydantic_crud.state import UPDATED_KEY, get_ui_state, set_state
+from streamlit_pydantic_crud.state import get_ui_state, session_writes
 
 
 def show_crud_dialog(
@@ -13,14 +12,13 @@ def show_crud_dialog(
 ) -> None:
     """Open a dialog running `show` and store its result in the `key` UI state.
 
-    Reruns the page once `show` wrote to the database (stsql_updated grew).
+    Reruns the page once `show` wrote to the database (`session_writes` grew).
     Dismissing it reruns too, so Streamlit drops the unsaved widget values.
     """
 
     @st.dialog(title, width="large", on_dismiss="rerun")
     def wrap_show() -> None:
-        set_state(UPDATED_KEY, 0)
-        updated_before = ss[UPDATED_KEY]
+        writes_before = session_writes()
         status, msg = show()
 
         ui_state = get_ui_state(key)
@@ -28,7 +26,7 @@ def show_crud_dialog(
         ui_state.update_message = msg
         ui_state.opened = True
 
-        if ss[UPDATED_KEY] > updated_before:
+        if session_writes() > writes_before:
             st.rerun()
 
     wrap_show()

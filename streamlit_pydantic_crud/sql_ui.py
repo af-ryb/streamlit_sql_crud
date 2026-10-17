@@ -9,7 +9,6 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
 from sqlalchemy.orm import DeclarativeBase
-from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 from streamlit.elements.arrow import DataframeState
@@ -42,10 +41,10 @@ from streamlit_pydantic_crud.helpers.values import (
 )
 from streamlit_pydantic_crud.state import (
     OPTIONS_NOTICE_KEYS,
-    UPDATED_KEY,
     UiState,
+    data_version,
     get_ui_state,
-    set_state,
+    session_writes,
 )
 from streamlit_pydantic_crud.table import filter_ui, pagination, query
 
@@ -244,7 +243,6 @@ class SqlUi:
 
         # Bootstrap
         self.state: UiState = get_ui_state(self.key)
-        self.set_initial_state()
         self.set_structure()
         self.notification()
         logs.set_logging(self.disable_log)
@@ -252,7 +250,7 @@ class SqlUi:
         # Create UI
         self.col_filter = self.filter()
         stmt_no_pag = query.get_stmt_no_pag(self.cte, self.col_filter)
-        qtty_rows = query.get_qtty_rows(self.conn, stmt_no_pag, ss[UPDATED_KEY])
+        qtty_rows = query.get_qtty_rows(self.conn, stmt_no_pag, data_version())
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
         order_col = self.cte.columns.get(pk_name(self.edit_create_model))
         stmt_pag = query.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
@@ -278,9 +276,6 @@ class SqlUi:
                 f"is not compatible with {table_name}"
             )
             raise ValueError(msg)
-
-    def set_initial_state(self) -> None:
-        set_state(UPDATED_KEY, 1)
 
     def set_structure(self) -> None:
         self.header_container = st.container()
@@ -338,7 +333,7 @@ class SqlUi:
             existing = filter_ui.get_existing_values(
                 _session=s,
                 cte=self.cte,
-                updated=ss[UPDATED_KEY],
+                version=data_version(),
                 available_col_filter=filter_cols_name,
             )
 
@@ -505,11 +500,12 @@ class SqlUi:
         return selection_state
 
     def df_key(self) -> str:
-        """Return the dataframe key, renewed by every write (stsql_updated).
+        """Return the dataframe key, renewed by every write of this session.
 
         The selection holds row positions; a new key drops it once rows shift.
+        Per session, so another session's write keeps this one's selection.
         """
-        return f"{self.key}_df_sql_ui_{ss[UPDATED_KEY]}"
+        return f"{self.key}_df_sql_ui_{session_writes()}"
 
     @staticmethod
     def get_rows_selected(selection_state: DataframeState | None) -> list[int]:

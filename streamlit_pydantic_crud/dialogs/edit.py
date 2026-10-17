@@ -7,7 +7,6 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
-from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
@@ -35,7 +34,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
 )
 from streamlit_pydantic_crud.helpers.values import convert_numpy_to_python
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
+from streamlit_pydantic_crud.state import record_write, set_state
 
 
 class UpdateRow:
@@ -71,8 +70,6 @@ class UpdateRow:
         self.key_prefix = f"{key}_update"
         self.dt_filters = dt_filters or {}
         self.no_dt_filters = no_dt_filters or {}
-
-        set_state(UPDATED_KEY, 0)
 
         with conn.session as s:
             # Load row with many-to-many relationships if needed
@@ -228,7 +225,7 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                ss[UPDATED_KEY] += 1
+                record_write()
                 table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
 
@@ -255,7 +252,7 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                ss[UPDATED_KEY] += 1
+                record_write()
                 table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"

@@ -22,11 +22,9 @@ def _app(db: str) -> None:
         CreateRow,
     )
     from streamlit_pydantic_crud.dialogs.edit import UpdateRow  # noqa: PLC0415
-    from streamlit_pydantic_crud.state import UPDATED_KEY, set_state  # noqa: PLC0415
     from tests.conftest import Employee  # noqa: PLC0415
     from tests.test_fk_filters_edit import FILTERS  # noqa: PLC0415
 
-    set_state(UPDATED_KEY, 0)
     conn = st.connection("sql", url=f"sqlite:///{db}")
     create = CreateRow(conn, Employee, key="c", no_dt_filters=FILTERS)
     update = UpdateRow(conn, Employee, 1, key="u", no_dt_filters=FILTERS)
