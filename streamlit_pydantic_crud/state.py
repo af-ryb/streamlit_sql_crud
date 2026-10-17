@@ -3,9 +3,11 @@
 Each instance keeps its own filters, notification and dialog flag so several
 `SqlUi` on one page do not disturb each other. The cache-busting counter
 `stsql_updated` stays global on purpose (see `UPDATED_KEY`). Also holds the
-other process- and session-wide constants and the `set_state` helper.
+other process- and session-wide constants and the `set_state` and
+`clear_state_keys` helpers.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -52,6 +54,13 @@ def set_state(key: str, value: Any) -> None:
     """Set session-state `key` to `value` unless it is already set."""
     if key not in ss:
         ss[key] = value
+
+
+def clear_state_keys(keys: Iterable[str]) -> None:
+    """Delete each of `keys` that is present from session state."""
+    for key in keys:
+        if key in ss:
+            del ss[key]
 
 
 def state_key_for(key: str) -> str:

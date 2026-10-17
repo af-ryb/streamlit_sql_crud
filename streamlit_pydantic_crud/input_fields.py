@@ -11,7 +11,9 @@ from streamlit_datalist import stDatalist
 
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.form_options import ExistingData, FkOpt
+from streamlit_pydantic_crud.pydantic_form.widgets import nullable_number_input
 from streamlit_pydantic_crud.sa_model import column_label, is_array_type
+from streamlit_pydantic_crud.state import clear_state_keys
 from streamlit_pydantic_crud.values import (
     coerce_decimal,
     keep_unchanged_datetime,
@@ -172,13 +174,12 @@ class InputFields:
         A widget created with a value refills a cleared field on blur, so a
         nullable column seeds its state and starts with `value=None` instead.
         """
-        key = f"{self.key_prefix}_{col_name}"
-        if nullable:
-            if key not in st.session_state:
-                st.session_state[key] = value
-            value = None
-        return st.number_input(
-            get_pretty_name(col_name), value=value, step=step, key=key
+        return nullable_number_input(
+            get_pretty_name(col_name),
+            value,
+            f"{self.key_prefix}_{col_name}",
+            nullable=nullable,
+            step=step,
         )
 
     def input_numeric(
@@ -288,7 +289,7 @@ class InputFields:
 
         The next render then re-seeds each widget from its `value` argument.
         """
-        for col in self.model.__table__.columns:
-            key = f"{self.key_prefix}_{column_label(col)}"
-            if key in st.session_state:
-                del st.session_state[key]
+        clear_state_keys(
+            f"{self.key_prefix}_{column_label(col)}"
+            for col in self.model.__table__.columns
+        )
