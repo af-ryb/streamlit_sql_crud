@@ -2,7 +2,8 @@
 
 The DB path comes from CRUD_TEST_DB and the scenario from CRUD_TEST_MODE, so
 one app covers enum editing, default values and widget key collisions.
-Seeding more than ten distinct notes keeps `note` a free-text input.
+Seeding more than ten distinct notes keeps `note` a free-text input; `kind`
+holds two values, so it is a short-string (string-enum) column.
 """
 
 import os
@@ -54,6 +55,7 @@ class Task(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     note: Mapped[str | None] = mapped_column()
+    kind: Mapped[str | None] = mapped_column()
     status: Mapped[Status] = mapped_column(SQLEnum(Status, name="status_type"))
     priority: Mapped[str] = mapped_column(SQLEnum("low", "high", name="prio_type"))
     done: Mapped[bool] = mapped_column(default=False)
@@ -79,6 +81,7 @@ with Session(eng) as s:
             Task(
                 id=i,
                 note=f"n{i}",
+                kind="bug" if i % 2 else "chore",
                 status=Status.ACTIVE,
                 priority="high",
                 done=True,

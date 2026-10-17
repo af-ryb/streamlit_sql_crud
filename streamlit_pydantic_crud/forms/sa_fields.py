@@ -7,7 +7,6 @@ from sqlalchemy import Numeric
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
-from streamlit_datalist import stDatalist
 
 from streamlit_pydantic_crud.forms.options import ExistingData, FkOpt
 from streamlit_pydantic_crud.forms.pydantic.widgets import nullable_number_input
@@ -29,9 +28,8 @@ class InputFields:
 
     Automatically detects field types and creates appropriate inputs:
     - Enum fields: selectbox
-    - String fields with few unique values: selectbox (String(Enum) style)
+    - String fields: selectbox of stored values that also takes a new value
     - Array[Enum] fields: multiselect
-    - Regular string fields: text input with datalist
     - Foreign keys: selectbox with related records
     - Numbers, dates, booleans: appropriate input widgets
     """
@@ -116,31 +114,15 @@ class InputFields:
             key=f"{self.key_prefix}_{col_name}",
         )
 
-    def input_str_enum(self, col_name: str, value=None) -> str | None:
-        """Handle string columns that should be treated as enums using selectbox."""
-        key = f"{self.key_prefix}_{col_name}"
-        pretty_name = get_pretty_name(col_name)
+    def input_str_enum(self, col_name: str, value: str | None = None) -> str | None:
+        """Render a short string column: its few stored values, or a new one.
 
-        # Get available options from existing data
-        opts = list(self.existing_data.text[col_name])
-
-        # Find current value index
-        index = None
-        if value and value in opts:
-            index = opts.index(value)
-        elif value and value not in opts:
-            # If current value is not in options, add it
-            opts.append(value)
-            index = len(opts) - 1
-
-        input_value = st.selectbox(
-            pretty_name,
-            options=opts,
-            index=index,
-            key=key,
-            help=f"Select from {len(opts)} available options",
+        Unlike a real Enum the column takes any string, so typing is allowed.
+        """
+        count = len(self.existing_data.text[col_name])
+        return self.select_or_type_str(
+            col_name, value, f"Select one of {count} values or type a new one"
         )
-        return input_value
 
     def is_string_enum_candidate(self, col_name: str) -> bool:
         """Determine if a string column should be treated as an enum based on unique value count."""
@@ -149,14 +131,26 @@ class InputFields:
         return len(opts) <= self.string_enum_threshold and len(opts) > 0
 
     def input_str(self, col_name: str, value: str | None = None) -> str | None:
-        """Render a free-text datalist input; return None when left empty."""
-        key = f"{self.key_prefix}_{col_name}"
+        """Render a free-text input suggesting stored values; None when empty."""
+        return self.select_or_type_str(
+            col_name, value, "Select a stored value or type a new one"
+        )
+
+    def select_or_type_str(
+        self, col_name: str, value: str | None, help_text: str
+    ) -> str | None:
+        """Render a selectbox of stored values that accepts a typed new one.
+
+        Returns None when nothing is selected or the text is empty.
+        """
         val_index, opts = self.get_col_str_opts(col_name, value)
-        input_value = stDatalist(
+        input_value = st.selectbox(
             get_pretty_name(col_name),
-            list(opts),
-            index=val_index,  # ty: ignore[invalid-argument-type]
-            key=key,
+            options=opts,
+            index=val_index,
+            key=f"{self.key_prefix}_{col_name}",
+            help=help_text,
+            accept_new_options=True,
         )
         if input_value is None or input_value == "":
             return None
