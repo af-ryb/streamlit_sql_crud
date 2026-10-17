@@ -110,3 +110,28 @@ Leftovers:
 ## Step 4 — API decisions
 
 - [ ] Remove deprecated `base_key` and `read_instance` + `edit_create_model` (before 1.0?)
+
+## Step 5 — Module reorganization
+
+- [x] Stage 1: core helper modules — `typing_helpers`, `sa_model`, `values`, `display`;
+  constants and `set_state` in `state`; `utils.py` dissolved, duplicates merged
+- [ ] Stage 2: dissolve `lib`/`read_cte`/`filters`/`many` into `query.py`,
+  `pagination.py`, `filter_ui.py`, `form_options.py`, `one_to_many.py`
+- [ ] Stage 3: `dialogs/` package (create, edit, delete, `persist.py` with the shared
+  M2M save + error block); `action_btns` → `sql_ui`
+- [ ] Stage 4: split `pydantic_utils` into `pydantic_form/` (field_info,
+  option_resolve, widgets, generator)
+
+Side findings (stage 1, not fixed — behavior-preserving refactor):
+- [ ] `update_model.py` (~line 115) applies the PK-typed `convert_numpy_to_python` to
+  every column value, not only the primary key
+- [ ] `stsql_updated` is seeded with 1 by `SqlUi` but with 0 by the dialogs and
+  `show_crud_dialog` (`set_state(UPDATED_KEY, ...)`)
+- [ ] `PydanticCrudUi.__init__` builds `PydanticInputGenerator` and session state twice
+- [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`; unreachable guards in
+  `_render_foreign_key_selectbox`/`_render_many_to_many_multiselect`;
+  `if operation == "read": pass`; `if col_name is None` after `column_label`
+- [ ] `many.ReadManyRel.other_model` looks the model up inline (raises
+  StopIteration/AttributeError) instead of `sa_model.model_by_tablename` (returns None)
+- [ ] `InputFields.get_input_value` uses `col.description` (raises when None) rather
+  than `column_label`
