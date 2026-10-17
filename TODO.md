@@ -89,8 +89,8 @@ From reading (verify with a test first):
 - [x] Tests for schema_builder, type detection, many-to-many, delete
 
 Leftovers:
-- [ ] FK/M2M option-load errors are only logged (invisible with `disable_log=True`) —
-  consider `st.warning`
+- [x] FK/M2M option-load errors are only logged (invisible with `disable_log=True`) —
+  consider `st.warning` — done: also shown as `st.warning`, once per field per run
 - [ ] No-schema nullable-number row-switching not browser-verified (example app has no
   no-schema page)
 - [ ] Stale example-repo scripts `test_final_verification.py`/`test_null_value_fix.py`
