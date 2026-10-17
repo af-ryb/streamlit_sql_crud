@@ -7,7 +7,7 @@ import pytest
 import sqlalchemy as sa
 
 from streamlit_pydantic_crud import input_fields
-from streamlit_pydantic_crud.filters import FkOpt
+from streamlit_pydantic_crud.form_options import FkOpt
 from streamlit_pydantic_crud.input_fields import InputFields
 from streamlit_pydantic_crud.many import ReadManyRel
 

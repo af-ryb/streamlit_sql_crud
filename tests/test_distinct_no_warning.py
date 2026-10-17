@@ -16,7 +16,7 @@ from sqlalchemy.sql import operators
 from sqlalchemy.sql.elements import UnaryExpression
 
 from streamlit_pydantic_crud.filter_ui import get_existing_values
-from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.form_options import ExistingData
 from streamlit_pydantic_crud.state import UPDATED_KEY
 from tests.conftest import Department
 

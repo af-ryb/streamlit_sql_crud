@@ -9,7 +9,7 @@ from typing import Any
 
 from streamlit_pydantic_crud import filter_ui, query
 from streamlit_pydantic_crud.create_delete_model import DeleteRows
-from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.form_options import ExistingData
 
 
 def _ttl(cached_func: Any) -> object:
