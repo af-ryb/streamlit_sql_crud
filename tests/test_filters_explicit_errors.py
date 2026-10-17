@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import select
 
-from streamlit_pydantic_crud import params, query
+from streamlit_pydantic_crud.table import params, query
 from tests.conftest import Department
 
 CTE = select(Department).cte()

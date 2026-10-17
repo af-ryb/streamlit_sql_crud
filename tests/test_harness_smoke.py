@@ -3,7 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from streamlit_pydantic_crud import query
+from streamlit_pydantic_crud.table import query
 from tests.conftest import Department
 
 

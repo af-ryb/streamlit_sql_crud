@@ -17,16 +17,16 @@ from streamlit_pydantic_crud.dialogs.persist import (
     load_related,
     pop_m2m_data,
 )
-from streamlit_pydantic_crud.display import get_pretty_name
-from streamlit_pydantic_crud.form_options import ExistingData, load_form_options
-from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
-from streamlit_pydantic_crud.logs import log
-from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.sa_model import (
+from streamlit_pydantic_crud.forms.options import ExistingData, load_form_options
+from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
+from streamlit_pydantic_crud.helpers.display import get_pretty_name
+from streamlit_pydantic_crud.helpers.logs import log
+from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     pk_name,
     tablename,
 )
+from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 
 

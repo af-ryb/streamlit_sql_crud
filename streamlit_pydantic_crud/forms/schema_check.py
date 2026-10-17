@@ -1,6 +1,6 @@
 """Check that a Pydantic schema fits the SQLAlchemy model it edits.
 
-Kept apart from `sa_model`, a leaf module, which `typing_helpers` reaches
+Kept apart from `sa_model`, a leaf module, which `helpers.typing` reaches
 through `values`; importing `model_fields` there would cycle.
 """
 
@@ -8,8 +8,8 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 
-from streamlit_pydantic_crud.sa_model import pk_name, tablename
-from streamlit_pydantic_crud.typing_helpers import model_fields
+from streamlit_pydantic_crud.helpers.sa_model import pk_name, tablename
+from streamlit_pydantic_crud.helpers.typing import model_fields
 
 
 def validate_schema_compatibility(

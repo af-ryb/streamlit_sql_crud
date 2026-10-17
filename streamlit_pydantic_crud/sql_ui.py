@@ -14,25 +14,32 @@ from streamlit.connections import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_pydantic_crud import filter_ui, logs, pagination, query
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
 from streamlit_pydantic_crud.dialogs.persist import m2m_load_options
-from streamlit_pydantic_crud.display import (
+from streamlit_pydantic_crud.forms.schema_check import validate_schema_compatibility
+from streamlit_pydantic_crud.helpers import logs
+from streamlit_pydantic_crud.helpers.display import (
     DfStyleFormatter,
     convert_arrow,
     get_pretty_name,
     numeric_formatters,
 )
-from streamlit_pydantic_crud.sa_model import (
+from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     pk_attr,
     pk_name,
     tablename,
 )
-from streamlit_pydantic_crud.schema_check import validate_schema_compatibility
+from streamlit_pydantic_crud.helpers.typing import model_fields
+from streamlit_pydantic_crud.helpers.values import (
+    convert_numpy_list_to_python,
+    convert_numpy_to_python,
+    enum_value,
+    row_to_python,
+)
 from streamlit_pydantic_crud.state import (
     OPTIONS_NOTICE_KEYS,
     UPDATED_KEY,
@@ -40,13 +47,7 @@ from streamlit_pydantic_crud.state import (
     get_ui_state,
     set_state,
 )
-from streamlit_pydantic_crud.typing_helpers import model_fields
-from streamlit_pydantic_crud.values import (
-    convert_numpy_list_to_python,
-    convert_numpy_to_python,
-    enum_value,
-    row_to_python,
-)
+from streamlit_pydantic_crud.table import filter_ui, pagination, query
 
 
 class SqlUi:

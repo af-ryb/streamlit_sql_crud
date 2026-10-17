@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from streamlit.testing.v1 import AppTest
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions
-from streamlit_pydantic_crud.form_options import ExistingData
-from streamlit_pydantic_crud.input_fields import InputFields
+from streamlit_pydantic_crud.forms.options import ExistingData
+from streamlit_pydantic_crud.forms.sa_fields import InputFields
 from tests.conftest import Base, Department, Employee
 
 FILTERS = {"name": "Dept 1"}

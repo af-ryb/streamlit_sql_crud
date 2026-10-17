@@ -7,7 +7,7 @@ order, so the same row can appear on two pages or none.
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from streamlit_pydantic_crud import query
+from streamlit_pydantic_crud.table import query
 from tests.conftest import Department
 
 

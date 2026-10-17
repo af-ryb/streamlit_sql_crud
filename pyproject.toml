@@ -5,8 +5,8 @@ include = ["streamlit_pydantic_crud", "tests"]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["streamlit_pydantic_crud"]
+[tool.setuptools.packages.find]
+include = ["streamlit_pydantic_crud*"]
 
 [tool.vulture]
 exclude = []

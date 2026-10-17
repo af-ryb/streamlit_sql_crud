@@ -13,13 +13,13 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
-from streamlit_pydantic_crud.display import field_label
-from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
-from streamlit_pydantic_crud.schema_builder import (
+from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
+from streamlit_pydantic_crud.forms.schema_builder import (
     create_pydantic_model_from_json_schema,
 )
+from streamlit_pydantic_crud.helpers.display import field_label
+from streamlit_pydantic_crud.helpers.typing import model_fields
 from streamlit_pydantic_crud.state import clear_state_keys
-from streamlit_pydantic_crud.typing_helpers import model_fields
 
 
 class PydanticUi[T: BaseModel]:

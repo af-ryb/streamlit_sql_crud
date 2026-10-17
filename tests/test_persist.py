@@ -3,12 +3,12 @@
 from unittest.mock import patch
 
 from streamlit_pydantic_crud.config_types import ManyToManyFields
-from streamlit_pydantic_crud.db_errors import format_database_error
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
     handle_save_error,
     pop_m2m_data,
 )
+from streamlit_pydantic_crud.helpers.db_errors import format_database_error
 from streamlit_pydantic_crud.state import UPDATED_KEY
 from tests.conftest import Department
 

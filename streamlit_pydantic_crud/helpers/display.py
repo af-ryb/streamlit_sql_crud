@@ -14,8 +14,8 @@ from sqlalchemy import CTE, Numeric
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 
-from streamlit_pydantic_crud.sa_model import is_array_type, is_json_type
-from streamlit_pydantic_crud.values import enum_value, json_to_text
+from streamlit_pydantic_crud.helpers.sa_model import is_array_type, is_json_type
+from streamlit_pydantic_crud.helpers.values import enum_value, json_to_text
 
 """Per-column formatter accepted by pandas ``Styler.format``."""
 DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]

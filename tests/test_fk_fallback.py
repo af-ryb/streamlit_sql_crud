@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 
 from pydantic import BaseModel
 
-from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
+from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_fk_fallback_uses_text_input(mock_st: MagicMock) -> None:
     """A configured FK field without loaded options falls back to text input."""
 

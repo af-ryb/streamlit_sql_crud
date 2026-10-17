@@ -7,12 +7,12 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from streamlit_pydantic_crud.pydantic_form.field_info import (
+from streamlit_pydantic_crud.forms.pydantic.field_info import (
     get_pydantic_field_info,
     get_streamlit_input_type,
 )
-from streamlit_pydantic_crud.pydantic_form.widgets import render_enum_select
-from streamlit_pydantic_crud.typing_helpers import (
+from streamlit_pydantic_crud.forms.pydantic.widgets import render_enum_select
+from streamlit_pydantic_crud.helpers.typing import (
     is_enum_annotation,
     is_enum_list_annotation,
     is_list_annotation,
@@ -99,7 +99,7 @@ def test_enum_list_detection_pep604() -> None:
 
 def test_render_enum_input_pep604() -> None:
     """The selectbox receives the enum values, not a crash on UnionType."""
-    with patch("streamlit_pydantic_crud.pydantic_form.widgets.st.selectbox") as sb:
+    with patch("streamlit_pydantic_crud.forms.pydantic.widgets.st.selectbox") as sb:
         sb.return_value = "blue"
         result = render_enum_select("Color", Color | None, Color.BLUE, key="k")
     assert result == "blue"

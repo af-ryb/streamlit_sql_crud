@@ -6,7 +6,7 @@ behind by a module move would silently disable the hasher.
 
 import importlib
 
-from streamlit_pydantic_crud.filter_ui import ColFilter, hash_funcs
+from streamlit_pydantic_crud.table.filter_ui import ColFilter, hash_funcs
 
 
 def test_col_filter_hash_key_matches_class() -> None:

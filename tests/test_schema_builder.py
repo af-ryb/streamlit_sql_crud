@@ -8,10 +8,10 @@ from typing import Any, get_args, get_origin
 from pydantic import BaseModel, Field
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.schema_builder import (
+from streamlit_pydantic_crud.forms.schema_builder import (
     create_pydantic_model_from_json_schema as build,
 )
-from streamlit_pydantic_crud.typing_helpers import (
+from streamlit_pydantic_crud.helpers.typing import (
     is_enum_annotation,
     is_enum_list_annotation,
 )

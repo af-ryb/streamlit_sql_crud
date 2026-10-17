@@ -6,9 +6,10 @@ from types import SimpleNamespace
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import input_fields, values
-from streamlit_pydantic_crud.input_fields import InputFields
-from streamlit_pydantic_crud.values import parse_pg_array
+from streamlit_pydantic_crud.forms import sa_fields
+from streamlit_pydantic_crud.forms.sa_fields import InputFields
+from streamlit_pydantic_crud.helpers import values
+from streamlit_pydantic_crud.helpers.values import parse_pg_array
 from tests.test_input_fields_enum import RunMode
 
 NULLABLE = ("qty", "score", "price")
@@ -54,7 +55,7 @@ def test_datalist_label_is_pretty(monkeypatch: pytest.MonkeyPatch) -> None:
         labels.append(label)
         return ""
 
-    monkeypatch.setattr(input_fields, "stDatalist", fake_datalist)
+    monkeypatch.setattr(sa_fields, "stDatalist", fake_datalist)
     existing = SimpleNamespace(text={"first_name": set()})
     fields = InputFields(object, "p", {}, existing)  # ty: ignore[invalid-argument-type]
 
@@ -67,7 +68,7 @@ def _array_app() -> None:
 
     from sqlalchemy import ARRAY, String  # noqa: PLC0415
 
-    from streamlit_pydantic_crud.input_fields import InputFields  # noqa: PLC0415
+    from streamlit_pydantic_crud.forms.sa_fields import InputFields  # noqa: PLC0415
 
     existing = SimpleNamespace(text={})
     fields = InputFields(object, "a", {}, existing)  # ty: ignore[invalid-argument-type]

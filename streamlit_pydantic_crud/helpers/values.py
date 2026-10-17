@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import DeclarativeBase
 
-from streamlit_pydantic_crud.sa_model import pk_column
+from streamlit_pydantic_crud.helpers.sa_model import pk_column
 
 
 def enum_value(value: Any) -> Any:

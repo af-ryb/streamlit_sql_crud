@@ -1,12 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-from streamlit_pydantic_crud.pydantic_form.widgets import render_radio
+from streamlit_pydantic_crud.forms.pydantic.widgets import render_radio
 
 
 class TestRenderRadioWidget:
     """Tests for widgets.render_radio()."""
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_basic_options(self, mock_st: MagicMock) -> None:
         """Radio renders with provided options and defaults to index 0."""
         mock_st.radio.return_value = "area"
@@ -24,7 +24,7 @@ class TestRenderRadioWidget:
         )
         assert result == "area"
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_existing_value_sets_index(self, mock_st: MagicMock) -> None:
         """Existing value selects the matching option by index."""
         mock_st.radio.return_value = "line"
@@ -41,7 +41,7 @@ class TestRenderRadioWidget:
             key="test_key",
         )
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_existing_value_not_in_options(self, mock_st: MagicMock) -> None:
         """Unknown existing value falls back to index 0."""
         mock_st.radio.return_value = "area"
@@ -58,7 +58,7 @@ class TestRenderRadioWidget:
             key="test_key",
         )
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_horizontal_kwarg_passed_through(self, mock_st: MagicMock) -> None:
         """Extra kwargs like horizontal are forwarded to st.radio."""
         mock_st.radio.return_value = "area"
@@ -76,7 +76,7 @@ class TestRenderRadioWidget:
             horizontal=True,
         )
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_empty_options(self, mock_st: MagicMock) -> None:
         """Empty options list renders without error."""
         mock_st.radio.return_value = None

@@ -14,16 +14,16 @@ from sqlalchemy.types import Enum as SQLEnum
 from streamlit import session_state as ss
 from streamlit.delta_generator import DeltaGenerator
 
-from streamlit_pydantic_crud import params
-from streamlit_pydantic_crud.display import display_value, get_pretty_name
-from streamlit_pydantic_crud.query import SQL_HASH_FUNCS, to_date
-from streamlit_pydantic_crud.sa_model import (
+from streamlit_pydantic_crud.helpers.display import display_value, get_pretty_name
+from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     is_array_type,
     is_json_type,
     safe_python_type,
 )
 from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS
+from streamlit_pydantic_crud.table import params
+from streamlit_pydantic_crud.table.query import SQL_HASH_FUNCS, to_date
 
 
 class ColFilter:

@@ -12,7 +12,7 @@ from loguru import logger
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from streamlit_pydantic_crud.typing_helpers import model_fields, unwrap_optional
+from streamlit_pydantic_crud.helpers.typing import model_fields, unwrap_optional
 
 
 def get_pydantic_field_info(schema: type[BaseModel]) -> dict[str, dict[str, Any]]:

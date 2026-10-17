@@ -6,7 +6,7 @@ to raise ValueError via list.index and crash the filter render.
 
 import pytest
 
-from streamlit_pydantic_crud import params
+from streamlit_pydantic_crud.table import params
 from tests.conftest import Department
 
 

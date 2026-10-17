@@ -157,6 +157,30 @@ step "Tests"
 uv run --locked -- pytest -q || die "tests failed"
 ok "tests passed"
 
+# Consumers install the tagged commit as a wheel, not the source tree, so a
+# module left out of the packaging config only breaks on their machine. Build
+# from a pristine export of HEAD and import every module from a fresh venv.
+step "Wheel installs and imports"
+wheel_tmp="$(mktemp -d)"
+trap 'rm -rf "$wheel_tmp"' EXIT
+mkdir "$wheel_tmp/src"
+git archive HEAD | tar -x -C "$wheel_tmp/src"
+uv build --quiet --wheel --out-dir "$wheel_tmp/dist" "$wheel_tmp/src" \
+    || die "uv build --wheel failed"
+uv venv --quiet "$wheel_tmp/venv" || die "could not create a scratch venv"
+uv pip install --quiet --python "$wheel_tmp/venv/bin/python" "$wheel_tmp"/dist/*.whl \
+    || die "the wheel does not install"
+# Bare-mode Streamlit logs runtime warnings on import; show them only on failure.
+(cd "$wheel_tmp" && "$wheel_tmp/venv/bin/python" -I - "$PKG_NAME" 2>"$wheel_tmp/import.log") <<'PY' \
+    || { cat "$wheel_tmp/import.log" >&2; die "the installed wheel does not import (missing sub-package in pyproject.toml?)"; }
+import importlib, pkgutil, sys
+pkg = importlib.import_module(sys.argv[1])
+from streamlit_pydantic_crud import PydanticCrudUi, PydanticUi, SqlUi  # noqa: F401
+for mod in pkgutil.walk_packages(pkg.__path__, f"{pkg.__name__}."):
+    importlib.import_module(mod.name)
+PY
+ok "wheel installs and every module imports"
+
 # ---------------------------------------------------------------------------
 # 5. Tag
 # ---------------------------------------------------------------------------

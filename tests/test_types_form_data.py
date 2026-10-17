@@ -6,8 +6,8 @@ import pytest
 from pydantic import BaseModel, Field
 
 from streamlit_pydantic_crud import PydanticUi
-from streamlit_pydantic_crud.pydantic_form.field_info import get_pydantic_field_info
-from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
+from streamlit_pydantic_crud.forms.pydantic.field_info import get_pydantic_field_info
+from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
 
 
 class Simple(BaseModel):
@@ -44,7 +44,7 @@ class WithId(BaseModel):
     name: str
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_id_field_shown_in_update_mode_without_value(mock_st: MagicMock) -> None:
     """Update forms always show the read-only id, even before a value is known."""
     gen = PydanticInputGenerator(WithId, key_prefix="f_update", operation_type="update")
@@ -55,7 +55,7 @@ def test_id_field_shown_in_update_mode_without_value(mock_st: MagicMock) -> None
     assert kwargs["value"] == ""
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_id_field_hidden_in_create_mode(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(WithId, key_prefix="update", operation_type="create")
     info = gen.field_info["id"]
@@ -84,7 +84,7 @@ def test_field_info_default_resolution() -> None:
     assert info["level"]["default"] == "high"
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
     gen.render_field(
@@ -93,7 +93,7 @@ def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
     assert mock_st.multiselect.call_args.kwargs["default"] == ["a", "b"]
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_default_factory_selects_custom_widget_option(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
     gen.render_field(

@@ -10,8 +10,8 @@ from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud import one_to_many
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.dialogs import one_to_many
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
@@ -20,12 +20,11 @@ from streamlit_pydantic_crud.dialogs.persist import (
     m2m_load_options,
     pop_m2m_data,
 )
-from streamlit_pydantic_crud.display import get_pretty_name
-from streamlit_pydantic_crud.form_options import ExistingData, load_form_options
-from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
-from streamlit_pydantic_crud.logs import log
-from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.sa_model import (
+from streamlit_pydantic_crud.forms.options import ExistingData, load_form_options
+from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
+from streamlit_pydantic_crud.helpers.display import get_pretty_name
+from streamlit_pydantic_crud.helpers.logs import log
+from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     pk_attr,
     pk_column,
@@ -33,8 +32,9 @@ from streamlit_pydantic_crud.sa_model import (
     related_model,
     tablename,
 )
+from streamlit_pydantic_crud.helpers.values import convert_numpy_to_python
+from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
-from streamlit_pydantic_crud.values import convert_numpy_to_python
 
 
 class UpdateRow:

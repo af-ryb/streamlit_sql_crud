@@ -2,7 +2,7 @@
 
 import pytest
 
-from streamlit_pydantic_crud.values import parse_pg_array, to_list
+from streamlit_pydantic_crud.helpers.values import parse_pg_array, to_list
 
 CASES = [
     ("{a,b}", ["a", "b"]),
