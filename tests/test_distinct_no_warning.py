@@ -17,6 +17,7 @@ from sqlalchemy.sql.elements import UnaryExpression
 
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.read_cte import get_existing_values
+from streamlit_pydantic_crud.state import UPDATED_KEY
 from tests.conftest import Department
 
 
@@ -24,7 +25,7 @@ from tests.conftest import Department
 def executed(session: Session) -> Iterator[list[Select]]:
     """Record every statement the seeded session executes."""
     st.cache_data.clear()
-    st.session_state["stsql_updated"] = 1
+    st.session_state[UPDATED_KEY] = 1
     stmts: list[Select] = []
     original = session.execute
 

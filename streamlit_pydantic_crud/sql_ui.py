@@ -27,7 +27,13 @@ from streamlit_pydantic_crud.sa_model import (
     pk_name,
     tablename,
 )
-from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
+from streamlit_pydantic_crud.state import (
+    OPTIONS_NOTICE_KEYS,
+    UPDATED_KEY,
+    UiState,
+    get_ui_state,
+    set_state,
+)
 from streamlit_pydantic_crud.typing_helpers import model_fields
 from streamlit_pydantic_crud.values import (
     convert_numpy_list_to_python,
@@ -37,9 +43,6 @@ from streamlit_pydantic_crud.values import (
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
-
-"""SqlUi keys already told that read_instance ORM options are ignored."""
-OPTIONS_NOTICE_KEYS: set[str] = set()
 
 
 class SqlUi:
@@ -242,7 +245,7 @@ class SqlUi:
         # Create UI
         self.col_filter = self.filter()
         stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
-        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss.stsql_updated)
+        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss[UPDATED_KEY])
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
         order_col = self.cte.columns.get(pk_name(self.edit_create_model))
         stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
@@ -272,7 +275,7 @@ class SqlUi:
             raise ValueError(msg)
 
     def set_initial_state(self) -> None:
-        lib.set_state(UPDATED_KEY, 1)
+        set_state(UPDATED_KEY, 1)
 
     def set_structure(self) -> None:
         self.header_container = st.container()
@@ -337,7 +340,7 @@ class SqlUi:
             existing = read_cte.get_existing_values(
                 _session=s,
                 cte=self.cte,
-                updated=ss.stsql_updated,
+                updated=ss[UPDATED_KEY],
                 available_col_filter=filter_cols_name,
             )
 
@@ -513,7 +516,7 @@ class SqlUi:
 
         The selection holds row positions; a new key drops it once rows shift.
         """
-        return f"{self.key}_df_sql_ui_{ss.stsql_updated}"
+        return f"{self.key}_df_sql_ui_{ss[UPDATED_KEY]}"
 
     @staticmethod
     def get_rows_selected(selection_state: DataframeState | None) -> list[int]:

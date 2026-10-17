@@ -18,7 +18,6 @@ from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.lib import (
     format_database_error,
     log,
-    set_state,
     show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
@@ -29,6 +28,7 @@ from streamlit_pydantic_crud.sa_model import (
     pk_name,
     tablename,
 )
+from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 from streamlit_pydantic_crud.values import convert_numpy_to_python
 
 
@@ -66,7 +66,7 @@ class UpdateRow:
         self.dt_filters = dt_filters or {}
         self.no_dt_filters = no_dt_filters or {}
 
-        set_state("stsql_updated", 0)
+        set_state(UPDATED_KEY, 0)
 
         with conn.session as s:
             # Load row with many-to-many relationships if needed
@@ -238,7 +238,7 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
 
@@ -249,7 +249,7 @@ class UpdateRow:
                 return True, f"Updated successfully {row}"
 
         except Exception as e:
-            ss.stsql_updated += 1
+            ss[UPDATED_KEY] += 1
             table_name = tablename(self.model)
             log("UPDATE", table_name, validated_data.model_dump(), success=False)
             logger.exception(f"Update failed for {table_name}")
@@ -270,12 +270,12 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"
             except Exception as e:
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
                 table_name = tablename(self.model)

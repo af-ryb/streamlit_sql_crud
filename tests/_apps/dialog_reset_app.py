@@ -14,7 +14,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.create_delete_model import CreateRow
-from streamlit_pydantic_crud.lib import set_state
+from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 from streamlit_pydantic_crud.update_model import UpdateRow
 
 DB = os.environ["CRUD_TEST_DB"]
@@ -61,7 +61,7 @@ with Session(eng) as s:
         s.commit()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
-set_state("stsql_updated", 0)
+set_state(UPDATED_KEY, 0)
 
 open_btn = st.button("open", key="open")
 close_btn = st.button("close", key="close")

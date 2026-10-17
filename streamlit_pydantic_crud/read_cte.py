@@ -16,13 +16,13 @@ from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
 from streamlit_pydantic_crud.display import display_value, get_pretty_name
-from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
 from streamlit_pydantic_crud.sa_model import (
     column_label,
     is_array_type,
     is_json_type,
     safe_python_type,
 )
+from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS
 
 SHOW_ALL = "Show All"
 

@@ -13,12 +13,12 @@ from sqlalchemy.sql.schema import ForeignKey
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.config_types import ForeignKeyConfig, ForeignKeyOptions
-from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
 from streamlit_pydantic_crud.sa_model import (
     model_by_tablename,
     safe_python_type,
     tablename,
 )
+from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY
 
 
 @dataclass
@@ -49,9 +49,9 @@ class ExistingData:
         self.cols = Model.__table__.columns
 
         table_name = tablename(Model)
-        text = self.get_text(table_name, ss.stsql_updated, default_values)
+        text = self.get_text(table_name, ss[UPDATED_KEY], default_values)
         self.text = self.add_row_values(text)
-        self.dt = self.get_dt(table_name, ss.stsql_updated)
+        self.dt = self.get_dt(table_name, ss[UPDATED_KEY])
         self.fk = self.get_fk()
 
     def add_default_where(self, stmt, model: type[DeclarativeBase]) -> Any:

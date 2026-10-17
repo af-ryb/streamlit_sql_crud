@@ -1,3 +1,5 @@
+"""CRUD action logging, the shared CRUD dialog and database error messages."""
+
 from collections.abc import Callable
 from typing import Literal
 
@@ -5,11 +7,7 @@ import streamlit as st
 from loguru import logger
 from streamlit import session_state as ss
 
-from streamlit_pydantic_crud.state import get_ui_state
-
-# Default ttl for cached option/count queries so values added outside the
-# library (ETL, agents, direct writes) appear without an app restart.
-CACHE_TTL_SECONDS = 60
+from streamlit_pydantic_crud.state import UPDATED_KEY, get_ui_state, set_state
 
 
 def log(
@@ -33,11 +31,6 @@ def set_logging(disable_log: bool) -> None:
     logger.enable("streamlit_pydantic_crud")
 
 
-def set_state(key: str, value) -> None:
-    if key not in ss:
-        ss[key] = value
-
-
 def show_crud_dialog(
     title: str, key: str, show: Callable[[], tuple[bool | None, str | None]]
 ) -> None:
@@ -49,8 +42,8 @@ def show_crud_dialog(
 
     @st.dialog(title, width="large", on_dismiss="rerun")
     def wrap_show() -> None:
-        set_state("stsql_updated", 0)
-        updated_before = ss.stsql_updated
+        set_state(UPDATED_KEY, 0)
+        updated_before = ss[UPDATED_KEY]
         status, msg = show()
 
         ui_state = get_ui_state(key)
@@ -58,7 +51,7 @@ def show_crud_dialog(
         ui_state.update_message = msg
         ui_state.opened = True
 
-        if ss.stsql_updated > updated_before:
+        if ss[UPDATED_KEY] > updated_before:
             st.rerun()
 
     wrap_show()
