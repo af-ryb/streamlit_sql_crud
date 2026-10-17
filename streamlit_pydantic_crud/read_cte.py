@@ -15,7 +15,8 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import params
-from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS, get_pretty_name
+from streamlit_pydantic_crud.display import display_value, get_pretty_name
+from streamlit_pydantic_crud.lib import CACHE_TTL_SECONDS
 from streamlit_pydantic_crud.sa_model import (
     column_label,
     is_array_type,
@@ -138,9 +139,7 @@ class ColFilter:
             if dt
         )
         no_dt_str = ", ".join(
-            f"{k}: {params.display_value(v)}"
-            for k, v in self.no_dt_filters.items()
-            if v
+            f"{k}: {display_value(v)}" for k, v in self.no_dt_filters.items() if v
         )
 
         filter_str = ""
@@ -248,7 +247,7 @@ class ColFilter:
                 options=self.existing_values[colname],
                 index=None,
                 key=key,
-                format_func=params.display_value,
+                format_func=display_value,
                 args=(colname, key, self.key),
                 on_change=params.set_no_dt_param,
             )

@@ -9,8 +9,8 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit_datalist import stDatalist
 
+from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.filters import ExistingData, FkOpt
-from streamlit_pydantic_crud.lib import get_pretty_name
 from streamlit_pydantic_crud.sa_model import column_label, is_array_type
 from streamlit_pydantic_crud.values import (
     coerce_decimal,

@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from functools import cache
 from typing import Literal
 
 import streamlit as st
@@ -63,12 +62,6 @@ def show_crud_dialog(
             st.rerun()
 
     wrap_show()
-
-
-@cache
-def get_pretty_name(name: str) -> str:
-    pretty_name = " ".join(name.split("_")).title()
-    return pretty_name
 
 
 def format_database_error(error: Exception) -> str:

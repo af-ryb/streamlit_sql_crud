@@ -73,13 +73,6 @@ def param_value(value: Any) -> str:
     return str(value)
 
 
-def display_value(value: Any) -> str:
-    """Return the label of a filter option: the enum value or str()."""
-    if isinstance(value, Enum):
-        return str(value.value)
-    return str(value)
-
-
 def set_dt_param(colname: str, key: str, suffix: str, prefix: str = "") -> None:
     query_key = param_name(prefix, f"{colname}_{suffix}")
     value = ss[key]

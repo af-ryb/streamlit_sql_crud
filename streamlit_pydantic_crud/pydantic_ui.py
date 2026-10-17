@@ -13,6 +13,7 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
+from streamlit_pydantic_crud.display import field_label
 from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
@@ -133,7 +134,7 @@ class PydanticUi[T: BaseModel]:
     def _field_label(self, field_name: str) -> str:
         """Return the widget label of a field: its description or title-case name."""
         description = model_fields(self.schema)[field_name].description
-        return description or field_name.replace("_", " ").title()
+        return field_label(field_name, description)
 
     def _display_validation_errors(self, error: ValidationError) -> None:
         """Display validation errors in a user-friendly format."""

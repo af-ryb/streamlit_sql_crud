@@ -18,6 +18,7 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
+from streamlit_pydantic_crud.display import field_label
 from streamlit_pydantic_crud.sa_model import pk_name as get_pk_name
 from streamlit_pydantic_crud.sa_model import tablename
 from streamlit_pydantic_crud.typing_helpers import (
@@ -338,12 +339,7 @@ class PydanticInputGenerator:
 
         field_default = field_info.get("default")
 
-        # Ensure label is always a string
-        description = field_info.get("description")
-        if description is None or description == "":
-            label = field_name.replace("_", " ").title()
-        else:
-            label = str(description)
+        label = field_label(field_name, field_info.get("description"))
 
         # Custom widgets resolve session/kw/default precedence themselves, so
         # pass the raw session value (not pre-filled with the default).
