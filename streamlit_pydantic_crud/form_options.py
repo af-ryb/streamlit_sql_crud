@@ -1,9 +1,10 @@
 """Load foreign-key and many-to-many options into a Pydantic CRUD form.
 
-Shared by CreateRow and UpdateRow; failures are logged per field and that
-field falls back to a plain input.
+Shared by CreateRow and UpdateRow; failures are logged per field, shown once
+as an ``st.warning``, and that field falls back to a plain input.
 """
 
+import streamlit as st
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
@@ -79,8 +80,8 @@ def load_foreign_key_options(
                 field_name, options, display_field, value_field
             )
         except Exception:
-            """Log the traceback; the field falls back to a text input."""
-            logger.exception(f"Failed to load foreign key data for {field_name}")
+            """Log and warn; the field falls back to a text input."""
+            handle_option_load_error("foreign key", field_name)
 
 
 def load_many_to_many_options(
@@ -107,7 +108,17 @@ def load_many_to_many_options(
                     pk_name(related_model),
                 )
         except Exception:
-            logger.exception(f"Failed to load many-to-many data for {field_name}")
+            handle_option_load_error("many-to-many", field_name)
+
+
+def handle_option_load_error(kind: str, field_name: str) -> None:
+    """Log the current exception and warn the user about the field.
+
+    Must be called from an ``except`` block. ``kind`` is ``"foreign key"`` or
+    ``"many-to-many"``; the warning stays visible even with ``disable_log``.
+    """
+    logger.exception(f"Failed to load {kind} data for {field_name}")
+    st.warning(f"Could not load {kind} options for '{field_name}'.")
 
 
 def foreign_key_column_names(model: type[DeclarativeBase]) -> set[str]:

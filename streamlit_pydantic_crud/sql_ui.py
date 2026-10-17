@@ -37,6 +37,9 @@ from streamlit_pydantic_crud.utils import (
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
 
+"""SqlUi keys already told that read_instance ORM options are ignored."""
+OPTIONS_NOTICE_KEYS: set[str] = set()
+
 """Per-column formatter accepted by pandas ``Styler.format``."""
 DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
 
@@ -229,6 +232,7 @@ class SqlUi:
                 self._validate_schema(schema, operation)
 
         self.cte = self.get_cte()
+        self.notice_ignored_options()
 
         # Bootstrap
         self.state: UiState = get_ui_state(self.key)
@@ -312,25 +316,18 @@ class SqlUi:
 
         return cte
 
-    def _stmt_has_orm_options(self, stmt: Select) -> bool:
-        """Check if the statement has ORM options like selectinload"""
-        # Check if the original read_instance has options applied
-        if isinstance(self.read_instance, Select):
-            return bool(getattr(self.read_instance, "_with_options", None))
-        return False
-
-    def _stmt_has_explicit_columns(self, stmt: Select) -> bool:
-        """Check if statement uses explicit column selection (expression-based entities)"""
-        if isinstance(self.read_instance, Select):
-            # Check if the statement selects specific columns rather than entire entities
-            selected_columns = self.read_instance.selected_columns
-            if selected_columns:
-                # If any selected item is not a full table/entity, it's expression-based
-                for col in selected_columns:
-                    # If it's a column attribute rather than a full table/entity
-                    if hasattr(col, "table") or hasattr(col, "element"):
-                        return True
-        return False
+    def notice_ignored_options(self) -> None:
+        """Log once per key that ORM options on read_instance are ignored."""
+        if not isinstance(self.read_instance, Select):
+            return
+        if not self.read_instance._with_options or self.key in OPTIONS_NOTICE_KEYS:
+            return
+        OPTIONS_NOTICE_KEYS.add(self.key)
+        logger.info(
+            f"SqlUi '{self.key}': ORM options on read_instance are ignored "
+            "because the query is wrapped in a CTE; use many_to_many_fields "
+            "for relationship loading."
+        )
 
     def filter(self) -> read_cte.ColFilter:
         filter_cols_name = self.available_filter
@@ -414,26 +411,7 @@ class SqlUi:
         self,
         stmt_pag: Select,
     ) -> pd.DataFrame:
-        # Check if we have ORM options but explicit column selection (incompatible combination)
-        has_orm_options = self._stmt_has_orm_options(stmt_pag)
-        has_explicit_columns = self._stmt_has_explicit_columns(stmt_pag)
-
-        if has_orm_options and has_explicit_columns:
-            logger.warning(
-                "selectinload() options detected with explicit column selection. "
-                "ORM options will be ignored as they're incompatible with expression-based SELECT statements. "
-                "Consider using separate queries for many-to-many relationships or select full entities instead of individual columns."
-            )
-
-        # Check if we need special handling for many-to-many fields or specific statement types
-        needs_orm_execution = (
-            self.read_schema
-            or self.many_to_many_fields
-            or (
-                has_orm_options and not has_explicit_columns
-            )  # Only use ORM execution if compatible
-        )
-
+        needs_orm_execution = bool(self.read_schema or self.many_to_many_fields)
         if needs_orm_execution:
             df = self._execute_with_pydantic_schema(stmt_pag)
         else:
@@ -446,13 +424,7 @@ class SqlUi:
     def _execute_with_pydantic_schema(self, stmt: Select) -> pd.DataFrame:
         """Execute query using ORM execution for many-to-many or selectinload support"""
         with self.conn.session as s:
-            has_orm_options = self._stmt_has_orm_options(stmt)
-            has_explicit_columns = self._stmt_has_explicit_columns(stmt)
-
-            # For many-to-many or selectinload, we need ORM objects, not Row objects
-            if self.many_to_many_fields or (
-                has_orm_options and not has_explicit_columns
-            ):
+            if self.many_to_many_fields:
                 # Use the filtered statement first to get the correct data
                 filtered_result = s.execute(stmt).all()
 

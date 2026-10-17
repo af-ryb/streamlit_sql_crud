@@ -89,12 +89,20 @@ From reading (verify with a test first):
 - [x] Tests for schema_builder, type detection, many-to-many, delete
 
 Leftovers:
-- [ ] FK/M2M option-load errors are only logged (invisible with `disable_log=True`) —
-  consider `st.warning`
-- [ ] No-schema nullable-number row-switching not browser-verified (example app has no
-  no-schema page)
-- [ ] Stale example-repo scripts `test_final_verification.py`/`test_null_value_fix.py`
-  patch the removed `_render_field_input`
+- [x] FK/M2M option-load errors are only logged (invisible with `disable_log=True`) —
+  consider `st.warning` — done: also shown as `st.warning`
+- [x] No-schema nullable-number row-switching not browser-verified (example app has no
+  no-schema page) — done: example page `no_schema_numbers.py`, all checks pass
+- [x] Stale example-repo scripts `test_final_verification.py`/`test_null_value_fix.py`
+  patch the removed `_render_field_input` — done: deleted (untracked), with
+  `test_render_with_submit.py`
+- [x] Unsaved edits reappear when the edit dialog is reopened on the same row (closed
+  with ×): widget keys lack the row id (`update_model.py:65`, `input_fields.py:180`)
+  — done: dialogs rerun on dismiss and opening edit/create resets the form state
+- [ ] No-schema edit save overwrites an untouched JSON column with JSON `null`
+  (data loss; seen on `test_data_types.metadata_json` in the example app)
+- [ ] No-schema edit save truncates an untouched datetime to whole minutes
+  (`created_datetime` 09:33:25.08 → 09:33:00)
 
 ## Step 4 — API decisions
 

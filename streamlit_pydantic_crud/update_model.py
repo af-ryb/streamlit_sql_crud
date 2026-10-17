@@ -309,9 +309,22 @@ class UpdateRow:
         return None, None
 
     def show_dialog(self) -> None:
-        """Open the edit dialog."""
+        """Open the edit dialog with a form seeded from the database row."""
+        self.reset_form_state()
         pretty_name = get_pretty_name(tablename(self.model))
         show_crud_dialog(f"Edit {pretty_name}", self.key, self.show)
+
+    def reset_form_state(self) -> None:
+        """Drop unsaved values a previously closed edit dialog left behind.
+
+        Runs only on the opening run: reruns inside the open dialog skip it, so
+        values entered there (e.g. after a validation error) are kept.
+        """
+        if self.update_schema:
+            self.pydantic_ui.clear_session_data()
+            st.session_state[self.get_session_key] = dict(self.current_values)
+        else:
+            self.input_fields.reset_state()
 
 
 def action_btns(

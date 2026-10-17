@@ -286,3 +286,13 @@ class InputFields:
             input_value = None
 
         return input_value
+
+    def reset_state(self) -> None:
+        """Drop the widget values of every model column from session state.
+
+        The next render then re-seeds each widget from its `value` argument.
+        """
+        for col in self.model.__table__.columns:
+            key = f"{self.key_prefix}_{col.description or col.name}"
+            if key in st.session_state:
+                del st.session_state[key]

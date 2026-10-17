@@ -1,6 +1,7 @@
 """Shared FK / many-to-many option loading for Pydantic CRUD forms."""
 
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -15,6 +16,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.pool import StaticPool
+from streamlit.testing.v1 import AppTest
 
 from streamlit_pydantic_crud.config_types import (
     ForeignKeyConfig,
@@ -195,3 +197,97 @@ def test_failing_fk_field_is_logged_not_raised(conn: Any, logged: list[str]) -> 
     assert names == ["editor"]
     assert any("foreign key data for writer" in m for m in logged)
     assert not any("for editor" in m for m in logged)
+
+
+def broken_filter(query: Any) -> Any:
+    """M2M filter that always fails, to exercise the option-load error path."""
+    msg = f"broken filter for {query}"
+    raise ValueError(msg)
+
+
+def _warning_app(db: str, disable_log: bool) -> None:
+    import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
+    from pydantic import BaseModel  # noqa: PLC0415
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from streamlit_pydantic_crud.config_types import (  # noqa: PLC0415
+        ForeignKeyOptions,
+        ManyToManyFields,
+    )
+    from streamlit_pydantic_crud.create_delete_model import (  # noqa: PLC0415
+        CreateRow,
+    )
+    from streamlit_pydantic_crud.lib import set_logging  # noqa: PLC0415
+    from tests.test_form_options import (  # noqa: PLC0415
+        Author,
+        Post,
+        broken_filter,
+    )
+
+    class PostForm(BaseModel):
+        """Form schema with the FK and M2M fields under test."""
+
+        title: str
+        writer: int | None = None
+        bad: list[int] = []
+
+    set_logging(disable_log)
+    conn = st.connection("sql", url=f"sqlite:///{db}")
+    fk: ForeignKeyOptions = {
+        "writer": {
+            "query": select(Author),
+            "display_field": "nope",
+            "value_field": "id",
+        }
+    }
+    m2m: ManyToManyFields = {
+        "bad": {
+            "relationship": "tags",
+            "display_field": "label",
+            "filter": broken_filter,
+        }
+    }
+    CreateRow(
+        conn,
+        Post,
+        create_schema=PostForm,
+        foreign_key_options=fk,
+        many_to_many_fields=m2m,
+    )
+    st.write("RENDERED")
+
+
+@pytest.fixture
+def form_db(tmp_path: Path) -> Iterator[str]:
+    """SQLite file with one author and post 1; re-enables logging afterwards."""
+    path = tmp_path / "options.db"
+    eng = create_engine(f"sqlite:///{path}")
+    Base.metadata.create_all(eng)
+    with Session(eng) as s:
+        s.add(Author(id=1, name="A1"))
+        s.add(Post(id=1, title="p", author_id=1))
+        s.commit()
+    eng.dispose()
+    yield str(path)
+    logger.enable("streamlit_pydantic_crud")
+
+
+@pytest.mark.parametrize("disable_log", [False, True])
+def test_option_load_failure_shows_warning_per_field(
+    form_db: str, logged: list[str], disable_log: bool
+) -> None:
+    """Each failing field shows a warning, also with logging disabled."""
+    kwargs = {"db": form_db, "disable_log": disable_log}
+    at = AppTest.from_function(_warning_app, kwargs=kwargs)
+
+    for _ in range(2):
+        at.run()
+        assert not at.exception
+        assert "RENDERED" in [m.value for m in at.markdown]
+        assert sorted(w.value for w in at.warning) == [
+            "Could not load foreign key options for 'writer'.",
+            "Could not load many-to-many options for 'bad'.",
+        ]
+
+    failures = [m for m in logged if m.startswith("Failed to load")]
+    assert len(failures) == (0 if disable_log else 4)

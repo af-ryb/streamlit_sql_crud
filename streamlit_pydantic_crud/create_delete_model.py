@@ -229,11 +229,25 @@ class CreateRow:
             return False, error_msg
 
     def show_dialog(self) -> None:
-        """Open the create dialog."""
+        """Open the create dialog with a form seeded from defaults or the copy."""
+        self.reset_form_state()
         pretty_name = get_pretty_name(tablename(self.model))
         show_crud_dialog(
             f"Create {pretty_name}", self.key, partial(self.show, pretty_name)
         )
+
+    def reset_form_state(self) -> None:
+        """Drop unsaved values a previously closed create dialog left behind.
+
+        Runs only on the opening run: reruns inside the open dialog skip it, so
+        values entered there (e.g. after a validation error) are kept.
+        """
+        if self.create_schema:
+            self.pydantic_ui.clear_session_data()
+            session_key = f"{self.key_prefix}_form_data"
+            st.session_state[session_key] = dict(self.initial_data)
+        else:
+            self.input_fields.reset_state()
 
 
 class DeleteRows:
