@@ -1,10 +1,20 @@
+"""One-to-many relationship panels shown in the SqlUi edit dialog.
+
+Each panel lists, creates and deletes the child rows of the edited row.
+"""
+
 from functools import cached_property
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import Select, func, select
-from sqlalchemy.orm import RelationshipDirection, RelationshipProperty, Session
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    RelationshipDirection,
+    RelationshipProperty,
+    Session,
+)
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud import pagination, query
@@ -14,9 +24,11 @@ from streamlit_pydantic_crud.sa_model import pk_attr, pk_name
 
 
 class ReadManyRel:
+    """Query the child rows that `rel` links to the row `model_id` of `model`."""
+
     def __init__(
         self,
-        model,
+        model: Any,
         model_id: int | str,
         rel: RelationshipProperty,
     ) -> None:
@@ -84,8 +96,12 @@ class ReadManyRel:
 
 @st.fragment
 def show_rel(
-    conn: SQLConnection, model, model_id: int | str, rel: RelationshipProperty
+    conn: SQLConnection,
+    model: type[DeclarativeBase],
+    model_id: int | str,
+    rel: RelationshipProperty,
 ) -> None:
+    """Render the Read/Create/Delete panel of one one-to-many relationship."""
     read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
@@ -145,7 +161,10 @@ def show_rel(
                 delete_rows.show(pretty_name)
 
 
-def show_rels(conn: SQLConnection, model, model_id: int | str) -> None:
+def show_rels(
+    conn: SQLConnection, model: type[DeclarativeBase], model_id: int | str
+) -> None:
+    """Render a panel for every one-to-many relationship of `model`."""
     rels = [
         rel
         for rel in model.__mapper__.relationships

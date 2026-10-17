@@ -9,7 +9,7 @@ from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 
-from streamlit_pydantic_crud import many
+from streamlit_pydantic_crud import one_to_many
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.db_errors import format_database_error
 from streamlit_pydantic_crud.dialogs import show_crud_dialog
@@ -303,7 +303,7 @@ class UpdateRow:
                 return self.save_sqlalchemy(updated)
 
         if self.update_show_many:
-            many.show_rels(self.conn, self.model, self.row_id)
+            one_to_many.show_rels(self.conn, self.model, self.row_id)
 
         return None, None
 
