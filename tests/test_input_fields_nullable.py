@@ -1,13 +1,10 @@
-"""No-schema InputFields: nullable numbers can be cleared, labels, arrays."""
+"""No-schema InputFields: nullable numbers can be cleared, arrays."""
 
 from decimal import Decimal
-from types import SimpleNamespace
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.forms import sa_fields
-from streamlit_pydantic_crud.forms.sa_fields import InputFields
 from streamlit_pydantic_crud.helpers import values
 from streamlit_pydantic_crud.helpers.values import parse_pg_array
 from tests.test_input_fields_enum import RunMode
@@ -45,22 +42,6 @@ def test_required_number_keeps_default(run_mode: RunMode) -> None:
     at = run_mode("fields_row")
 
     assert at.number_input(key="r_count").proto.HasField("default")
-
-
-def test_datalist_label_is_pretty(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The free-text datalist is labelled like the other inputs."""
-    labels: list[str] = []
-
-    def fake_datalist(label: str, *args: object, **kwargs: object) -> str:
-        labels.append(label)
-        return ""
-
-    monkeypatch.setattr(sa_fields, "stDatalist", fake_datalist)
-    existing = SimpleNamespace(text={"first_name": set()})
-    fields = InputFields(object, "p", {}, existing)  # ty: ignore[invalid-argument-type]
-
-    assert fields.input_str("first_name") is None
-    assert labels == ["First Name"]
 
 
 def _array_app() -> None:

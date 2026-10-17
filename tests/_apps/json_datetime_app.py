@@ -1,7 +1,8 @@
 """Harness app editing a row with a JSON and a seconds-precise datetime column.
 
 `CRUD_TEST_MODE` picks no-schema (`update`, `create`) or Pydantic
-(`update_schema`) mode; the form is shown directly, as inside the open dialog.
+(`update_schema`, `create_schema`) mode; `update_schema_null` edits row 2,
+whose JSON is SQL NULL. `revised` counts the UPDATEs of a row; the form is shown directly, as inside the open dialog.
 """
 
 import os
@@ -10,7 +11,7 @@ from typing import Any
 
 import streamlit as st
 from pydantic import BaseModel
-from sqlalchemy import JSON, DateTime, create_engine
+from sqlalchemy import JSON, DateTime, create_engine, null, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud.dialogs.create import CreateRow
@@ -36,6 +37,7 @@ class Doc(Base):
     count: Mapped[int] = mapped_column(default=0)
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=dict)
     created: Mapped[datetime | None] = mapped_column(DateTime)
+    revised: Mapped[int] = mapped_column(default=0, onupdate=text("revised + 1"))
 
     def __str__(self) -> str:
         return f"Doc {self.id}"
@@ -50,18 +52,28 @@ class DocUpdate(BaseModel):
     created: datetime | None = None
 
 
+class DocCreate(BaseModel):
+    """Create schema; `meta` left empty means no JSON value."""
+
+    count: int = 0
+    meta: dict[str, Any] | None = None
+
+
 eng = create_engine(f"sqlite:///{DB}")
 Base.metadata.create_all(eng)
 with Session(eng) as s:
     if not s.query(Doc).first():
         s.add(Doc(id=1, count=7, meta=META, created=CREATED))
+        s.add(Doc(id=2, count=1, meta=null(), created=CREATED))
         s.commit()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
 set_state(UPDATED_KEY, 0)
 
-if MODE == "create":
-    CreateRow(conn, Doc, key="t").show("Doc")
+if MODE in ("create", "create_schema"):
+    create_schema = DocCreate if MODE == "create_schema" else None
+    CreateRow(conn, Doc, key="t", create_schema=create_schema).show("Doc")
 else:
-    schema = DocUpdate if MODE == "update_schema" else None
-    UpdateRow(conn, Doc, 1, key="t", update_schema=schema).show()
+    schema = DocUpdate if MODE.startswith("update_schema") else None
+    row_id = 2 if MODE == "update_schema_null" else 1
+    UpdateRow(conn, Doc, row_id, key="t", update_schema=schema).show()

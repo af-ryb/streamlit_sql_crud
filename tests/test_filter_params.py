@@ -53,7 +53,7 @@ def test_enum_options_show_values(fresh: Callable[..., AppTest]) -> None:
 def test_enum_selection_writes_name_param(fresh: Callable[..., AppTest]) -> None:
     at = fresh()
     at.selectbox(key=kind_key()).select_index(1).run()
-    assert at.query_params.get("kind") == ["HR"]
+    assert at.query_params.get("kind") == "HR"
     assert ids(at) == "IDS=1,3"
     assert any("hr" in m.value and "Kind." not in m.value for m in at.markdown)
 
@@ -68,10 +68,10 @@ def test_keyed_instance_prefixes_params(fresh: Callable[..., AppTest]) -> None:
     at = fresh(key="k")
     at.selectbox(key=kind_key("k")).select_index(0).run()
     at.date_input(key="k_create_date_filter_start_Born").set_value(
-        date(2000, 1, 3)
+        date(2020, 1, 3)
     ).run()
-    assert at.query_params.get("k_kind") == ["ENG"]
-    assert at.query_params.get("k_born_start") == ["2000-01-03"]
+    assert at.query_params.get("k_kind") == "ENG"
+    assert at.query_params.get("k_born_start") == "2020-01-03"
     assert "kind" not in at.query_params
     assert ids(at) == "IDS=4"
 

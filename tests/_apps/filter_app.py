@@ -53,7 +53,7 @@ with Session(eng) as s:
                 id=i,
                 name=f"P{i}",
                 kind=Kind.HR if i % 2 else Kind.ENG,
-                born=date(2000, 1, i),
+                born=date(2020, 1, i),
             )
             for i in range(1, 5)
         )
