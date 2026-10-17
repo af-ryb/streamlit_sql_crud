@@ -537,22 +537,10 @@ class SqlUi:
             key=self.key,
         )
 
-        if action == "add":
-            create_row = CreateRow(
-                conn=self.conn,
-                model=self.edit_create_model,
-                default_values=self.edit_create_default_values,
-                create_schema=self.create_schema,
-                foreign_key_options=self.foreign_key_options,
-                many_to_many_fields=self.many_to_many_fields,
-                key=self.key,
-                dt_filters=self.col_filter.dt_filters,
-                no_dt_filters=self.col_filter.no_dt_filters,
-            )
-            create_row.show_dialog()
-        elif action == "copy":
-            selected_pos = rows_selected[0]
-            initial_data = row_to_python(df.iloc[selected_pos])
+        if action in ("add", "copy"):
+            initial_data = None
+            if action == "copy":
+                initial_data = row_to_python(df.iloc[rows_selected[0]])
             create_row = CreateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
