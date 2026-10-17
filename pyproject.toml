@@ -52,7 +52,7 @@ license = {text = "MIT License"}
 dependencies = [
     "pandas",
     "sqlalchemy",
-    "streamlit>=1.52.0",
+    "streamlit>=1.58.0",
     "streamlit_datalist",
     "streamlit_antd_components",
     "loguru>=0.7.3",

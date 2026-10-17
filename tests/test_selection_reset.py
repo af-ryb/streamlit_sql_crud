@@ -13,7 +13,7 @@ from streamlit_pydantic_crud.state import UPDATED_KEY
 
 def df_id(at: AppTest) -> str:
     """Return the element id of the SqlUi dataframe."""
-    return at.get("arrow_data_frame")[0].proto.id
+    return at.get("dataframe")[0].proto.id
 
 
 def test_dataframe_remounts_after_write(run_app: Callable[[str], AppTest]) -> None:

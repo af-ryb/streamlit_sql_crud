@@ -27,7 +27,7 @@ def test_selectbox_cancel_clears_filter(run_app: Callable[[str], AppTest]) -> No
     at = run_app("filter_app.py")
     at.selectbox(key=NAME).set_value("P2").run()
     assert ids(at) == "IDS=2"
-    assert at.query_params.get("name") == ["P2"]
+    assert at.query_params.get("name") == "P2"
 
     at.button(key=f"{NAME}_btn").click().run()
     assert not at.exception
@@ -38,9 +38,9 @@ def test_selectbox_cancel_clears_filter(run_app: Callable[[str], AppTest]) -> No
 
 def test_date_cancel_clears_filter(run_app: Callable[[str], AppTest]) -> None:
     at = run_app("filter_app.py")
-    at.date_input(key=START).set_value(date(2000, 1, 3)).run()
+    at.date_input(key=START).set_value(date(2020, 1, 3)).run()
     assert ids(at) == "IDS=3,4"
-    assert at.query_params.get("born_start") == ["2000-01-03"]
+    assert at.query_params.get("born_start") == "2020-01-03"
 
     at.button(key=DATE_BTN).click().run()
     assert not at.exception
@@ -76,7 +76,7 @@ def test_date_cancel_pushes_none_to_frontend(
     run_app: Callable[[str], AppTest],
 ) -> None:
     at = run_app("filter_app.py")
-    at.date_input(key=START).set_value(date(2000, 1, 3)).run()
+    at.date_input(key=START).set_value(date(2020, 1, 3)).run()
     at.button(key=DATE_BTN).click().run()
     proto = at.date_input(key=START).proto
     assert proto.set_value
