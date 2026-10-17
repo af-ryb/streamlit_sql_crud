@@ -12,7 +12,7 @@ from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
+from streamlit_pydantic_crud import create_delete_model, logs, read_cte, update_model
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.display import (
     DfStyleFormatter,
@@ -240,7 +240,7 @@ class SqlUi:
         self.set_initial_state()
         self.set_structure()
         self.notification()
-        lib.set_logging(self.disable_log)
+        logs.set_logging(self.disable_log)
 
         # Create UI
         self.col_filter = self.filter()

@@ -217,7 +217,7 @@ def _warning_app(db: str, disable_log: bool) -> None:
     from streamlit_pydantic_crud.create_delete_model import (  # noqa: PLC0415
         CreateRow,
     )
-    from streamlit_pydantic_crud.lib import set_logging  # noqa: PLC0415
+    from streamlit_pydantic_crud.logs import set_logging  # noqa: PLC0415
     from tests.test_form_options import (  # noqa: PLC0415
         Author,
         Post,
