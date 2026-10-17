@@ -156,8 +156,9 @@ Leftovers:
 Side findings (stage 1, not fixed — behavior-preserving refactor):
 - [ ] `update_model.py` (~line 115) applies the PK-typed `convert_numpy_to_python` to
   every column value, not only the primary key
-- [ ] `stsql_updated` is seeded with 1 by `SqlUi` but with 0 by the dialogs and
-  `show_crud_dialog` (`set_state(UPDATED_KEY, ...)`)
+- [x] `stsql_updated` is seeded with 1 by `SqlUi` but with 0 by the dialogs and
+  `show_crud_dialog` (`set_state(UPDATED_KEY, ...)`) — 0.7.1: no longer seeded;
+  `record_write` increments it and `session_writes` reads it with default 0
 - [ ] `PydanticCrudUi.__init__` builds `PydanticInputGenerator` and session state twice
 - [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`;
   `if col_name is None` after `column_label` (the guards in
@@ -241,10 +242,13 @@ Side findings (code review, not fixed):
   12-31 after an earlier attempt in the same dialog (may be a browser-tool artefact)
 
 Side findings (0.7.0, not fixed):
-- [ ] Count/option caches are keyed by `stsql_updated`, which every new session
+- [x] Count/option caches are keyed by `stsql_updated`, which every new session
   restarts at 1, so a reloaded page can show a stale row count from another
   session for up to `CACHE_TTL_SECONDS` (seen twice: tickets after delete + reload,
   and Departments showing `1-5 / 5` with 4 rows right after a delete)
+  — 0.7.1: keyed by a process-wide, thread-safe data version (`state.DATA_VERSION`)
+  bumped by every write attempt (`record_write`); `stsql_updated` stays per session
+  for dataframe keys and dialog reruns (`tests/test_shared_cache.py`)
 - [ ] Filter date inputs keep Streamlit's default range (today ± 10 years), so older
   dates cannot be picked (Streamlit ≥1.58 also rejects them server-side)
 - [ ] Moving the page through session state logs Streamlit's one-time "created with

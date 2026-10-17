@@ -722,6 +722,14 @@ def create_task_form(task_type: str):
 
 See the [API documentation](https://github.com/af-ryb/streamlit_sql_crud) for complete parameter documentation and advanced features.
 
+### Caching
+
+Row counts, filter values and form options are cached with `st.cache_data`, keyed
+by a process-wide data version that every create, edit and delete made through the
+library bumps, so all sessions of one server process see a write immediately.
+Writes from outside the app (direct SQL, ETL, other processes or server replicas)
+are only picked up when the cache expires, after `CACHE_TTL_SECONDS` (60 s).
+
 ## Changes from Original
 
 This fork significantly extends the original streamlit_sql package with:
