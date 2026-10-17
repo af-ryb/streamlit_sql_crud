@@ -50,7 +50,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT License"}
 dependencies = [
-    "python-dateutil",
     "pandas",
     "sqlalchemy",
     "streamlit>=1.52.0",

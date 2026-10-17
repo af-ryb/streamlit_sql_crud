@@ -29,9 +29,5 @@ def test_get_text_has_ttl() -> None:
     assert _ttl(ExistingData.get_text) is not None
 
 
-def test_get_dt_has_ttl() -> None:
-    assert _ttl(ExistingData.get_dt) is not None
-
-
 def test_get_rows_str_has_ttl() -> None:
     assert _ttl(DeleteRows.get_rows_str) is not None

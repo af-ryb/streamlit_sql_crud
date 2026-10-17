@@ -7,13 +7,11 @@ input. Plain InputFields forms read theirs from ``ExistingData``.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
 from typing import Any
 
 import streamlit as st
-from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.schema import ForeignKey
@@ -153,7 +151,7 @@ def handle_option_load_error(kind: str, field_name: str) -> None:
 class ExistingData:
     """Option values of the plain (non-Pydantic) InputFields of `Model`.
 
-    Distinct strings, date bounds and FK options, narrowed by the page filters.
+    Distinct strings and FK options, narrowed by the page filters.
     """
 
     def __init__(
@@ -179,7 +177,6 @@ class ExistingData:
         table_name = tablename(Model)
         text = self.get_text(table_name, ss[UPDATED_KEY], default_values)
         self.text = self.add_row_values(text)
-        self.dt = self.get_dt(table_name, ss[UPDATED_KEY])
         self.fk = self.get_fk()
 
     def add_default_where(self, stmt, model: type[DeclarativeBase]) -> Any:
@@ -229,21 +226,6 @@ class ExistingData:
         stmt = select(column).distinct().select_from(self.Model).limit(10000)
         stmt = self.add_default_where(stmt, self.Model)
         return list(self.session.execute(stmt).scalars().all())
-
-    def _get_dt_col(self, column) -> tuple[date, date]:
-        min_default = date.today() - relativedelta(days=30)
-        min_dt: date = self.session.query(func.min(column)).scalar() or min_default
-        max_dt: date = self.session.query(func.max(column)).scalar() or date.today()
-        return min_dt, max_dt
-
-    @st.cache_data(ttl=CACHE_TTL_SECONDS)
-    def get_dt(_self, table_name: str, updated: int) -> dict[str, tuple[date, date]]:
-        opts = {
-            col.name: _self._get_dt_col(col)
-            for col in _self.cols
-            if safe_python_type(col) is date
-        }
-        return opts
 
     def get_foreign_opt(self, row, fk_pk_name: str) -> FkOpt:
         idx = getattr(row, fk_pk_name)
