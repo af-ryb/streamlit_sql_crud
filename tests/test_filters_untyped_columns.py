@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import func, literal_column, select
 
-from streamlit_pydantic_crud import params, read_cte
+from streamlit_pydantic_crud import filter_ui, params
 from streamlit_pydantic_crud.sa_model import safe_python_type
 from tests.conftest import Department
 
@@ -30,13 +30,13 @@ def test_safe_python_type_returns_none_for_nulltype() -> None:
 
 def test_existing_cond_skips_untyped_columns() -> None:
     """Untyped columns get no existing-values query."""
-    assert read_cte.get_existing_cond(UNTYPED_CTE.c.tag) is False
-    assert read_cte.get_existing_cond(UNTYPED_CTE.c.name) is True
+    assert filter_ui.get_existing_cond(UNTYPED_CTE.c.tag) is False
+    assert filter_ui.get_existing_cond(UNTYPED_CTE.c.name) is True
 
 
 def test_col_filter_skips_untyped_columns() -> None:
     """ColFilter renders no widget for untyped columns."""
-    col_filter = read_cte.ColFilter(
+    col_filter = filter_ui.ColFilter(
         MagicMock(),
         cte=UNTYPED_CTE,
         existing_values={"tag": ["x"], "calc": ["A"]},

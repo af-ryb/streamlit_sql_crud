@@ -76,15 +76,22 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    - These three classes are the public API (`streamlit_pydantic_crud.__init__`)
 
 3. **Core Modules**:
-   - `filters.py` - Advanced filtering for JOIN queries and complex conditions
    - `input_fields.py` - Custom Streamlit input widgets with Pydantic integration
    - `pydantic_utils.py` - Utilities for Pydantic-SQLAlchemy conversion
    - `schema_builder.py` - Dynamic Pydantic model creation from JSON schemas
    - `create_delete_model.py` - Handles create/delete operations
    - `update_model.py` - Manages update operations
-   - `read_cte.py` - Complex read queries with CTEs (Common Table Expressions)
-   - `many.py` - Many-to-many relationship management
-   - `lib.py` - CRUD logging, shared CRUD dialog, database error messages
+   - `query.py` - Read statements: CTE wrapping, filters, row count, paging
+     (`to_cte`, `get_stmt_no_pag`, `get_qtty_rows`, `apply_active_filters`)
+   - `pagination.py` - Page-size selector and pager, `OPTS_ITEMS_PAGE` tuples
+   - `filter_ui.py` - `ColFilter` widgets, cached filter values, `hash_funcs`
+   - `form_options.py` - FK / M2M options for Pydantic forms (`load_form_options`)
+     and plain forms (`ExistingData`, `FkOpt`, `custom_foreign_opts`)
+   - `params.py` - Mirror filter values to URL query params and restore them
+   - `one_to_many.py` - One-to-many relationship panels in the edit dialog
+   - `dialogs.py` - Shared CRUD dialog wrapper (`show_crud_dialog`)
+   - `db_errors.py` - User-friendly database error messages
+   - `logs.py` - CRUD action logging, `set_logging`
    - `state.py` - Per-instance UI state, `UPDATED_KEY`, cache TTL, `set_state`
 
 4. **Core helpers** (leaf modules, no Streamlit state; import only each other):

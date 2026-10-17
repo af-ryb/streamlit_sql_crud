@@ -115,8 +115,23 @@ Leftovers:
 
 - [x] Stage 1: core helper modules — `typing_helpers`, `sa_model`, `values`, `display`;
   constants and `set_state` in `state`; `utils.py` dissolved, duplicates merged
-- [ ] Stage 2: dissolve `lib`/`read_cte`/`filters`/`many` into `query.py`,
-  `pagination.py`, `filter_ui.py`, `form_options.py`, `one_to_many.py`
+- [x] Stage 2: dissolve `lib`/`read_cte`/`filters`/`many` into `query.py`,
+  `pagination.py`, `filter_ui.py`, `form_options.py`, `one_to_many.py`; `lib` split
+  into `logs.py`, `dialogs.py`, `db_errors.py`
+- [ ] Drop third-party Streamlit components: `st.pagination` + `st.selectbox` (0.7.0),
+  as its own PR after stage 2: replace the `streamlit_antd_components` pagination in
+  `pagination.py` with `st.pagination` (Streamlit ≥1.58); page size via
+  `st.selectbox` instead of `sac.cascader`, then drop the `streamlit_antd_components`
+  dependency (used only in `pagination.py`); `num_pages = max(1, ceil(count / size))`;
+  remove the `pagination_widget_key` remount trick — reset/clamp the page through
+  `st.session_state[key]` when filters, page size or row count change; total via
+  `st.caption`; consider `bind="query-params"` for the page; raise the `streamlit`
+  floor to `>=1.58`; also replace `stDatalist` in `InputFields.input_str`
+  (`input_fields.py`, no-schema free-text string input with suggestions) with
+  `st.selectbox(..., accept_new_options=True, index=None)` and drop the
+  `streamlit_datalist` dependency (removes the `ty: ignore[invalid-argument-type]`);
+  keep empty → None and saving a new value not in the list; browser-verify (pagination
+  pages, and the string input on No-Schema Numbers)
 - [ ] Stage 3: `dialogs/` package (create, edit, delete, `persist.py` with the shared
   M2M save + error block); `action_btns` → `sql_ui`
 - [ ] Stage 4: split `pydantic_utils` into `pydantic_form/` (field_info,
@@ -131,7 +146,18 @@ Side findings (stage 1, not fixed — behavior-preserving refactor):
 - [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`; unreachable guards in
   `_render_foreign_key_selectbox`/`_render_many_to_many_multiselect`;
   `if operation == "read": pass`; `if col_name is None` after `column_label`
-- [ ] `many.ReadManyRel.other_model` looks the model up inline (raises
+- [ ] `one_to_many.ReadManyRel.other_model` looks the model up inline (raises
   StopIteration/AttributeError) instead of `sa_model.model_by_tablename` (returns None)
 - [ ] `InputFields.get_input_value` uses `col.description` (raises when None) rather
   than `column_label`
+
+Side findings (stage 2, not fixed — behavior-preserving refactor):
+- [ ] An enum-array column shows as `DepartmentTypeEnum.ENGINEERING` in the table
+  (`_execute_with_pydantic_schema` list branch applies `str()`), seen on the
+  example's No-Schema Numbers page
+- [ ] `one_to_many.ReadManyRel.get_qtty_rows` is uncached and counts the PK, unlike
+  `query.get_qtty_rows` (cached per `updated`); unify once the panel's refresh
+  after create/delete is covered by a test
+- [ ] `one_to_many` panels page without ORDER BY, so rows may move between pages
+- [ ] `ReadManyRel.suffix_key` uses `__table__.name` while elsewhere `tablename()`
+  uses `__tablename__`; `model` is untyped (`Any`) there because of it

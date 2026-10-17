@@ -7,7 +7,7 @@ order, so the same row can appear on two pages or none.
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from streamlit_pydantic_crud import read_cte
+from streamlit_pydantic_crud import query
 from tests.conftest import Department
 
 
@@ -22,8 +22,8 @@ def test_get_stmt_pag_orders_by_given_column(engine: Engine) -> None:
         stmt_no_pag = select(cte)
         order_col = cte.c.get("id")
 
-        page1 = read_cte.get_stmt_pag(stmt_no_pag, 2, 1, order_col)
-        page2 = read_cte.get_stmt_pag(stmt_no_pag, 2, 2, order_col)
+        page1 = query.get_stmt_pag(stmt_no_pag, 2, 1, order_col)
+        page2 = query.get_stmt_pag(stmt_no_pag, 2, 2, order_col)
         ids1 = s.execute(page1).scalars().all()
         ids2 = s.execute(page2).scalars().all()
 

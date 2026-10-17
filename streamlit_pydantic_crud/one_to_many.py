@@ -1,24 +1,34 @@
+"""One-to-many relationship panels shown in the SqlUi edit dialog.
+
+Each panel lists, creates and deletes the child rows of the edited row.
+"""
+
 from functools import cached_property
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import Select, func, select
-from sqlalchemy.orm import RelationshipDirection, RelationshipProperty, Session
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    RelationshipDirection,
+    RelationshipProperty,
+    Session,
+)
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud import read_cte
+from streamlit_pydantic_crud import pagination, query
 from streamlit_pydantic_crud.create_delete_model import CreateRow, DeleteRows
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.sa_model import pk_attr, pk_name
 
 
 class ReadManyRel:
-    OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000)
+    """Query the child rows that `rel` links to the row `model_id` of `model`."""
 
     def __init__(
         self,
-        model,
+        model: Any,
         model_id: int | str,
         rel: RelationshipProperty,
     ) -> None:
@@ -72,9 +82,7 @@ class ReadManyRel:
         return qtty
 
     def get_stmt_pag(self, items_per_page: int, page: int) -> Select[Any]:
-        offset = (page - 1) * items_per_page
-        stmt = self.base_stmt.offset(offset).limit(items_per_page)
-        return stmt
+        return query.get_stmt_pag(self.base_stmt, items_per_page, page)
 
     def get_data(
         self, session: Session, items_per_page: int, page: int
@@ -88,8 +96,12 @@ class ReadManyRel:
 
 @st.fragment
 def show_rel(
-    conn: SQLConnection, model, model_id: int | str, rel: RelationshipProperty
+    conn: SQLConnection,
+    model: type[DeclarativeBase],
+    model_id: int | str,
+    rel: RelationshipProperty,
 ) -> None:
+    """Render the Read/Create/Delete panel of one one-to-many relationship."""
     read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
@@ -102,9 +114,9 @@ def show_rel(
 
     with pag_container, conn.session as s:
         qtty_rows = read_many_rel.get_qtty_rows(s)
-        items_per_page, page = read_cte.show_pagination(
+        items_per_page, page = pagination.show_pagination(
             qtty_rows,
-            read_many_rel.OPTS_ITEMS_PAGE,
+            pagination.REL_OPTS_ITEMS_PAGE,
             key=f"stsql_read_many_pag_{read_many_rel.suffix_key}",
         )
 
@@ -149,7 +161,10 @@ def show_rel(
                 delete_rows.show(pretty_name)
 
 
-def show_rels(conn: SQLConnection, model, model_id: int | str) -> None:
+def show_rels(
+    conn: SQLConnection, model: type[DeclarativeBase], model_id: int | str
+) -> None:
+    """Render a panel for every one-to-many relationship of `model`."""
     rels = [
         rel
         for rel in model.__mapper__.relationships

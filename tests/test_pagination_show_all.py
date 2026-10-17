@@ -4,7 +4,7 @@ With an empty result, page_size=count=0 reaches sac.pagination, whose antd
 frontend divides total by page size to compute the page count.
 """
 
-from streamlit_pydantic_crud.read_cte import SHOW_ALL, resolve_page_size
+from streamlit_pydantic_crud.pagination import SHOW_ALL, resolve_page_size
 
 
 def test_show_all_with_empty_result_is_positive() -> None:

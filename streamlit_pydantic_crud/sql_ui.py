@@ -6,13 +6,20 @@ import pandas as pd
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import CTE, Select, select
+from sqlalchemy import CTE, Select
 from sqlalchemy.orm import DeclarativeBase, selectinload
 from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
+from streamlit_pydantic_crud import (
+    create_delete_model,
+    filter_ui,
+    logs,
+    pagination,
+    query,
+    update_model,
+)
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.display import (
     DfStyleFormatter,
@@ -41,8 +48,6 @@ from streamlit_pydantic_crud.values import (
     enum_value,
     row_to_python,
 )
-
-OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
 
 
 class SqlUi:
@@ -189,10 +194,12 @@ class SqlUi:
 
         # Validate items_per_page_default
         if not isinstance(items_per_page_default, int):
-            msg = f"items_per_page_default must be an integer index (0-{len(OPTS_ITEMS_PAGE) - 1}), got {type(items_per_page_default)}"
+            msg = f"items_per_page_default must be an integer index (0-{len(pagination.OPTS_ITEMS_PAGE) - 1}), got {type(items_per_page_default)}"
             raise ValueError(msg)
-        if items_per_page_default < 0 or items_per_page_default >= len(OPTS_ITEMS_PAGE):
-            msg = f"items_per_page_default must be between 0 and {len(OPTS_ITEMS_PAGE) - 1}, got {items_per_page_default}"
+        if items_per_page_default < 0 or items_per_page_default >= len(
+            pagination.OPTS_ITEMS_PAGE
+        ):
+            msg = f"items_per_page_default must be between 0 and {len(pagination.OPTS_ITEMS_PAGE) - 1}, got {items_per_page_default}"
             raise ValueError(msg)
         self.items_per_page_default = items_per_page_default
 
@@ -240,15 +247,15 @@ class SqlUi:
         self.set_initial_state()
         self.set_structure()
         self.notification()
-        lib.set_logging(self.disable_log)
+        logs.set_logging(self.disable_log)
 
         # Create UI
         self.col_filter = self.filter()
-        stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
-        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss[UPDATED_KEY])
+        stmt_no_pag = query.get_stmt_no_pag(self.cte, self.col_filter)
+        qtty_rows = query.get_qtty_rows(self.conn, stmt_no_pag, ss[UPDATED_KEY])
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
         order_col = self.cte.columns.get(pk_name(self.edit_create_model))
-        stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
+        stmt_pag = query.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
         df = self.get_df(stmt_pag)
         selection_state = self.show_df(df)
         rows_selected = self.get_rows_selected(selection_state)
@@ -308,14 +315,7 @@ class SqlUi:
         self.state.update_message = None
 
     def get_cte(self) -> CTE:
-        if isinstance(self.read_instance, Select):
-            cte = self.read_instance.cte()
-        elif isinstance(self.read_instance, CTE):
-            cte = self.read_instance
-        else:
-            cte = select(self.read_instance).cte()
-
-        return cte
+        return query.to_cte(self.read_instance)
 
     def notice_ignored_options(self) -> None:
         """Log once per key that ORM options on read_instance are ignored."""
@@ -330,21 +330,21 @@ class SqlUi:
             "for relationship loading."
         )
 
-    def filter(self) -> read_cte.ColFilter:
+    def filter(self) -> filter_ui.ColFilter:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
             filter_cols_name = [column_label(col) for col in self.cte.columns]
 
         with self.conn.session as s:
-            existing = read_cte.get_existing_values(
+            existing = filter_ui.get_existing_values(
                 _session=s,
                 cte=self.cte,
                 updated=ss[UPDATED_KEY],
                 available_col_filter=filter_cols_name,
             )
 
-        col_filter = read_cte.ColFilter(
+        col_filter = filter_ui.ColFilter(
             self.expander_container,
             cte=self.cte,
             existing_values=existing,
@@ -357,12 +357,12 @@ class SqlUi:
         return col_filter
 
     def pagination(
-        self, qtty_rows: int, col_filter: read_cte.ColFilter
+        self, qtty_rows: int, col_filter: filter_ui.ColFilter
     ) -> tuple[int, int]:
         with self.pag_container:
-            items_per_page, page = read_cte.show_pagination(
+            items_per_page, page = pagination.show_pagination(
                 qtty_rows,
-                OPTS_ITEMS_PAGE,
+                pagination.OPTS_ITEMS_PAGE,
                 self.key,
                 self.items_per_page_default,
             )
