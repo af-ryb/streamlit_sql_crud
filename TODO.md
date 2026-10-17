@@ -96,8 +96,9 @@ Leftovers:
 - [x] Stale example-repo scripts `test_final_verification.py`/`test_null_value_fix.py`
   patch the removed `_render_field_input` — done: deleted (untracked), with
   `test_render_with_submit.py`
-- [ ] Unsaved edits reappear when the edit dialog is reopened on the same row (closed
+- [x] Unsaved edits reappear when the edit dialog is reopened on the same row (closed
   with ×): widget keys lack the row id (`update_model.py:65`, `input_fields.py:180`)
+  — done: dialogs rerun on dismiss and opening edit/create resets the form state
 
 ## Step 4 — API decisions
 

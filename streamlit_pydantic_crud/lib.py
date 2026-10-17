@@ -45,9 +45,10 @@ def show_crud_dialog(
     """Open a dialog running `show` and store its result in the `key` UI state.
 
     Reruns the page once `show` wrote to the database (stsql_updated grew).
+    Dismissing it reruns too, so Streamlit drops the unsaved widget values.
     """
 
-    @st.dialog(title, width="large")
+    @st.dialog(title, width="large", on_dismiss="rerun")
     def wrap_show() -> None:
         set_state("stsql_updated", 0)
         updated_before = ss.stsql_updated
