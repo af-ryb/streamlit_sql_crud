@@ -83,3 +83,16 @@ def test_json_none_becomes_sql_null_only_for_json_columns() -> None:
 
 def test_json_value_is_kept() -> None:
     assert json_none_as_sql_null(Blob, {"payload": {"a": 1}}) == {"payload": {"a": 1}}
+
+
+def test_json_already_null_on_row_stays_none() -> None:
+    """Rewriting an untouched NULL as null() would issue a needless UPDATE."""
+    data = json_none_as_sql_null(Blob, {"payload": None}, Blob(payload=None))
+
+    assert data == {"payload": None}
+
+
+def test_json_cleared_on_row_becomes_sql_null() -> None:
+    data = json_none_as_sql_null(Blob, {"payload": None}, Blob(payload={"a": 1}))
+
+    assert isinstance(data["payload"], Null)

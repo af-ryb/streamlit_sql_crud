@@ -101,6 +101,18 @@ def test_schema_create_without_json_is_sql_null(
     assert raw_meta_is_null("count = 3")
 
 
+def test_untouched_null_json_is_not_rewritten(
+    open_form: Callable[[str], AppTest],
+) -> None:
+    """Saving an unchanged form must not UPDATE a row whose JSON is NULL."""
+    at = open_form("update_schema_null")
+    save(at)
+    with sqlite3.connect(os.environ["CRUD_TEST_DB"]) as con:
+        (revised,) = con.execute("SELECT revised FROM doc WHERE id = 2").fetchone()
+    assert revised == 0
+    assert raw_meta_is_null("id = 2")
+
+
 def raw_meta_is_null(where: str) -> bool:
     """Return True when `meta` of the matching row is SQL NULL (not 'null')."""
     with sqlite3.connect(os.environ["CRUD_TEST_DB"]) as con:

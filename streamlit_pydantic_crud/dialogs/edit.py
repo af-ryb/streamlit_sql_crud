@@ -207,7 +207,7 @@ class UpdateRow:
                 # Separate many-to-many fields from the main data
                 main_data = validated_data.model_dump(exclude_unset=True)
                 m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
-                main_data = json_none_as_sql_null(self.model, main_data)
+                main_data = json_none_as_sql_null(self.model, main_data, row)
 
                 # Update only the fields present in the validated data
                 for field_name, field_value in main_data.items():
@@ -250,7 +250,7 @@ class UpdateRow:
                 id_col = pk_column(self.model)
                 stmt = select(self.model).where(id_col == updated[pk_name(self.model)])
                 row = s.execute(stmt).scalar_one()
-                for k, v in json_none_as_sql_null(self.model, updated).items():
+                for k, v in json_none_as_sql_null(self.model, updated, row).items():
                     setattr(row, k, v)
 
                 s.add(row)
