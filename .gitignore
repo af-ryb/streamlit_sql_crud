@@ -154,4 +154,8 @@ cython_debug/
 
 
 # Ignore IntelliJ files.
-.idea/.claude/worktrees/
+.idea/
+
+# Claude Code: agent worktrees and local settings.
+.claude/worktrees/
+.claude/settings.local.json
