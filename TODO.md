@@ -132,8 +132,9 @@ Leftovers:
   `streamlit_datalist` dependency (removes the `ty: ignore[invalid-argument-type]`);
   keep empty → None and saving a new value not in the list; browser-verify (pagination
   pages, and the string input on No-Schema Numbers)
-- [ ] Stage 3: `dialogs/` package (create, edit, delete, `persist.py` with the shared
-  M2M save + error block); `action_btns` → `sql_ui`
+- [x] Stage 3: `dialogs/` package (`frame`, `create`, `edit`, `delete`, `persist.py`
+  with the shared M2M save + error block); `action_btns` → `sql_ui`;
+  `create_delete_model.py`, `update_model.py`, `dialogs.py` removed
 - [ ] Stage 4: split `pydantic_utils` into `pydantic_form/` (field_info,
   option_resolve, widgets, generator)
 
@@ -161,3 +162,14 @@ Side findings (stage 2, not fixed — behavior-preserving refactor):
 - [ ] `one_to_many` panels page without ORDER BY, so rows may move between pages
 - [ ] `ReadManyRel.suffix_key` uses `__table__.name` while elsewhere `tablename()`
   uses `__tablename__`; `model` is untyped (`Any`) there because of it
+
+Side findings (stage 3, not fixed — behavior-preserving refactor):
+- [ ] A create/delete from a one-to-many panel keeps the edit dialog open and its
+  Read tab stays stale (empty) until the dialog is reopened; same on stage 2
+- [ ] Inside an edit dialog the panel's `CreateRow` form keeps the entered values
+  after a successful save (plain `st.form`, no `clear_on_submit`)
+- [ ] `handle_save_error` logs from `dialogs.persist` now, so the loguru record's
+  module/function in "… failed for <table>" changed (message text unchanged)
+- [ ] `CreateRow`/`UpdateRow` success paths still repeat `ss[UPDATED_KEY] += 1`,
+  `log(...)` and the form-data cleanup; a `handle_save_ok` could share them
+- [ ] Code comments in the dialogs still use `#` instead of the triple-quoted style

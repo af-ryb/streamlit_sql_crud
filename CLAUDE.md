@@ -79,8 +79,6 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    - `input_fields.py` - Custom Streamlit input widgets with Pydantic integration
    - `pydantic_utils.py` - Utilities for Pydantic-SQLAlchemy conversion
    - `schema_builder.py` - Dynamic Pydantic model creation from JSON schemas
-   - `create_delete_model.py` - Handles create/delete operations
-   - `update_model.py` - Manages update operations
    - `query.py` - Read statements: CTE wrapping, filters, row count, paging
      (`to_cte`, `get_stmt_no_pag`, `get_qtty_rows`, `apply_active_filters`)
    - `pagination.py` - Page-size selector and pager, `OPTS_ITEMS_PAGE` tuples
@@ -89,14 +87,20 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
      and plain forms (`ExistingData`, `FkOpt`, `custom_foreign_opts`)
    - `params.py` - Mirror filter values to URL query params and restore them
    - `one_to_many.py` - One-to-many relationship panels in the edit dialog
-   - `dialogs.py` - Shared CRUD dialog wrapper (`show_crud_dialog`)
+   - `dialogs/` - CRUD dialogs; `__init__` has no eager imports (`edit` →
+     `one_to_many` → `create`/`delete` would cycle), import submodules directly:
+     - `frame.py` - Shared dialog wrapper (`show_crud_dialog`)
+     - `create.py` / `edit.py` / `delete.py` - `CreateRow` / `UpdateRow` / `DeleteRows`
+     - `persist.py` - Shared save helpers: M2M split/load, `selectinload`
+       options, form session key, `handle_save_error`
    - `db_errors.py` - User-friendly database error messages
    - `logs.py` - CRUD action logging, `set_logging`
    - `state.py` - Per-instance UI state, `UPDATED_KEY`, cache TTL, `set_state`
 
 4. **Core helpers** (leaf modules, no Streamlit state; import only each other):
    - `typing_helpers.py` - Annotation inspection (Optional, enum, list, `model_fields`)
-   - `sa_model.py` - SQLAlchemy introspection (PK, table name, column label/types)
+   - `sa_model.py` - SQLAlchemy introspection (PK, table name, column label/types,
+     `related_model`)
    - `values.py` - Value coercion (PG arrays, numpy/DataFrame cells, enum, JSON)
    - `display.py` - Labels and table formatting (`get_pretty_name`, `convert_arrow`)
 
