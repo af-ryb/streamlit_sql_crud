@@ -1,20 +1,23 @@
 """Session state of one `SqlUi` instance, keyed by its widget key.
 
 Each instance keeps its own filters, notification and dialog flag so several
-`SqlUi` on one page do not disturb each other. The cache-busting counter
-`stsql_updated` stays global on purpose (see `UPDATED_KEY`). Also holds the
-other process- and session-wide constants and the `set_state` and
+`SqlUi` on one page do not disturb each other. Every write is recorded twice
+(`record_write`): in the process-wide data version that keys the caches shared
+by all sessions, and in the session's own write counter (`UPDATED_KEY`). Also
+holds the other process- and session-wide constants and the `set_state` and
 `clear_state_keys` helpers.
 """
 
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any
 
 from streamlit import session_state as ss
 
-"""Global on purpose: a write through one instance must invalidate caches of
-every instance, which may read the same table or reference it by FK."""
+"""Writes of this session, shared by all its instances. Renews dataframe keys
+and detects a dialog write; never a cache key (it restarts in every session)."""
 UPDATED_KEY = "stsql_updated"
 
 """Default ttl for cached option/count queries so values added outside the
@@ -23,6 +26,35 @@ CACHE_TTL_SECONDS = 60
 
 """SqlUi keys already told that read_instance ORM options are ignored."""
 OPTIONS_NOTICE_KEYS: set[str] = set()
+
+
+class DataVersion:
+    """Thread-safe counter of the writes made through this server process.
+
+    It starts at the clock in nanoseconds, so a re-created counter (module
+    reload) never repeats a value an older one used as a cache key.
+    """
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._value = time.time_ns()
+
+    @property
+    def current(self) -> int:
+        """Return the current version."""
+        with self._lock:
+            return self._value
+
+    def bump(self) -> int:
+        """Increment the version and return the new value."""
+        with self._lock:
+            self._value += 1
+            return self._value
+
+
+"""Module-level, so one per server process and shared by every session; unlike
+a st.cache_resource it works without a runtime and survives cache clears."""
+DATA_VERSION = DataVersion()
 
 
 @dataclass
@@ -48,6 +80,31 @@ def get_ui_state(key: str) -> UiState:
     if state_key not in ss:
         ss[state_key] = UiState()
     return ss[state_key]
+
+
+def record_write() -> None:
+    """Record a write (or attempt) to the database by this session.
+
+    Invalidates the shared caches of every session and renews this session's
+    dataframe keys, which drops its row selection.
+    """
+    bump_data_version()
+    ss[UPDATED_KEY] = session_writes() + 1
+
+
+def data_version() -> int:
+    """Return the process-wide data version, the key of shared DB caches."""
+    return DATA_VERSION.current
+
+
+def bump_data_version() -> int:
+    """Invalidate the DB caches of all sessions; return the new version."""
+    return DATA_VERSION.bump()
+
+
+def session_writes() -> int:
+    """Return how many writes this session recorded (0 before the first)."""
+    return ss.get(UPDATED_KEY, 0)
 
 
 def set_state(key: str, value: Any) -> None:
