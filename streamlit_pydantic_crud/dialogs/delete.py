@@ -10,9 +10,9 @@ from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import handle_save_error
-from streamlit_pydantic_crud.display import get_pretty_name
-from streamlit_pydantic_crud.logs import log
-from streamlit_pydantic_crud.sa_model import pk_column, tablename
+from streamlit_pydantic_crud.helpers.display import get_pretty_name
+from streamlit_pydantic_crud.helpers.logs import log
+from streamlit_pydantic_crud.helpers.sa_model import pk_column, tablename
 from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY
 
 

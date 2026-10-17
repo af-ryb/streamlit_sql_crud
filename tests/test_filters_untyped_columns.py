@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import func, literal_column, select
 
-from streamlit_pydantic_crud import filter_ui, params
-from streamlit_pydantic_crud.sa_model import safe_python_type
+from streamlit_pydantic_crud.helpers.sa_model import safe_python_type
+from streamlit_pydantic_crud.table import filter_ui, params
 from tests.conftest import Department
 
 UNTYPED_CTE = select(

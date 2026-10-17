@@ -10,7 +10,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
-from streamlit_pydantic_crud.sa_model import pk_attr, pk_column, pk_name, tablename
+from streamlit_pydantic_crud.helpers.sa_model import (
+    pk_attr,
+    pk_column,
+    pk_name,
+    tablename,
+)
 
 
 class Base(DeclarativeBase):

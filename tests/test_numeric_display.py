@@ -9,7 +9,7 @@ from decimal import Decimal
 import numpy as np
 from sqlalchemy import Float, Integer, Numeric, column, select, table
 
-from streamlit_pydantic_crud.display import format_number, numeric_formatters
+from streamlit_pydantic_crud.helpers.display import format_number, numeric_formatters
 
 CTE = select(
     table(

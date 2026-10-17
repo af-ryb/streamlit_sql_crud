@@ -17,11 +17,11 @@ from sqlalchemy.orm import (
 )
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud import pagination, query
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
-from streamlit_pydantic_crud.display import get_pretty_name
-from streamlit_pydantic_crud.sa_model import pk_attr, pk_name
+from streamlit_pydantic_crud.helpers.display import get_pretty_name
+from streamlit_pydantic_crud.helpers.sa_model import pk_attr, pk_name
+from streamlit_pydantic_crud.table import pagination, query
 
 
 class ReadManyRel:

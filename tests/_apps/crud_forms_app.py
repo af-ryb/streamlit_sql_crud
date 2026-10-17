@@ -16,8 +16,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
-from streamlit_pydantic_crud.form_options import ExistingData
-from streamlit_pydantic_crud.input_fields import InputFields
+from streamlit_pydantic_crud.forms.options import ExistingData
+from streamlit_pydantic_crud.forms.sa_fields import InputFields
 from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 
 DB = os.environ["CRUD_TEST_DB"]

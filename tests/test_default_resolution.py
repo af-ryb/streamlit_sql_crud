@@ -10,13 +10,13 @@ from unittest.mock import MagicMock, patch
 
 from pydantic import BaseModel, Field
 
-from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
-from streamlit_pydantic_crud.pydantic_form.option_resolve import (
+from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
+from streamlit_pydantic_crud.forms.pydantic.option_resolve import (
     match_option,
     resolve_multiselect_default,
     resolve_select_index,
 )
-from streamlit_pydantic_crud.pydantic_form.widgets import (
+from streamlit_pydantic_crud.forms.pydantic.widgets import (
     render_multiselect,
     render_selectbox,
 )
@@ -104,7 +104,7 @@ def test_multiselect_session_empty_respected() -> None:
 # --- integration: widget wiring -------------------------------------------
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_selectbox_uses_field_default(mock_st: MagicMock) -> None:
     render_selectbox("L", {"options": ["red", "blue"]}, None, "k", field_default="blue")
     mock_st.selectbox.assert_called_once_with(
@@ -112,7 +112,7 @@ def test_selectbox_uses_field_default(mock_st: MagicMock) -> None:
     )
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) -> None:
     render_selectbox(
         "L", {"options": ["red", "blue"], "index": 0}, None, "k", field_default="blue"
@@ -122,7 +122,7 @@ def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) ->
     )
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
     render_multiselect(
         "L", {"options": ["a", "b", "c"]}, None, "k", field_default=["b"]
@@ -132,7 +132,7 @@ def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
     )
 
 
-@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+@patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) -> None:
     """End to end: a selectbox field with no session value selects its default."""
 

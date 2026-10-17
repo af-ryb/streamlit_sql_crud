@@ -18,17 +18,17 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
-from streamlit_pydantic_crud.display import field_label
-from streamlit_pydantic_crud.pydantic_form import widgets
-from streamlit_pydantic_crud.pydantic_form.field_info import (
+from streamlit_pydantic_crud.forms.pydantic import widgets
+from streamlit_pydantic_crud.forms.pydantic.field_info import (
     get_pydantic_field_info,
     get_streamlit_input_type,
     is_optional_field,
 )
-from streamlit_pydantic_crud.pydantic_form.option_resolve import (
+from streamlit_pydantic_crud.forms.pydantic.option_resolve import (
     is_float_number_kwargs,
 )
-from streamlit_pydantic_crud.typing_helpers import (
+from streamlit_pydantic_crud.helpers.display import field_label
+from streamlit_pydantic_crud.helpers.typing import (
     is_enum_annotation,
     is_enum_list_annotation,
     is_list_annotation,

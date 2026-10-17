@@ -23,10 +23,10 @@ from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
 )
-from streamlit_pydantic_crud.form_options import (
+from streamlit_pydantic_crud.forms.options import (
     load_form_options,
 )
-from streamlit_pydantic_crud.sa_model import foreign_key_column_names
+from streamlit_pydantic_crud.helpers.sa_model import foreign_key_column_names
 
 
 class Base(DeclarativeBase):
@@ -217,7 +217,7 @@ def _warning_app(db: str, disable_log: bool) -> None:
     from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
-    from streamlit_pydantic_crud.logs import set_logging  # noqa: PLC0415
+    from streamlit_pydantic_crud.helpers.logs import set_logging  # noqa: PLC0415
     from tests.test_form_options import (  # noqa: PLC0415
         Author,
         Post,

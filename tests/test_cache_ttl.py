@@ -7,9 +7,9 @@ writes) stay invisible until the app restarts.
 
 from typing import Any
 
-from streamlit_pydantic_crud import filter_ui, query
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
-from streamlit_pydantic_crud.form_options import ExistingData
+from streamlit_pydantic_crud.forms.options import ExistingData
+from streamlit_pydantic_crud.table import filter_ui, query
 
 
 def _ttl(cached_func: Any) -> object:

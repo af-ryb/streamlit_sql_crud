@@ -5,7 +5,7 @@ not re-sync on prop change, so the widget must be remounted (new key) when
 either changes; otherwise the page-count display goes stale.
 """
 
-from streamlit_pydantic_crud.pagination import pagination_widget_key
+from streamlit_pydantic_crud.table.pagination import pagination_widget_key
 
 
 def test_key_changes_when_page_size_changes() -> None:

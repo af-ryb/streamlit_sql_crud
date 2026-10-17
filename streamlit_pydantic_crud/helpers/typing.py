@@ -10,7 +10,7 @@ from typing import Any, Union, get_args, get_origin
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from streamlit_pydantic_crud.values import enum_value
+from streamlit_pydantic_crud.helpers.values import enum_value
 
 
 def is_enum_annotation(annotation: Any) -> bool:

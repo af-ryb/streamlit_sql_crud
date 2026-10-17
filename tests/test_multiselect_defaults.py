@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from pydantic import BaseModel
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.pydantic_form.option_resolve import (
+from streamlit_pydantic_crud.forms.pydantic.option_resolve import (
     enum_list_defaults,
     known_defaults,
 )
@@ -48,7 +48,7 @@ def test_known_defaults_drops_unknown() -> None:
 def _render_enum_list() -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
 
-    from streamlit_pydantic_crud.pydantic_form.generator import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.forms.pydantic.generator import (  # noqa: PLC0415
         PydanticInputGenerator,
     )
     from tests.test_multiselect_defaults import Dept, Form  # noqa: PLC0415
@@ -69,7 +69,7 @@ def test_enum_list_form_renders_existing_members() -> None:
 
 def test_multiselect_widget_drops_unknown_default() -> None:
     def app() -> None:
-        from streamlit_pydantic_crud.pydantic_form.widgets import (  # noqa: PLC0415
+        from streamlit_pydantic_crud.forms.pydantic.widgets import (  # noqa: PLC0415
             render_multiselect,
         )
 
@@ -82,10 +82,10 @@ def test_multiselect_widget_drops_unknown_default() -> None:
 
 def test_many_to_many_drops_unknown_ids() -> None:
     def app() -> None:
-        from streamlit_pydantic_crud.pydantic_form.generator import (  # noqa: PLC0415
+        from streamlit_pydantic_crud.forms.pydantic.generator import (  # noqa: PLC0415
             PydanticInputGenerator,
         )
-        from streamlit_pydantic_crud.pydantic_form.widgets import (  # noqa: PLC0415
+        from streamlit_pydantic_crud.forms.pydantic.widgets import (  # noqa: PLC0415
             render_many_to_many_multiselect,
         )
         from tests.test_multiselect_defaults import Form, opts  # noqa: PLC0415

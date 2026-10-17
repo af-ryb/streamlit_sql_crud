@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from streamlit_pydantic_crud.values import row_to_python
+from streamlit_pydantic_crud.helpers.values import row_to_python
 
 
 def test_missing_values_become_none() -> None:

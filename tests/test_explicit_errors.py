@@ -6,10 +6,10 @@ from typing import Any, cast
 import pytest
 import sqlalchemy as sa
 
-from streamlit_pydantic_crud import input_fields
-from streamlit_pydantic_crud.form_options import FkOpt
-from streamlit_pydantic_crud.input_fields import InputFields
-from streamlit_pydantic_crud.one_to_many import ReadManyRel
+from streamlit_pydantic_crud.dialogs.one_to_many import ReadManyRel
+from streamlit_pydantic_crud.forms import sa_fields
+from streamlit_pydantic_crud.forms.options import FkOpt
+from streamlit_pydantic_crud.forms.sa_fields import InputFields
 
 
 def test_get_input_value_unnamed_column_raises() -> None:
@@ -31,7 +31,7 @@ def test_input_fk_unexpected_option_type_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A selectbox returning something other than an FkOpt is a TypeError."""
-    monkeypatch.setattr(input_fields.st, "selectbox", lambda *_args, **_kwargs: "stray")
+    monkeypatch.setattr(sa_fields.st, "selectbox", lambda *_args, **_kwargs: "stray")
     existing = SimpleNamespace(fk={"author_id": [FkOpt(1, "A1")]})
     fields = InputFields(cast(Any, object), "p", {}, cast(Any, existing))
 

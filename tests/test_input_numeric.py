@@ -5,7 +5,7 @@ Regression: entering 0 must be preserved, not silently turned into None.
 
 from decimal import Decimal
 
-from streamlit_pydantic_crud.values import coerce_decimal
+from streamlit_pydantic_crud.helpers.values import coerce_decimal
 
 
 def test_zero_is_preserved() -> None:

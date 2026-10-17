@@ -10,7 +10,7 @@ from datetime import date
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import params
+from streamlit_pydantic_crud.table import params
 
 NAME = "_create_no_dt_filter_Name"
 START = "_create_date_filter_start_Born"

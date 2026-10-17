@@ -13,7 +13,7 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import params
+from streamlit_pydantic_crud.table import params
 
 APP = str(Path(__file__).parent / "_apps" / "filter_app.py")
 

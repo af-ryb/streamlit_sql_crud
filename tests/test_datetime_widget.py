@@ -1,8 +1,8 @@
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from streamlit_pydantic_crud.pydantic_form.field_info import get_streamlit_input_type
-from streamlit_pydantic_crud.pydantic_form.widgets import render_datetime_input
+from streamlit_pydantic_crud.forms.pydantic.field_info import get_streamlit_input_type
+from streamlit_pydantic_crud.forms.pydantic.widgets import render_datetime_input
 
 
 class TestDatetimeTypeDetection:
@@ -24,7 +24,7 @@ class TestDatetimeTypeDetection:
 class TestRenderDatetimeInputWidget:
     """Tests for widgets.render_datetime_input()."""
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_basic_rendering(self, mock_st: MagicMock) -> None:
         """Renders st.datetime_input with value and key."""
         dt_value = datetime(2025, 6, 15, 14, 30)
@@ -42,7 +42,7 @@ class TestRenderDatetimeInputWidget:
         )
         assert result == dt_value
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_none_value(self, mock_st: MagicMock) -> None:
         """Renders with None value (empty datetime picker)."""
         mock_st.datetime_input.return_value = None
@@ -59,7 +59,7 @@ class TestRenderDatetimeInputWidget:
         )
         assert result is None
 
-    @patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
+    @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_extra_kwargs_passed_through(self, mock_st: MagicMock) -> None:
         """Extra kwargs like min_value, max_value, step are forwarded."""
         dt_value = datetime(2025, 6, 15, 14, 30)

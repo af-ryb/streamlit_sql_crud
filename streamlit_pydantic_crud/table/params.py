@@ -12,8 +12,8 @@ import streamlit as st
 from sqlalchemy.sql.elements import KeyedColumnElement
 from streamlit import session_state as ss
 
-from streamlit_pydantic_crud.form_options import FkOpt
-from streamlit_pydantic_crud.sa_model import safe_python_type
+from streamlit_pydantic_crud.forms.options import FkOpt
+from streamlit_pydantic_crud.helpers.sa_model import safe_python_type
 
 
 def param_name(prefix: str, name: str) -> str:

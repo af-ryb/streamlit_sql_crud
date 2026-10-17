@@ -8,9 +8,9 @@ from sqlalchemy.orm.interfaces import LoaderOption
 from streamlit import session_state as ss
 
 from streamlit_pydantic_crud.config_types import ManyToManyFields
-from streamlit_pydantic_crud.db_errors import format_database_error
-from streamlit_pydantic_crud.logs import log
-from streamlit_pydantic_crud.sa_model import pk_attr, related_model, tablename
+from streamlit_pydantic_crud.helpers.db_errors import format_database_error
+from streamlit_pydantic_crud.helpers.logs import log
+from streamlit_pydantic_crud.helpers.sa_model import pk_attr, related_model, tablename
 from streamlit_pydantic_crud.state import UPDATED_KEY
 
 

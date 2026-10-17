@@ -7,7 +7,7 @@ input. Plain InputFields forms read theirs from ``ExistingData``.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import streamlit as st
 from loguru import logger
@@ -23,9 +23,7 @@ from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
 )
-from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.query import apply_active_filters
-from streamlit_pydantic_crud.sa_model import (
+from streamlit_pydantic_crud.helpers.sa_model import (
     foreign_key_column_names,
     model_by_tablename,
     pk_name,
@@ -34,6 +32,11 @@ from streamlit_pydantic_crud.sa_model import (
     tablename,
 )
 from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY
+from streamlit_pydantic_crud.table.query import apply_active_filters
+
+if TYPE_CHECKING:
+    """Type-only: forms sit below pydantic_ui, which imports the form generator."""
+    from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 
 
 @dataclass
@@ -45,7 +48,7 @@ class FkOpt:
 
 
 def load_form_options(
-    form: PydanticCrudUi,
+    form: "PydanticCrudUi",
     conn: SQLConnection,
     model: type[DeclarativeBase],
     foreign_key_options: ForeignKeyOptions,
@@ -66,7 +69,7 @@ def load_form_options(
 
 
 def load_foreign_key_options(
-    form: PydanticCrudUi,
+    form: "PydanticCrudUi",
     conn: SQLConnection,
     model: type[DeclarativeBase],
     foreign_key_options: ForeignKeyOptions,
@@ -113,7 +116,7 @@ def load_foreign_key_options(
 
 
 def load_many_to_many_options(
-    form: PydanticCrudUi,
+    form: "PydanticCrudUi",
     conn: SQLConnection,
     model: type[DeclarativeBase],
     many_to_many_fields: ManyToManyFields,
