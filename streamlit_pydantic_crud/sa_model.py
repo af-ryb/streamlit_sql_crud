@@ -38,6 +38,13 @@ def pk_column(model: type[DeclarativeBase]) -> Column:
     return primary_key[0]
 
 
+def related_model(
+    model: type[DeclarativeBase], relationship: str
+) -> type[DeclarativeBase]:
+    """Return the model on the other side of `model`'s `relationship`."""
+    return getattr(model, relationship).property.mapper.class_
+
+
 def model_by_tablename(
     model: type[DeclarativeBase], name: str
 ) -> type[DeclarativeBase] | None:

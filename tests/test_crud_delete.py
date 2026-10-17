@@ -41,10 +41,14 @@ class FakeState(dict):
 def clicked() -> Iterator[MagicMock]:
     """Patch Streamlit so the Delete button is clicked; yield the `log` mock."""
     target = "streamlit_pydantic_crud.dialogs.delete"
+    persist = "streamlit_pydantic_crud.dialogs.persist"
+    state = FakeState({UPDATED_KEY: 0})
     with (
         patch(f"{target}.st") as mock_st,
-        patch(f"{target}.ss", FakeState({UPDATED_KEY: 0})),
+        patch(f"{target}.ss", state),
         patch(f"{target}.log") as mock_log,
+        patch(f"{persist}.ss", state),
+        patch(f"{persist}.log", mock_log),
         patch.object(DeleteRows, "get_rows_str", return_value=[]),
     ):
         mock_st.button.return_value = True

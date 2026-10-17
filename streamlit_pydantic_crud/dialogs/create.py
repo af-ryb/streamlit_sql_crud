@@ -4,15 +4,19 @@ from functools import partial
 from typing import Any
 
 import streamlit as st
-from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
-from streamlit_pydantic_crud.db_errors import format_database_error
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
+from streamlit_pydantic_crud.dialogs.persist import (
+    form_data_key,
+    handle_save_error,
+    load_related,
+    pop_m2m_data,
+)
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.form_options import ExistingData, load_form_options
 from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
@@ -20,7 +24,6 @@ from streamlit_pydantic_crud.logs import log
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.sa_model import (
     column_label,
-    pk_attr,
     pk_name,
     tablename,
 )
@@ -77,7 +80,7 @@ class CreateRow:
                 )
             return
 
-        session_key = f"{self.key_prefix}_form_data"
+        session_key = form_data_key(self.key_prefix)
 
         # Pre-populate form with initial_data if provided (for "copy" action)
         if self.initial_data:
@@ -159,12 +162,8 @@ class CreateRow:
         try:
             with self.conn.session as s:
                 # Separate many-to-many fields from the main data
-                m2m_data = {}
                 main_data = validated_data.model_dump()
-
-                for field_name in self.many_to_many_fields:
-                    if field_name in main_data:
-                        m2m_data[field_name] = main_data.pop(field_name)
+                m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
 
                 # Create the main object without m2m fields
                 row = self.model(**main_data)
@@ -176,15 +175,8 @@ class CreateRow:
                     relationship_name = self.many_to_many_fields[field_name][
                         "relationship"
                     ]
-                    related_model = getattr(
-                        self.model, relationship_name
-                    ).property.mapper.class_
-
-                    # Get the related objects from the database
-                    related_objects = (
-                        s.query(related_model)
-                        .filter(pk_attr(related_model).in_(selected_options))
-                        .all()
+                    related_objects = load_related(
+                        s, self.model, relationship_name, selected_options
                     )
 
                     # Append the related objects to the relationship
@@ -196,21 +188,16 @@ class CreateRow:
                 log("CREATE", table_name, row)
 
                 # Clear the form data after successful save
-                session_key = f"{self.key_prefix}_form_data"
+                session_key = form_data_key(self.key_prefix)
                 if session_key in st.session_state:
                     del st.session_state[session_key]
 
                 return True, f"Created successfully {row}"
 
         except Exception as e:
-            ss[UPDATED_KEY] += 1
-            table_name = tablename(self.model)
-            log("CREATE", table_name, validated_data.model_dump(), success=False)
-            logger.exception(f"Create failed for {table_name}")
-
-            # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = format_database_error(e)
-            return False, error_msg
+            return handle_save_error(
+                "CREATE", self.model, validated_data.model_dump(), e
+            )
 
     def save_sqlalchemy(self, created: dict) -> tuple[bool, str]:
         """Original SQLAlchemy save logic"""
@@ -224,14 +211,7 @@ class CreateRow:
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"
         except Exception as e:
-            ss[UPDATED_KEY] += 1
-            table_name = tablename(self.model)
-            log("CREATE", table_name, created, success=False)
-            logger.exception(f"Create failed for {table_name}")
-
-            # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = format_database_error(e)
-            return False, error_msg
+            return handle_save_error("CREATE", self.model, created, e)
 
     def show_dialog(self) -> None:
         """Open the create dialog with a form seeded from defaults or the copy."""
@@ -249,7 +229,7 @@ class CreateRow:
         """
         if self.create_schema:
             self.pydantic_ui.clear_session_data()
-            session_key = f"{self.key_prefix}_form_data"
+            session_key = form_data_key(self.key_prefix)
             st.session_state[session_key] = dict(self.initial_data)
         else:
             self.input_fields.reset_state()

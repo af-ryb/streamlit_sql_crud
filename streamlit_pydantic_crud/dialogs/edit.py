@@ -6,14 +6,20 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import DeclarativeBase, selectinload
+from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud import one_to_many
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
-from streamlit_pydantic_crud.db_errors import format_database_error
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
+from streamlit_pydantic_crud.dialogs.persist import (
+    form_data_key,
+    handle_save_error,
+    load_related,
+    m2m_load_options,
+    pop_m2m_data,
+)
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.form_options import ExistingData, load_form_options
 from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
@@ -24,6 +30,7 @@ from streamlit_pydantic_crud.sa_model import (
     pk_attr,
     pk_column,
     pk_name,
+    related_model,
     tablename,
 )
 from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
@@ -69,11 +76,7 @@ class UpdateRow:
         with conn.session as s:
             # Load row with many-to-many relationships if needed
             if self.many_to_many_fields:
-                # Build options for eager loading
-                options = []
-                for config in self.many_to_many_fields.values():
-                    relationship_attr = getattr(self.model, config["relationship"])
-                    options.append(selectinload(relationship_attr))
+                options = m2m_load_options(self.model, self.many_to_many_fields)
 
                 # Use query with selectinload to get the row with relationships
                 self.row = (
@@ -120,10 +123,8 @@ class UpdateRow:
                 if hasattr(self.row, relationship_name):
                     # Get currently selected objects
                     current_objects = getattr(self.row, relationship_name)
-                    related_model = getattr(
-                        self.model, relationship_name
-                    ).property.mapper.class_
-                    related_pk = pk_name(related_model)
+                    related = related_model(self.model, relationship_name)
+                    related_pk = pk_name(related)
                     # Convert to list of PKs for multiselect
                     self.current_values[field_name] = [
                         getattr(obj, related_pk) for obj in current_objects
@@ -162,7 +163,7 @@ class UpdateRow:
 
     @property
     def get_session_key(self) -> str:
-        return f"{self.key_prefix}_form_data"
+        return form_data_key(self.key_prefix)
 
     def get_pydantic_updates(self) -> BaseModel | None:
         """Generate updates using PydanticUi"""
@@ -203,12 +204,8 @@ class UpdateRow:
                 row = s.execute(stmt).scalar_one()
 
                 # Separate many-to-many fields from the main data
-                m2m_data = {}
                 main_data = validated_data.model_dump(exclude_unset=True)
-
-                for field_name in self.many_to_many_fields:
-                    if field_name in main_data:
-                        m2m_data[field_name] = main_data.pop(field_name)
+                m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
 
                 # Update only the fields present in the validated data
                 for field_name, field_value in main_data.items():
@@ -220,15 +217,8 @@ class UpdateRow:
                     relationship_name = self.many_to_many_fields[field_name][
                         "relationship"
                     ]
-                    related_model = getattr(
-                        self.model, relationship_name
-                    ).property.mapper.class_
-
-                    # Get the related objects from the database
-                    related_objects = (
-                        s.query(related_model)
-                        .filter(pk_attr(related_model).in_(selected_options))
-                        .all()
+                    related_objects = load_related(
+                        s, self.model, relationship_name, selected_options
                     )
 
                     # Update the relationship
@@ -247,14 +237,9 @@ class UpdateRow:
                 return True, f"Updated successfully {row}"
 
         except Exception as e:
-            ss[UPDATED_KEY] += 1
-            table_name = tablename(self.model)
-            log("UPDATE", table_name, validated_data.model_dump(), success=False)
-            logger.exception(f"Update failed for {table_name}")
-
-            # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = format_database_error(e)
-            return False, error_msg
+            return handle_save_error(
+                "UPDATE", self.model, validated_data.model_dump(), e
+            )
 
     def save_sqlalchemy(self, updated: dict) -> tuple[bool, str]:
         """Original SQLAlchemy save logic"""
@@ -273,16 +258,9 @@ class UpdateRow:
                 log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"
             except Exception as e:
-                ss[UPDATED_KEY] += 1
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
-                table_name = tablename(self.model)
-                log("UPDATE", table_name, updated_str, success=False)
-                logger.exception(f"Update failed for {table_name}")
-
-                # Handle specific SQLAlchemy errors with user-friendly messages
-                error_msg = format_database_error(e)
-                return False, error_msg
+                return handle_save_error("UPDATE", self.model, updated_str, e)
 
     def show(self) -> tuple[bool | None, str | None]:
         pretty_name = get_pretty_name(tablename(self.model))

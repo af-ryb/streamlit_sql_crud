@@ -8,7 +8,7 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
-from sqlalchemy.orm import DeclarativeBase, selectinload
+from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
@@ -19,6 +19,7 @@ from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFi
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
+from streamlit_pydantic_crud.dialogs.persist import m2m_load_options
 from streamlit_pydantic_crud.display import (
     DfStyleFormatter,
     convert_arrow,
@@ -399,13 +400,9 @@ class SqlUi:
                     # Extract entity PKs from filtered results
                     entity_ids = [getattr(row, pk) for row in filtered_result]
 
-                    # Build options for eager loading
-                    options = []
-                    for config in self.many_to_many_fields.values():
-                        relationship_attr = getattr(
-                            self.edit_create_model, config["relationship"]
-                        )
-                        options.append(selectinload(relationship_attr))
+                    options = m2m_load_options(
+                        self.edit_create_model, self.many_to_many_fields
+                    )
 
                     # Load entities with relationships for just the filtered PKs
                     entities_with_relations = (

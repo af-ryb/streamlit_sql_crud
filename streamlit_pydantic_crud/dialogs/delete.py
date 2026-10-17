@@ -3,14 +3,13 @@
 from functools import partial
 
 import streamlit as st
-from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud.db_errors import format_database_error
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
+from streamlit_pydantic_crud.dialogs.persist import handle_save_error
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.logs import log
 from streamlit_pydantic_crud.sa_model import pk_column, tablename
@@ -77,10 +76,7 @@ class DeleteRows:
                 s.commit()
                 ss[UPDATED_KEY] += 1
             except Exception as e:
-                ss[UPDATED_KEY] += 1
-                log("DELETE", table_name, self.rows_id, success=False)
-                logger.exception(f"Delete failed for {table_name}")
-                return False, format_database_error(e)
+                return handle_save_error("DELETE", self.model, self.rows_id, e)
 
         missing_msg = f"Not found (already deleted?): {missing}" if missing else ""
         if not lancs:
