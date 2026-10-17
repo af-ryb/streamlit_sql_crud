@@ -1,6 +1,6 @@
 """Inspect Python and Pydantic type annotations.
 
-Leaf module: depends only on the standard library and pydantic.
+Leaf module: depends on the standard library, pydantic and `values`.
 """
 
 import types
@@ -9,6 +9,8 @@ from typing import Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
+
+from streamlit_pydantic_crud.values import enum_value
 
 
 def is_enum_annotation(annotation: Any) -> bool:
@@ -70,7 +72,7 @@ def enum_member(value: Any, enum_type: type[Enum]) -> Enum | None:
         return None
     if isinstance(value, enum_type):
         return value
-    raw = value.value if isinstance(value, Enum) else value
+    raw = enum_value(value)
     for member in enum_type:
         if member.value == raw:
             return member

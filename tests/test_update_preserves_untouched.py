@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.utils import keep_unchanged_datetime
+from streamlit_pydantic_crud.values import keep_unchanged_datetime
 
 APP = "json_datetime_app.py"
 MODES = ["update", "update_schema"]

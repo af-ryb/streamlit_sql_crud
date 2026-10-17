@@ -2,8 +2,7 @@
 
 import pytest
 
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
-from streamlit_pydantic_crud.utils import parse_pg_array
+from streamlit_pydantic_crud.values import parse_pg_array, to_list
 
 CASES = [
     ("{a,b}", ["a", "b"]),
@@ -24,4 +23,4 @@ def test_parse_pg_array(value: str, expected: list[str]) -> None:
 
 
 def test_generator_uses_pg_array_parser() -> None:
-    assert PydanticInputGenerator._to_list('{"a,b",c,d}') == ["a,b", "c", "d"]
+    assert to_list('{"a,b",c,d}') == ["a,b", "c", "d"]

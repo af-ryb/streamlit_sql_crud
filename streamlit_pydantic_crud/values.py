@@ -1,6 +1,12 @@
-"""Utility functions for streamlit_sql package"""
+"""Coerce values between the database, DataFrames and Streamlit widgets.
 
+Leaf module: depends on numpy/pandas and `sa_model` only.
+"""
+
+import json
 from datetime import datetime
+from decimal import Decimal
+from enum import Enum
 from typing import Any
 
 import numpy as np
@@ -10,16 +16,30 @@ from sqlalchemy.orm import DeclarativeBase
 from streamlit_pydantic_crud.sa_model import pk_column
 
 
-def keep_unchanged_datetime(new: Any, original: Any) -> Any:
-    """Return `original` when the widget value `new` is it at minute precision.
+def enum_value(value: Any) -> Any:
+    """Return ``value.value`` for an enum member, else `value` unchanged."""
+    return value.value if isinstance(value, Enum) else value
 
-    `st.datetime_input` drops seconds, microseconds and tzinfo, so an untouched
-    widget must not overwrite the stored value with that truncated copy.
+
+def json_to_text(value: Any) -> str:
+    """Render a JSON value as text: dicts and lists indented, others via str()."""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, indent=2)
+    return str(value)
+
+
+def to_list(value: Any) -> list:
+    """Coerce a value into a list: None → [], a PG array literal is parsed.
+
+    Lists and tuples are copied; any other value becomes a one-item list.
     """
-    if not isinstance(new, datetime) or not isinstance(original, datetime):
-        return new
-    truncated = original.replace(second=0, microsecond=0, tzinfo=None)
-    return original if new == truncated else new
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    if isinstance(value, str):
+        return parse_pg_array(value)
+    return [value]
 
 
 def parse_pg_array(value: str) -> list[str]:
@@ -63,6 +83,44 @@ def _append_item(items: list[str], chars: list[str], quoted: bool) -> None:
         items.append(item)
 
 
+def coerce_decimal(value: float | int | None, step: float | None) -> Decimal | None:
+    """Convert a numeric input to Decimal, preserving 0 and quantizing.
+
+    Returns None only when value is None, so a literal 0 is kept.
+    """
+    if value is None:
+        return None
+    value_dec = Decimal(str(value))
+    if step:
+        value_dec = value_dec.quantize(Decimal(str(step)))
+    return value_dec
+
+
+def keep_unchanged_datetime(new: Any, original: Any) -> Any:
+    """Return `original` when the widget value `new` is it at minute precision.
+
+    `st.datetime_input` drops seconds, microseconds and tzinfo, so an untouched
+    widget must not overwrite the stored value with that truncated copy.
+    """
+    if not isinstance(new, datetime) or not isinstance(original, datetime):
+        return new
+    truncated = original.replace(second=0, microsecond=0, tzinfo=None)
+    return original if new == truncated else new
+
+
+def convert_numpy_list_to_python(values: list, model: type[DeclarativeBase]) -> list:
+    """Convert a list of potentially numpy values to Python native types
+
+    Args:
+        values: List of values to convert
+        model: SQLAlchemy model class to get the primary key type from
+
+    Returns:
+        List with values converted to appropriate Python native types
+    """
+    return [convert_numpy_to_python(value, model) for value in values]
+
+
 def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
     """Convert numpy types to Python native types based on SQLAlchemy model primary key type
 
@@ -94,19 +152,6 @@ def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
         return str(value)
 
     return value
-
-
-def convert_numpy_list_to_python(values: list, model: type[DeclarativeBase]) -> list:
-    """Convert a list of potentially numpy values to Python native types
-
-    Args:
-        values: List of values to convert
-        model: SQLAlchemy model class to get the primary key type from
-
-    Returns:
-        List with values converted to appropriate Python native types
-    """
-    return [convert_numpy_to_python(value, model) for value in values]
 
 
 def row_to_python(row: pd.Series) -> dict[str, Any]:

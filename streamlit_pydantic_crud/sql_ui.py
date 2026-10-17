@@ -31,9 +31,10 @@ from streamlit_pydantic_crud.sa_model import (
 )
 from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
 from streamlit_pydantic_crud.typing_helpers import model_fields
-from streamlit_pydantic_crud.utils import (
+from streamlit_pydantic_crud.values import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
+    enum_value,
     row_to_python,
 )
 
@@ -507,9 +508,8 @@ class SqlUi:
                             item.value if isinstance(item, Enum) else str(item)
                             for item in value
                         ]
-                    elif isinstance(value, Enum):
-                        # Handle single enum
-                        validated_data[key] = value.value
+                    else:
+                        validated_data[key] = enum_value(value)
 
                 validated_rows.append(validated_data)
 

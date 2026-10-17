@@ -29,7 +29,7 @@ from streamlit_pydantic_crud.sa_model import (
     pk_name,
     tablename,
 )
-from streamlit_pydantic_crud.utils import convert_numpy_to_python
+from streamlit_pydantic_crud.values import convert_numpy_to_python
 
 
 class UpdateRow:

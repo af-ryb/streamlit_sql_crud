@@ -29,9 +29,11 @@ from streamlit_pydantic_crud.typing_helpers import (
     model_fields,
     unwrap_optional,
 )
-from streamlit_pydantic_crud.utils import (
+from streamlit_pydantic_crud.values import (
+    enum_value,
+    json_to_text,
     keep_unchanged_datetime,
-    parse_pg_array,
+    to_list,
 )
 
 
@@ -482,7 +484,7 @@ class PydanticInputGenerator:
         default always stays within its options.
         """
         result = []
-        for item in PydanticInputGenerator._to_list(existing_value):
+        for item in to_list(existing_value):
             member = enum_member(item, enum_type)
             if member is None:
                 logger.warning(f"Dropping unknown {enum_type.__name__} value {item!r}")
@@ -509,12 +511,12 @@ class PydanticInputGenerator:
         self, label: str, annotation: Any, existing_value: Any, key: str
     ) -> Any:
         """Render multiselect for regular lists"""
-        current_values = []
-        if existing_value is not None:
-            if isinstance(existing_value, (list, tuple)):
-                current_values = [str(item) for item in existing_value]
-            elif isinstance(existing_value, str):
-                current_values = parse_pg_array(existing_value)
+        """Items are stringified; a scalar other than str gives no values."""
+        current_values = (
+            [str(item) for item in to_list(existing_value)]
+            if isinstance(existing_value, (list, tuple, str))
+            else []
+        )
 
         return st.multiselect(
             label,
@@ -748,10 +750,9 @@ class PydanticInputGenerator:
         for i, opt in enumerate(options):
             if opt == value:
                 return i
-        target = value.value if isinstance(value, Enum) else value
+        target = enum_value(value)
         for i, opt in enumerate(options):
-            opt_val = opt.value if isinstance(opt, Enum) else opt
-            if opt_val == target:
+            if enum_value(opt) == target:
                 return i
         return None
 
@@ -776,27 +777,16 @@ class PydanticInputGenerator:
         return 0 if options else None
 
     @staticmethod
-    def _to_list(value: Any) -> list:
-        """Coerce a value into a list for multiselect defaults."""
-        if value is None:
-            return []
-        if isinstance(value, (list, tuple)):
-            return list(value)
-        if isinstance(value, str):
-            return parse_pg_array(value)
-        return [value]
-
-    @staticmethod
     def _resolve_multiselect_default(
         session_value: Any, explicit_default: Any, field_default: Any
     ) -> list:
         """Resolve a multiselect default list: session > explicit kw > default > []."""
         if session_value is not None:
-            return PydanticInputGenerator._to_list(session_value)
+            return to_list(session_value)
         if explicit_default is not None:
-            return PydanticInputGenerator._to_list(explicit_default)
+            return to_list(explicit_default)
         if field_default is not None:
-            return PydanticInputGenerator._to_list(field_default)
+            return to_list(field_default)
         return []
 
     @staticmethod
@@ -955,10 +945,7 @@ class PydanticInputGenerator:
         json_value = ""
         if existing_value is not None:
             try:
-                if isinstance(existing_value, (dict, list)):
-                    json_value = json.dumps(existing_value, indent=2)
-                else:
-                    json_value = str(existing_value)
+                json_value = json_to_text(existing_value)
             except Exception as e:
                 logger.warning(f"Got exception while render JSON, {e}")
                 json_value = str(existing_value)
