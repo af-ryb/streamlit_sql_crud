@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import input_fields
+from streamlit_pydantic_crud import input_fields, values
 from streamlit_pydantic_crud.input_fields import InputFields
-from streamlit_pydantic_crud.utils import parse_pg_array
+from streamlit_pydantic_crud.values import parse_pg_array
 from tests.test_input_fields_enum import RunMode
 
 NULLABLE = ("qty", "score", "price")
@@ -77,14 +77,14 @@ def _array_app() -> None:
 def test_array_string_value_uses_shared_parser(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A PostgreSQL array literal is parsed by utils.parse_pg_array."""
+    """A PostgreSQL array literal is parsed by values.parse_pg_array."""
     calls: list[str] = []
 
     def spy(value: str) -> list[str]:
         calls.append(value)
         return parse_pg_array(value)
 
-    monkeypatch.setattr(input_fields, "parse_pg_array", spy)
+    monkeypatch.setattr(values, "parse_pg_array", spy)
     at = AppTest.from_function(_array_app).run()
 
     assert not at.exception

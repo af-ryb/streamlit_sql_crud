@@ -7,9 +7,10 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import RelationshipDirection, RelationshipProperty, Session
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud import lib, read_cte
+from streamlit_pydantic_crud import read_cte
 from streamlit_pydantic_crud.create_delete_model import CreateRow, DeleteRows
-from streamlit_pydantic_crud.utils import pk_attr, pk_name
+from streamlit_pydantic_crud.display import get_pretty_name
+from streamlit_pydantic_crud.sa_model import pk_attr, pk_name
 
 
 class ReadManyRel:
@@ -92,7 +93,7 @@ def show_rel(
     read_many_rel = ReadManyRel(model, model_id, rel)
 
     exp_name = f"{rel.target} - {read_many_rel.other_col.name}"
-    pretty_name = lib.get_pretty_name(exp_name)
+    pretty_name = get_pretty_name(exp_name)
 
     with st.expander(pretty_name):
         tab_read, tab_create, tab_delete = st.tabs(["Read", "Create", "Delete"])

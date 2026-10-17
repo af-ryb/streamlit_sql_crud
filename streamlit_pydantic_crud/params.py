@@ -12,7 +12,8 @@ import streamlit as st
 from sqlalchemy.sql.elements import KeyedColumnElement
 from streamlit import session_state as ss
 
-from streamlit_pydantic_crud.filters import FkOpt, safe_python_type
+from streamlit_pydantic_crud.filters import FkOpt
+from streamlit_pydantic_crud.sa_model import safe_python_type
 
 
 def param_name(prefix: str, name: str) -> str:
@@ -69,13 +70,6 @@ def param_value(value: Any) -> str:
         return value.name
     if isinstance(value, FkOpt):
         return str(value.idx)
-    return str(value)
-
-
-def display_value(value: Any) -> str:
-    """Return the label of a filter option: the enum value or str()."""
-    if isinstance(value, Enum):
-        return str(value.value)
     return str(value)
 
 

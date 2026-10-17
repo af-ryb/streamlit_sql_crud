@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.create_delete_model import DeleteRows
+from streamlit_pydantic_crud.state import UPDATED_KEY
 from tests.conftest import Department, Employee
 
 
@@ -42,7 +43,7 @@ def clicked() -> Iterator[MagicMock]:
     target = "streamlit_pydantic_crud.create_delete_model"
     with (
         patch(f"{target}.st") as mock_st,
-        patch(f"{target}.ss", FakeState(stsql_updated=0)),
+        patch(f"{target}.ss", FakeState({UPDATED_KEY: 0})),
         patch(f"{target}.log") as mock_log,
         patch.object(DeleteRows, "get_rows_str", return_value=[]),
     ):

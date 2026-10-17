@@ -3,15 +3,20 @@ from decimal import Decimal
 from typing import Any, Final
 
 import streamlit as st
-from sqlalchemy import ARRAY, Numeric
+from sqlalchemy import Numeric
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from streamlit_datalist import stDatalist
 
+from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.filters import ExistingData, FkOpt
-from streamlit_pydantic_crud.lib import get_pretty_name
-from streamlit_pydantic_crud.utils import keep_unchanged_datetime, parse_pg_array
+from streamlit_pydantic_crud.sa_model import column_label, is_array_type
+from streamlit_pydantic_crud.values import (
+    coerce_decimal,
+    keep_unchanged_datetime,
+    to_list,
+)
 
 NO_INPUT: Final = object()
 """Returned for a column without a widget; callers must leave it unchanged."""
@@ -155,19 +160,6 @@ class InputFields:
             return None
         return str(input_value)
 
-    @staticmethod
-    def coerce_decimal(value: float | int | None, step: float | None) -> Decimal | None:
-        """Convert a numeric input to Decimal, preserving 0 and quantizing.
-
-        Returns None only when value is None, so a literal 0 is kept.
-        """
-        if value is None:
-            return None
-        value_dec = Decimal(str(value))
-        if step:
-            value_dec = value_dec.quantize(Decimal(str(step)))
-        return value_dec
-
     def input_number(
         self,
         col_name: str,
@@ -204,19 +196,17 @@ class InputFields:
         value_float = float(str(value)) if value is not None else None
         input_value = self.input_number(col_name, value_float, step, nullable)
 
-        return self.coerce_decimal(input_value, step)
+        return coerce_decimal(input_value, step)
 
     def input_array(self, col_name: str, col_type, col_value=None) -> list[Any]:
         """Handle ARRAY column input with multiselect"""
         pretty_name = get_pretty_name(col_name)
 
-        # Convert current value to list
-        current_values = []
-        if col_value is not None:
-            if isinstance(col_value, (list, tuple)):
-                current_values = list(col_value)
-            elif isinstance(col_value, str):
-                current_values = parse_pg_array(col_value)
+        """Only lists, tuples and PG array literals preselect values; any other
+        scalar gives none (to_list would wrap it)."""
+        current_values = (
+            to_list(col_value) if isinstance(col_value, (list, tuple, str)) else []
+        )
 
         # Get existing values for options (if available)
         existing_values = self.existing_data.text.get(col_name, set())
@@ -263,10 +253,7 @@ class InputFields:
             input_value = col_value
         elif len(col.foreign_keys) > 0:
             input_value = self.input_fk(col_name, col_value)
-        elif isinstance(col.type, ARRAY):
-            input_value = self.input_array(col_name, col.type, col_value)
-        elif "ARRAY" in str(col.type).upper():
-            # Fallback for ARRAY types that don't match isinstance check
+        elif is_array_type(col.type):
             input_value = self.input_array(col_name, col.type, col_value)
         elif isinstance(col.type, SQLEnum):
             input_value = self.input_enum(col_name, col.type, col_value)
@@ -302,6 +289,6 @@ class InputFields:
         The next render then re-seeds each widget from its `value` argument.
         """
         for col in self.model.__table__.columns:
-            key = f"{self.key_prefix}_{col.description or col.name}"
+            key = f"{self.key_prefix}_{column_label(col)}"
             if key in st.session_state:
                 del st.session_state[key]

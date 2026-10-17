@@ -84,6 +84,14 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    - `update_model.py` - Manages update operations
    - `read_cte.py` - Complex read queries with CTEs (Common Table Expressions)
    - `many.py` - Many-to-many relationship management
+   - `lib.py` - CRUD logging, shared CRUD dialog, database error messages
+   - `state.py` - Per-instance UI state, `UPDATED_KEY`, cache TTL, `set_state`
+
+4. **Core helpers** (leaf modules, no Streamlit state; import only each other):
+   - `typing_helpers.py` - Annotation inspection (Optional, enum, list, `model_fields`)
+   - `sa_model.py` - SQLAlchemy introspection (PK, table name, column label/types)
+   - `values.py` - Value coercion (PG arrays, numpy/DataFrame cells, enum, JSON)
+   - `display.py` - Labels and table formatting (`get_pretty_name`, `convert_arrow`)
 
 ### Key Architectural Patterns
 

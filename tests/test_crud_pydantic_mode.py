@@ -43,7 +43,7 @@ def _app(db: str, schema: bool) -> None:
     from streamlit_pydantic_crud.create_delete_model import (  # noqa: PLC0415
         CreateRow,
     )
-    from streamlit_pydantic_crud.lib import set_state  # noqa: PLC0415
+    from streamlit_pydantic_crud.state import UPDATED_KEY, set_state  # noqa: PLC0415
     from streamlit_pydantic_crud.update_model import UpdateRow  # noqa: PLC0415
     from tests.conftest import Department, Employee  # noqa: PLC0415
     from tests.test_crud_pydantic_mode import (  # noqa: PLC0415
@@ -52,7 +52,7 @@ def _app(db: str, schema: bool) -> None:
         EmployeeUpdate,
     )
 
-    set_state("stsql_updated", 0)
+    set_state(UPDATED_KEY, 0)
     conn = st.connection("sql", url=f"sqlite:///{db}")
     fk: ForeignKeyOptions = {
         "department_id": {

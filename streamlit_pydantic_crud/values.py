@@ -1,52 +1,45 @@
-"""Utility functions for streamlit_sql package"""
+"""Coerce values between the database, DataFrames and Streamlit widgets.
 
-import types
+Leaf module: depends on numpy/pandas and `sa_model` only.
+"""
+
+import json
 from datetime import datetime
-from typing import Any, Union, get_args, get_origin
+from decimal import Decimal
+from enum import Enum
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import JSON, Column
-from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
-from sqlalchemy.types import TypeDecorator, TypeEngine
+from sqlalchemy.orm import DeclarativeBase
+
+from streamlit_pydantic_crud.sa_model import pk_column
 
 
-def unwrap_optional(tp: Any) -> tuple[Any, bool]:
-    """Split ``X | None`` / ``Optional[X]`` into ``(X, True)``.
+def enum_value(value: Any) -> Any:
+    """Return ``value.value`` for an enum member, else `value` unchanged."""
+    return value.value if isinstance(value, Enum) else value
 
-    Anything else, including unions of several non-None types, is returned
-    unchanged as ``(tp, False)``.
+
+def json_to_text(value: Any) -> str:
+    """Render a JSON value as text: dicts and lists indented, others via str()."""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, indent=2)
+    return str(value)
+
+
+def to_list(value: Any) -> list:
+    """Coerce a value into a list: None → [], a PG array literal is parsed.
+
+    Lists and tuples are copied; any other value becomes a one-item list.
     """
-    if is_union(tp):
-        args = get_args(tp)
-        non_none = [arg for arg in args if arg is not type(None)]
-        if len(args) == 2 and len(non_none) == 1:
-            return non_none[0], True
-    return tp, False
-
-
-def is_json_type(col_type: TypeEngine[Any]) -> bool:
-    """Return True for JSON-like SQLAlchemy types (``JSON``, ``JSONB``, wrappers)."""
-    if isinstance(col_type, TypeDecorator):
-        return is_json_type(col_type.impl_instance)
-    return isinstance(col_type, JSON)
-
-
-def keep_unchanged_datetime(new: Any, original: Any) -> Any:
-    """Return `original` when the widget value `new` is it at minute precision.
-
-    `st.datetime_input` drops seconds, microseconds and tzinfo, so an untouched
-    widget must not overwrite the stored value with that truncated copy.
-    """
-    if not isinstance(new, datetime) or not isinstance(original, datetime):
-        return new
-    truncated = original.replace(second=0, microsecond=0, tzinfo=None)
-    return original if new == truncated else new
-
-
-def is_union(tp: Any) -> bool:
-    """Return True for both ``typing.Union[...]`` and PEP 604 ``X | Y``."""
-    return get_origin(tp) in (Union, types.UnionType)
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    if isinstance(value, str):
+        return parse_pg_array(value)
+    return [value]
 
 
 def parse_pg_array(value: str) -> list[str]:
@@ -90,31 +83,42 @@ def _append_item(items: list[str], chars: list[str], quoted: bool) -> None:
         items.append(item)
 
 
-def tablename(model: type[DeclarativeBase]) -> str:
-    """Return the model's ``__tablename__``, or its class name when it has none."""
-    return getattr(model, "__tablename__", model.__name__)
+def coerce_decimal(value: float | int | None, step: float | None) -> Decimal | None:
+    """Convert a numeric input to Decimal, preserving 0 and quantizing.
 
-
-def pk_column(model: type[DeclarativeBase]) -> Column:
-    """Return the single primary-key column of the model.
-
-    Composite primary keys are out of scope and raise NotImplementedError.
+    Returns None only when value is None, so a literal 0 is kept.
     """
-    primary_key = model.__mapper__.primary_key
-    if len(primary_key) != 1:
-        msg = "composite primary keys are not supported"
-        raise NotImplementedError(msg)
-    return primary_key[0]
+    if value is None:
+        return None
+    value_dec = Decimal(str(value))
+    if step:
+        value_dec = value_dec.quantize(Decimal(str(step)))
+    return value_dec
 
 
-def pk_name(model: type[DeclarativeBase]) -> str:
-    """Return the primary-key column name of the model."""
-    return pk_column(model).key
+def keep_unchanged_datetime(new: Any, original: Any) -> Any:
+    """Return `original` when the widget value `new` is it at minute precision.
+
+    `st.datetime_input` drops seconds, microseconds and tzinfo, so an untouched
+    widget must not overwrite the stored value with that truncated copy.
+    """
+    if not isinstance(new, datetime) or not isinstance(original, datetime):
+        return new
+    truncated = original.replace(second=0, microsecond=0, tzinfo=None)
+    return original if new == truncated else new
 
 
-def pk_attr(model: type[DeclarativeBase]) -> InstrumentedAttribute:
-    """Return the mapped primary-key attribute, for `== x` / `.in_(...)` clauses."""
-    return getattr(model, pk_name(model))
+def convert_numpy_list_to_python(values: list, model: type[DeclarativeBase]) -> list:
+    """Convert a list of potentially numpy values to Python native types
+
+    Args:
+        values: List of values to convert
+        model: SQLAlchemy model class to get the primary key type from
+
+    Returns:
+        List with values converted to appropriate Python native types
+    """
+    return [convert_numpy_to_python(value, model) for value in values]
 
 
 def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
@@ -148,19 +152,6 @@ def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
         return str(value)
 
     return value
-
-
-def convert_numpy_list_to_python(values: list, model: type[DeclarativeBase]) -> list:
-    """Convert a list of potentially numpy values to Python native types
-
-    Args:
-        values: List of values to convert
-        model: SQLAlchemy model class to get the primary key type from
-
-    Returns:
-        List with values converted to appropriate Python native types
-    """
-    return [convert_numpy_to_python(value, model) for value in values]
 
 
 def row_to_python(row: pd.Series) -> dict[str, Any]:

@@ -8,6 +8,8 @@ from collections.abc import Callable
 
 from streamlit.testing.v1 import AppTest
 
+from streamlit_pydantic_crud.state import UPDATED_KEY
+
 
 def df_id(at: AppTest) -> str:
     """Return the element id of the SqlUi dataframe."""
@@ -21,7 +23,7 @@ def test_dataframe_remounts_after_write(run_app: Callable[[str], AppTest]) -> No
     at.run()
     assert df_id(at) == before
 
-    at.session_state["stsql_updated"] += 1
+    at.session_state[UPDATED_KEY] += 1
     at.run()
 
     assert not at.exception

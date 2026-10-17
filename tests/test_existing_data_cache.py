@@ -12,6 +12,7 @@ from sqlalchemy import Column, ForeignKey, Integer, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud.filters import ExistingData
+from streamlit_pydantic_crud.state import UPDATED_KEY
 from tests.conftest import Department, Employee
 
 
@@ -35,7 +36,7 @@ class _Orphan(_OrphanBase):
 def _fresh_cache() -> Iterator[None]:
     """Start each test with empty caches and the library's update counter."""
     st.cache_data.clear()
-    st.session_state["stsql_updated"] = 1
+    st.session_state[UPDATED_KEY] = 1
     yield
     st.cache_data.clear()
 

@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from streamlit_pydantic_crud.create_delete_model import CreateRow
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.input_fields import InputFields
-from streamlit_pydantic_crud.lib import set_state
+from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 from streamlit_pydantic_crud.update_model import UpdateRow
 
 DB = os.environ["CRUD_TEST_DB"]
@@ -94,7 +94,7 @@ with Session(eng) as s:
         s.commit()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
-set_state("stsql_updated", 0)
+set_state(UPDATED_KEY, 0)
 
 
 def render_fields(prefix: str, with_row: bool) -> None:

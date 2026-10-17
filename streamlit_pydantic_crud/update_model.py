@@ -11,24 +11,25 @@ from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import many
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.form_options import load_form_options
 from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.lib import (
     format_database_error,
-    get_pretty_name,
     log,
-    set_state,
     show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.utils import (
-    convert_numpy_to_python,
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
     pk_attr,
     pk_column,
     pk_name,
     tablename,
 )
+from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
+from streamlit_pydantic_crud.values import convert_numpy_to_python
 
 
 class UpdateRow:
@@ -65,7 +66,7 @@ class UpdateRow:
         self.dt_filters = dt_filters or {}
         self.no_dt_filters = no_dt_filters or {}
 
-        set_state("stsql_updated", 0)
+        set_state(UPDATED_KEY, 0)
 
         with conn.session as s:
             # Load row with many-to-many relationships if needed
@@ -107,7 +108,7 @@ class UpdateRow:
             # Get current row values for pre-populating form
             self.current_values = {}
             for col in self.model.__table__.columns:
-                col_name = col.description or col.name
+                col_name = column_label(col)
                 if col_name and hasattr(self.row, col_name):
                     value = getattr(self.row, col_name)
                     # Convert certain types for proper display
@@ -177,7 +178,7 @@ class UpdateRow:
         updated = {}
 
         for col in cols:
-            col_name = col.description or col.name
+            col_name = column_label(col)
             if col_name is None:
                 continue
 
@@ -237,7 +238,7 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
 
@@ -248,7 +249,7 @@ class UpdateRow:
                 return True, f"Updated successfully {row}"
 
         except Exception as e:
-            ss.stsql_updated += 1
+            ss[UPDATED_KEY] += 1
             table_name = tablename(self.model)
             log("UPDATE", table_name, validated_data.model_dump(), success=False)
             logger.exception(f"Update failed for {table_name}")
@@ -269,12 +270,12 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 table_name = tablename(self.model)
                 log("UPDATE", table_name, row)
                 return True, f"Updated successfully {row}"
             except Exception as e:
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
                 table_name = tablename(self.model)

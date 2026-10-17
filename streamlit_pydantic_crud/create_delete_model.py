@@ -10,19 +10,24 @@ from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.filters import ExistingData
 from streamlit_pydantic_crud.form_options import load_form_options
 from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.lib import (
-    CACHE_TTL_SECONDS,
     format_database_error,
-    get_pretty_name,
     log,
-    set_state,
     show_crud_dialog,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.utils import pk_attr, pk_column, pk_name, tablename
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
+    pk_attr,
+    pk_column,
+    pk_name,
+    tablename,
+)
+from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY, set_state
 
 
 class CreateRow:
@@ -52,7 +57,7 @@ class CreateRow:
         self.key = key
         self.key_prefix = f"{key}_create"
 
-        set_state("stsql_updated", 0)
+        set_state(UPDATED_KEY, 0)
 
         if not self.create_schema:
             """SQLAlchemy-mode inputs; Pydantic forms never read them."""
@@ -114,7 +119,7 @@ class CreateRow:
         cols = self.model.__table__.columns
         created = {}
         for col in cols:
-            col_name = col.description or col.name
+            col_name = column_label(col)
             if col_name is None:
                 continue
 
@@ -187,7 +192,7 @@ class CreateRow:
                     getattr(row, relationship_name).extend(related_objects)
 
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 table_name = tablename(self.model)
                 log("CREATE", table_name, row)
 
@@ -199,7 +204,7 @@ class CreateRow:
                 return True, f"Created successfully {row}"
 
         except Exception as e:
-            ss.stsql_updated += 1
+            ss[UPDATED_KEY] += 1
             table_name = tablename(self.model)
             log("CREATE", table_name, validated_data.model_dump(), success=False)
             logger.exception(f"Create failed for {table_name}")
@@ -215,12 +220,12 @@ class CreateRow:
             with self.conn.session as s:
                 s.add(row)
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 table_name = tablename(self.model)
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"
         except Exception as e:
-            ss.stsql_updated += 1
+            ss[UPDATED_KEY] += 1
             table_name = tablename(self.model)
             log("CREATE", table_name, created, success=False)
             logger.exception(f"Create failed for {table_name}")
@@ -286,7 +291,7 @@ class DeleteRows:
         st.subheader("Delete selected items?")
 
         table_name = tablename(self.model)
-        updated = ss.get("stsql_updated", 0)
+        updated = ss.get(UPDATED_KEY, 0)
         rows_str = self.get_rows_str(table_name, self.rows_id, updated)
         st.dataframe({pretty_name: rows_str}, hide_index=True)
 
@@ -307,9 +312,9 @@ class DeleteRows:
                     s.delete(lanc)
 
                 s.commit()
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
             except Exception as e:
-                ss.stsql_updated += 1
+                ss[UPDATED_KEY] += 1
                 log("DELETE", table_name, self.rows_id, success=False)
                 logger.exception(f"Delete failed for {table_name}")
                 return False, format_database_error(e)

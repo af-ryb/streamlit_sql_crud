@@ -6,7 +6,7 @@ import pytest
 from loguru import logger
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import sql_ui
+from streamlit_pydantic_crud import state
 
 NOTICE = "ORM options on read_instance are ignored"
 
@@ -14,12 +14,12 @@ NOTICE = "ORM options on read_instance are ignored"
 @pytest.fixture
 def messages() -> Iterator[list[str]]:
     """Capture loguru messages and reset the once-per-key notice registry."""
-    sql_ui.OPTIONS_NOTICE_KEYS.clear()
+    state.OPTIONS_NOTICE_KEYS.clear()
     captured: list[str] = []
     sink_id = logger.add(lambda m: captured.append(str(m)), level="DEBUG")
     yield captured
     logger.remove(sink_id)
-    sql_ui.OPTIONS_NOTICE_KEYS.clear()
+    state.OPTIONS_NOTICE_KEYS.clear()
 
 
 def markdown(at: AppTest, prefix: str) -> str:

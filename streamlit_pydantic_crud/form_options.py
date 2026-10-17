@@ -13,7 +13,7 @@ from streamlit.connections.sql_connection import SQLConnection
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.filters import custom_foreign_opts
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.utils import pk_name
+from streamlit_pydantic_crud.sa_model import foreign_key_column_names, pk_name
 
 
 def load_form_options(
@@ -119,12 +119,3 @@ def handle_option_load_error(kind: str, field_name: str) -> None:
     """
     logger.exception(f"Failed to load {kind} data for {field_name}")
     st.warning(f"Could not load {kind} options for '{field_name}'.")
-
-
-def foreign_key_column_names(model: type[DeclarativeBase]) -> set[str]:
-    """Return the names of the model's foreign-key columns."""
-    return {
-        col.description
-        for col in model.__table__.columns
-        if col.foreign_keys and col.description
-    }

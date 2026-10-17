@@ -24,9 +24,9 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
 )
 from streamlit_pydantic_crud.form_options import (
-    foreign_key_column_names,
     load_form_options,
 )
+from streamlit_pydantic_crud.sa_model import foreign_key_column_names
 
 
 class Base(DeclarativeBase):

@@ -8,9 +8,12 @@ from typing import Any, get_args, get_origin
 from pydantic import BaseModel, Field
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema as build,
+)
+from streamlit_pydantic_crud.typing_helpers import (
+    is_enum_annotation,
+    is_enum_list_annotation,
 )
 
 
@@ -122,10 +125,9 @@ def test_ref_to_enum_reuses_one_class_per_def() -> None:
 
 def test_ref_enum_renders_as_selectbox() -> None:
     model = build(Person.model_json_schema())
-    gen = PydanticInputGenerator(model)
-    assert gen._is_enum_field(_annotation(model, "color"))
-    assert gen._is_enum_field(_annotation(model, "fav"))
-    assert gen._is_enum_list_field(_annotation(model, "palette"))
+    assert is_enum_annotation(_annotation(model, "color"))
+    assert is_enum_annotation(_annotation(model, "fav"))
+    assert is_enum_list_annotation(_annotation(model, "palette"))
 
 
 def test_built_model_validates_enum_values() -> None:

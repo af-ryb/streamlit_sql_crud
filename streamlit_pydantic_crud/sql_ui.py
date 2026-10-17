@@ -1,47 +1,48 @@
-import json
-import math
 import warnings
-from collections.abc import Callable, Iterable
-from decimal import Decimal
+from collections.abc import Callable
 from enum import Enum
-from functools import partial
-from typing import Any
 
 import pandas as pd
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import CTE, Numeric, Select, select
+from sqlalchemy import CTE, Select, select
 from sqlalchemy.orm import DeclarativeBase, selectinload
-from sqlalchemy.types import Enum as SQLEnum
 from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
 from streamlit.elements.arrow import DataframeState
 
 from streamlit_pydantic_crud import create_delete_model, lib, read_cte, update_model
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
-from streamlit_pydantic_crud.pydantic_utils import (
-    PydanticSQLAlchemyConverter,
-    model_fields,
+from streamlit_pydantic_crud.display import (
+    DfStyleFormatter,
+    convert_arrow,
+    get_pretty_name,
+    numeric_formatters,
 )
-from streamlit_pydantic_crud.state import UPDATED_KEY, UiState, get_ui_state
-from streamlit_pydantic_crud.utils import (
-    convert_numpy_list_to_python,
-    convert_numpy_to_python,
-    is_json_type,
+from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
+from streamlit_pydantic_crud.sa_model import (
+    column_label,
     pk_attr,
     pk_name,
-    row_to_python,
     tablename,
+)
+from streamlit_pydantic_crud.state import (
+    OPTIONS_NOTICE_KEYS,
+    UPDATED_KEY,
+    UiState,
+    get_ui_state,
+    set_state,
+)
+from streamlit_pydantic_crud.typing_helpers import model_fields
+from streamlit_pydantic_crud.values import (
+    convert_numpy_list_to_python,
+    convert_numpy_to_python,
+    enum_value,
+    row_to_python,
 )
 
 OPTS_ITEMS_PAGE = (50, 100, 200, 500, 1000, None)
-
-"""SqlUi keys already told that read_instance ORM options are ignored."""
-OPTIONS_NOTICE_KEYS: set[str] = set()
-
-"""Per-column formatter accepted by pandas ``Styler.format``."""
-DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
 
 
 class SqlUi:
@@ -244,7 +245,7 @@ class SqlUi:
         # Create UI
         self.col_filter = self.filter()
         stmt_no_pag = read_cte.get_stmt_no_pag(self.cte, self.col_filter)
-        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss.stsql_updated)
+        qtty_rows = read_cte.get_qtty_rows(self.conn, stmt_no_pag, ss[UPDATED_KEY])
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
         order_col = self.cte.columns.get(pk_name(self.edit_create_model))
         stmt_pag = read_cte.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
@@ -274,14 +275,14 @@ class SqlUi:
             raise ValueError(msg)
 
     def set_initial_state(self) -> None:
-        lib.set_state(UPDATED_KEY, 1)
+        set_state(UPDATED_KEY, 1)
 
     def set_structure(self) -> None:
         self.header_container = st.container()
         self.data_container = st.container()
         self.pag_container = st.container()
 
-        table_name = lib.get_pretty_name(tablename(self.edit_create_model))
+        table_name = get_pretty_name(tablename(self.edit_create_model))
         self.header_container.header(table_name, divider="orange")
 
         self.expander_container = self.header_container.expander(
@@ -333,13 +334,13 @@ class SqlUi:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
-            filter_cols_name = [col.description or col.name for col in self.cte.columns]
+            filter_cols_name = [column_label(col) for col in self.cte.columns]
 
         with self.conn.session as s:
             existing = read_cte.get_existing_values(
                 _session=s,
                 cte=self.cte,
-                updated=ss.stsql_updated,
+                updated=ss[UPDATED_KEY],
                 available_col_filter=filter_cols_name,
             )
 
@@ -373,40 +374,6 @@ class SqlUi:
 
         return items_per_page, page
 
-    def convert_arrow(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = self.cte.columns
-        for col in cols:
-            col_name = col.name
-            if col_name in df.columns:
-                if isinstance(col.type, SQLEnum):
-                    df[col_name] = df[col_name].map(
-                        lambda v: v.value if isinstance(v, Enum) else v
-                    )
-                elif is_json_type(col.type):
-                    # Handle JSON columns for display
-                    df[col_name] = df[col_name].apply(
-                        lambda x: (
-                            json.dumps(x, indent=2)
-                            if x is not None and isinstance(x, (dict, list))
-                            else str(x)
-                            if x is not None
-                            else None
-                        )
-                    )
-                elif "ARRAY" in str(col.type).upper():
-                    # Handle ARRAY columns for display
-                    df[col_name] = df[col_name].apply(
-                        lambda x: (
-                            ", ".join(map(str, x))
-                            if x is not None and isinstance(x, (list, tuple))
-                            else str(x)
-                            if x is not None
-                            else None
-                        )
-                    )
-
-        return df
-
     def get_df(
         self,
         stmt_pag: Select,
@@ -417,7 +384,7 @@ class SqlUi:
         else:
             with self.conn.session as s:
                 df = pd.read_sql(stmt_pag, s.connection())
-            df = self.convert_arrow(df)
+            df = convert_arrow(self.cte.columns, df)
 
         return df
 
@@ -505,9 +472,8 @@ class SqlUi:
                             item.value if isinstance(item, Enum) else str(item)
                             for item in value
                         ]
-                    elif isinstance(value, Enum):
-                        # Handle single enum
-                        validated_data[key] = value.value
+                    else:
+                        validated_data[key] = enum_value(value)
 
                 validated_rows.append(validated_data)
 
@@ -550,7 +516,7 @@ class SqlUi:
 
         The selection holds row positions; a new key drops it once rows shift.
         """
-        return f"{self.key}_df_sql_ui_{ss.stsql_updated}"
+        return f"{self.key}_df_sql_ui_{ss[UPDATED_KEY]}"
 
     @staticmethod
     def get_rows_selected(selection_state: DataframeState | None) -> list[int]:
@@ -635,28 +601,3 @@ class SqlUi:
                 key=self.key,
             )
             delete_rows.show_dialog()
-
-
-def numeric_formatters(cte: CTE, columns: Iterable[str]) -> DfStyleFormatter:
-    """Return Styler formatters for the Numeric/Float columns of `cte` in `columns`.
-
-    Styler otherwise shows every float with 6 decimals (50000.000000).
-    """
-    names = set(columns)
-    return {
-        col.name: partial(format_number, scale=col.type.scale)
-        for col in cte.columns
-        if col.name in names and isinstance(col.type, Numeric)
-    }
-
-
-def format_number(value: object, scale: int | None = None) -> str:
-    """Format a number with `scale` decimals, or its shortest repr if None.
-
-    Missing, infinite and non-numeric values keep their plain str().
-    """
-    if not isinstance(value, float | int | Decimal) or not math.isfinite(value):
-        return str(value)
-    if scale is not None:
-        return f"{value:.{scale}f}"
-    return str(value)
