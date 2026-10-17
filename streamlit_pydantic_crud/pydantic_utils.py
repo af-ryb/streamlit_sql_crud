@@ -18,7 +18,12 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     OperationType,
 )
-from streamlit_pydantic_crud.utils import parse_pg_array, tablename, unwrap_optional
+from streamlit_pydantic_crud.utils import (
+    keep_unchanged_datetime,
+    parse_pg_array,
+    tablename,
+    unwrap_optional,
+)
 from streamlit_pydantic_crud.utils import pk_name as get_pk_name
 
 
@@ -734,13 +739,17 @@ class PydanticInputGenerator:
     def _render_datetime_input_widget(
         label: str, widget_kwargs: dict[str, Any], existing_value: Any, key: str
     ) -> Any:
-        """Render datetime input widget."""
-        return st.datetime_input(
+        """Render datetime input widget.
+
+        An untouched widget returns `existing_value` with its full precision.
+        """
+        value = st.datetime_input(
             label,
             value=existing_value,
             key=key,
             **widget_kwargs,
         )
+        return keep_unchanged_datetime(value, existing_value)
 
     @staticmethod
     def match_option(value: Any, options: list) -> int | None:

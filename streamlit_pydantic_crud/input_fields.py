@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Final
 
 import streamlit as st
 from sqlalchemy import ARRAY, Numeric
@@ -11,7 +11,10 @@ from streamlit_datalist import stDatalist
 
 from streamlit_pydantic_crud.filters import ExistingData, FkOpt
 from streamlit_pydantic_crud.lib import get_pretty_name
-from streamlit_pydantic_crud.utils import parse_pg_array
+from streamlit_pydantic_crud.utils import keep_unchanged_datetime, parse_pg_array
+
+NO_INPUT: Final = object()
+"""Returned for a column without a widget; callers must leave it unchanged."""
 
 
 class InputFields:
@@ -245,6 +248,10 @@ class InputFields:
         return selected_values
 
     def get_input_value(self, col: KeyedColumnElement, col_value) -> Any:
+        """Render the widget for `col` and return its value.
+
+        Returns `NO_INPUT` for a type without a widget (e.g. JSON).
+        """
         col_name = col.description
         if col_name is None:
             msg = "Column has no name; cannot build an input for it"
@@ -277,13 +284,15 @@ class InputFields:
             scale = col.type.scale
             input_value = self.input_numeric(col_name, scale, col_value, col.nullable)
         elif col.type.python_type is datetime:
-            input_value = st.datetime_input(pretty_name, value=col_value, key=key)
+            input_value = keep_unchanged_datetime(
+                st.datetime_input(pretty_name, value=col_value, key=key), col_value
+            )
         elif col.type.python_type is date:
             input_value = st.date_input(pretty_name, value=col_value, key=key)
         elif col.type.python_type is bool:
             input_value = st.checkbox(pretty_name, value=col_value, key=key)
         else:
-            input_value = None
+            input_value = NO_INPUT
 
         return input_value
 

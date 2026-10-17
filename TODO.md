@@ -99,10 +99,13 @@ Leftovers:
 - [x] Unsaved edits reappear when the edit dialog is reopened on the same row (closed
   with ×): widget keys lack the row id (`update_model.py:65`, `input_fields.py:180`)
   — done: dialogs rerun on dismiss and opening edit/create resets the form state
-- [ ] No-schema edit save overwrites an untouched JSON column with JSON `null`
-  (data loss; seen on `test_data_types.metadata_json` in the example app)
-- [ ] No-schema edit save truncates an untouched datetime to whole minutes
-  (`created_datetime` 09:33:25.08 → 09:33:00)
+- [x] No-schema edit save overwrites an untouched JSON column with JSON `null`
+  (data loss; seen on `test_data_types.metadata_json` in the example app) —
+  columns without a widget now return `NO_INPUT` and are left out of the save
+- [x] No-schema edit save truncates an untouched datetime to whole minutes
+  (`created_datetime` 09:33:25.08 → 09:33:00) — `keep_unchanged_datetime`
+  keeps the stored value when the minute-precision widget is unchanged (also
+  in Pydantic mode)
 
 ## Step 4 — API decisions
 

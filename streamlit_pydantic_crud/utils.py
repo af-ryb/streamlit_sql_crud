@@ -1,6 +1,7 @@
 """Utility functions for streamlit_sql package"""
 
 import types
+from datetime import datetime
 from typing import Any, Union, get_args, get_origin
 
 import numpy as np
@@ -29,6 +30,18 @@ def is_json_type(col_type: TypeEngine[Any]) -> bool:
     if isinstance(col_type, TypeDecorator):
         return is_json_type(col_type.impl_instance)
     return isinstance(col_type, JSON)
+
+
+def keep_unchanged_datetime(new: Any, original: Any) -> Any:
+    """Return `original` when the widget value `new` is it at minute precision.
+
+    `st.datetime_input` drops seconds, microseconds and tzinfo, so an untouched
+    widget must not overwrite the stored value with that truncated copy.
+    """
+    if not isinstance(new, datetime) or not isinstance(original, datetime):
+        return new
+    truncated = original.replace(second=0, microsecond=0, tzinfo=None)
+    return original if new == truncated else new
 
 
 def is_union(tp: Any) -> bool:
