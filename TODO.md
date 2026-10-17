@@ -135,8 +135,23 @@ Leftovers:
 - [x] Stage 3: `dialogs/` package (`frame`, `create`, `edit`, `delete`, `persist.py`
   with the shared M2M save + error block); `action_btns` → `sql_ui`;
   `create_delete_model.py`, `update_model.py`, `dialogs.py` removed
-- [ ] Stage 4: split `pydantic_utils` into `pydantic_form/` (field_info,
-  option_resolve, widgets, generator)
+- [x] Stage 4: split `pydantic_utils` into `pydantic_form/` (field_info,
+  option_resolve, widgets, generator); `validate_schema_compatibility` →
+  `schema_check.py`; `PydanticSQLAlchemyConverter` and `pydantic_utils.py` removed;
+  `state.clear_state_keys` and `widgets.nullable_number_input` shared
+- [ ] Stage 5 — group modules into sub-packages so the public classes stand out (pure
+  `git mv` + import updates, own PR after stage 4). Root keeps only `__init__.py`,
+  `sql_ui.py`, `pydantic_ui.py`, `config_types.py`, `state.py`.
+  - `helpers/` — leaf modules: `typing.py` (← `typing_helpers.py`), `sa_model.py`,
+    `values.py`, `display.py`, `logs.py`, `db_errors.py`
+  - `table/` — read side: `query.py`, `filter_ui.py`, `params.py`, `pagination.py`,
+    `one_to_many.py`
+  - `forms/` — form fields in both modes: `sa_fields.py` (← `input_fields.py`),
+    `options.py` (← `form_options.py`), `schema_builder.py`, `pydantic/`
+    (← `pydantic_form/`), plus `schema_check.py`
+  - `dialogs/` — unchanged
+  - Dependency direction helpers → table/forms → dialogs → sql_ui; add an
+    import-graph test enforcing it. Update test imports and every string patch target.
 
 Side findings (stage 1, not fixed — behavior-preserving refactor):
 - [ ] `update_model.py` (~line 115) applies the PK-typed `convert_numpy_to_python` to
@@ -144,9 +159,10 @@ Side findings (stage 1, not fixed — behavior-preserving refactor):
 - [ ] `stsql_updated` is seeded with 1 by `SqlUi` but with 0 by the dialogs and
   `show_crud_dialog` (`set_state(UPDATED_KEY, ...)`)
 - [ ] `PydanticCrudUi.__init__` builds `PydanticInputGenerator` and session state twice
-- [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`; unreachable guards in
-  `_render_foreign_key_selectbox`/`_render_many_to_many_multiselect`;
-  `if operation == "read": pass`; `if col_name is None` after `column_label`
+- [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`;
+  `if col_name is None` after `column_label` (the guards in
+  `_render_foreign_key_selectbox`/`_render_many_to_many_multiselect` and
+  `if operation == "read": pass` were removed in stage 4)
 - [ ] `one_to_many.ReadManyRel.other_model` looks the model up inline (raises
   StopIteration/AttributeError) instead of `sa_model.model_by_tablename` (returns None)
 - [ ] `InputFields.get_input_value` uses `col.description` (raises when None) rather
@@ -173,3 +189,19 @@ Side findings (stage 3, not fixed — behavior-preserving refactor):
 - [ ] `CreateRow`/`UpdateRow` success paths still repeat `ss[UPDATED_KEY] += 1`,
   `log(...)` and the form-data cleanup; a `handle_save_ok` could share them
 - [ ] Code comments in the dialogs still use `#` instead of the triple-quoted style
+
+Side findings (stage 4, not fixed — behavior-preserving refactor):
+- [ ] `PydanticCrudUi.__init__` still builds the generator twice (kept: each build
+  runs `get_pydantic_field_info`, which calls user `default_factory`s, so dropping
+  one is observable)
+- [ ] The M2M fallback (options not loaded) logs two warnings; the second ("not found
+  in foreign_key_options") always fires there and is misleading. Loguru records of
+  the moved warnings now come from `pydantic_form.*` / `schema_check`
+- [ ] Clearing an optional JSON field on edit stores JSON `null`, not SQL NULL
+  (SQLAlchemy `JSON` without `none_as_null=True`), seen on `metadata_json`
+- [ ] Example "Session State Demo": after `update_session_data` the text inputs and
+  selectbox show stale/blank values while session data holds the loaded record
+  (number inputs update); same on the stage 3 base
+- [ ] `render_field` takes `annotation` separately though `field_info["annotation"]`
+  holds it; `foreign_key_data` / `many_to_many_data` are untyped dicts
+- [ ] `pydantic_ui.py` comments still use `#` instead of the triple-quoted style

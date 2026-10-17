@@ -14,10 +14,11 @@ from streamlit_pydantic_crud.config_types import (
     OperationType,
 )
 from streamlit_pydantic_crud.display import field_label
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
+from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
 )
+from streamlit_pydantic_crud.state import clear_state_keys
 from streamlit_pydantic_crud.typing_helpers import model_fields
 
 
@@ -169,11 +170,7 @@ class PydanticUi[T: BaseModel]:
         if self.session_state_key in st.session_state:
             del st.session_state[self.session_state_key]
 
-        # Also clear individual widget keys
-        for field_name in model_fields(self.schema):
-            widget_key = f"{self.key}_{field_name}"
-            if widget_key in st.session_state:
-                del st.session_state[widget_key]
+        self._clear_widget_keys()
 
     def update_session_data(self, data: dict[str, Any] | BaseModel | None) -> None:
         """Update session state with new data.
@@ -190,11 +187,8 @@ class PydanticUi[T: BaseModel]:
             else:
                 data_dict = data
 
-            # Clear existing widget keys first to avoid Streamlit error
-            for field_name in model_fields(self.schema):
-                widget_key = f"{self.key}_{field_name}"
-                if widget_key in st.session_state:
-                    del st.session_state[widget_key]
+            """Clear existing widget keys first to avoid a Streamlit error."""
+            self._clear_widget_keys()
 
             # Update the main session state key
             st.session_state[self.session_state_key] = data_dict
@@ -204,6 +198,12 @@ class PydanticUi[T: BaseModel]:
 
         except Exception:
             logger.exception("Error updating session data")
+
+    def _clear_widget_keys(self) -> None:
+        """Drop every field's widget value so the next render re-seeds it."""
+        clear_state_keys(
+            f"{self.key}_{field_name}" for field_name in model_fields(self.schema)
+        )
 
     def get_form_data(self) -> dict[str, Any]:
         """Get current form data as dictionary.

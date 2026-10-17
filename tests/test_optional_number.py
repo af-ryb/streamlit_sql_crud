@@ -20,7 +20,7 @@ class Nums(BaseModel):
 def _app() -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
 
-    from streamlit_pydantic_crud.pydantic_utils import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.pydantic_form.generator import (  # noqa: PLC0415
         PydanticInputGenerator,
     )
     from tests.test_optional_number import Nums  # noqa: PLC0415
@@ -55,7 +55,7 @@ def _edit_app() -> None:
 
     import streamlit as st  # noqa: PLC0415
 
-    from streamlit_pydantic_crud.pydantic_utils import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.pydantic_form.generator import (  # noqa: PLC0415
         PydanticInputGenerator,
     )
     from tests.test_optional_number import Nums  # noqa: PLC0415

@@ -26,13 +26,13 @@ from streamlit_pydantic_crud.display import (
     get_pretty_name,
     numeric_formatters,
 )
-from streamlit_pydantic_crud.pydantic_utils import PydanticSQLAlchemyConverter
 from streamlit_pydantic_crud.sa_model import (
     column_label,
     pk_attr,
     pk_name,
     tablename,
 )
+from streamlit_pydantic_crud.schema_check import validate_schema_compatibility
 from streamlit_pydantic_crud.state import (
     OPTIONS_NOTICE_KEYS,
     UPDATED_KEY,
@@ -270,9 +270,7 @@ class SqlUi:
 
     def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
         """Raise ValueError if `schema` is incompatible with the edited model."""
-        if not PydanticSQLAlchemyConverter.validate_schema_compatibility(
-            schema, self.edit_create_model, operation
-        ):
+        if not validate_schema_compatibility(schema, self.edit_create_model, operation):
             table_name = tablename(self.edit_create_model)
             msg = (
                 f"{operation.capitalize()} schema {schema.__name__} "
