@@ -214,7 +214,7 @@ def _warning_app(db: str, disable_log: bool) -> None:
         ForeignKeyOptions,
         ManyToManyFields,
     )
-    from streamlit_pydantic_crud.create_delete_model import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
     from streamlit_pydantic_crud.logs import set_logging  # noqa: PLC0415

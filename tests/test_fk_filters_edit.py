@@ -18,11 +18,11 @@ FILTERS = {"name": "Dept 1"}
 def _app(db: str) -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
 
-    from streamlit_pydantic_crud.create_delete_model import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
+    from streamlit_pydantic_crud.dialogs.edit import UpdateRow  # noqa: PLC0415
     from streamlit_pydantic_crud.state import UPDATED_KEY, set_state  # noqa: PLC0415
-    from streamlit_pydantic_crud.update_model import UpdateRow  # noqa: PLC0415
     from tests.conftest import Employee  # noqa: PLC0415
     from tests.test_fk_filters_edit import FILTERS  # noqa: PLC0415
 

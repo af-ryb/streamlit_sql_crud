@@ -14,11 +14,11 @@ from sqlalchemy import ARRAY, ForeignKey, Numeric, String, create_engine
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from streamlit_pydantic_crud.create_delete_model import CreateRow
+from streamlit_pydantic_crud.dialogs.create import CreateRow
+from streamlit_pydantic_crud.dialogs.edit import UpdateRow
 from streamlit_pydantic_crud.form_options import ExistingData
 from streamlit_pydantic_crud.input_fields import InputFields
 from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
-from streamlit_pydantic_crud.update_model import UpdateRow
 
 DB = os.environ["CRUD_TEST_DB"]
 MODE = os.environ.get("CRUD_TEST_MODE", "fields")

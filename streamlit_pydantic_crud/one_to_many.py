@@ -18,7 +18,8 @@ from sqlalchemy.orm import (
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud import pagination, query
-from streamlit_pydantic_crud.create_delete_model import CreateRow, DeleteRows
+from streamlit_pydantic_crud.dialogs.create import CreateRow
+from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.sa_model import pk_attr, pk_name
 

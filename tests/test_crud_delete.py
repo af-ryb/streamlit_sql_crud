@@ -10,7 +10,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud.create_delete_model import DeleteRows
+from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.state import UPDATED_KEY
 from tests.conftest import Department, Employee
 
@@ -40,7 +40,7 @@ class FakeState(dict):
 @pytest.fixture
 def clicked() -> Iterator[MagicMock]:
     """Patch Streamlit so the Delete button is clicked; yield the `log` mock."""
-    target = "streamlit_pydantic_crud.create_delete_model"
+    target = "streamlit_pydantic_crud.dialogs.delete"
     with (
         patch(f"{target}.st") as mock_st,
         patch(f"{target}.ss", FakeState({UPDATED_KEY: 0})),

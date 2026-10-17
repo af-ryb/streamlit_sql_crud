@@ -34,10 +34,10 @@ def _app(db: str, action: str, tag_ids: list[int]) -> None:
     from streamlit_pydantic_crud.config_types import (  # noqa: PLC0415
         ManyToManyFields,
     )
-    from streamlit_pydantic_crud.create_delete_model import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
-    from streamlit_pydantic_crud.update_model import UpdateRow  # noqa: PLC0415
+    from streamlit_pydantic_crud.dialogs.edit import UpdateRow  # noqa: PLC0415
     from tests.test_form_options import Post  # noqa: PLC0415
     from tests.test_many_to_many_crud import (  # noqa: PLC0415
         PostCreate,

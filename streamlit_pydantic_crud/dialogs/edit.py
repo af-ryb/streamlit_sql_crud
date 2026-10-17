@@ -1,4 +1,6 @@
-from typing import Any, Literal
+"""The edit dialog: a form seeded from one database row, plus 1:N panels."""
+
+from typing import Any
 
 import streamlit as st
 from loguru import logger
@@ -7,12 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase, selectinload
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
-from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud import one_to_many
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.db_errors import format_database_error
-from streamlit_pydantic_crud.dialogs import show_crud_dialog
+from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.form_options import ExistingData, load_form_options
 from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
@@ -324,69 +325,3 @@ class UpdateRow:
             st.session_state[self.get_session_key] = dict(self.current_values)
         else:
             self.input_fields.reset_state()
-
-
-def action_btns(
-    container: DeltaGenerator,
-    qtty_selected: int,
-    opened: bool,
-    show_create_btn: bool,
-    show_delete_btn: bool,
-    key: str,
-) -> Literal["copy", "add", "edit", "delete"] | None:
-    disabled_add = (qtty_selected > 1) or not show_create_btn
-    disabled_edit = qtty_selected != 1
-    disabled_delete = (qtty_selected == 0) or not show_delete_btn
-
-    if qtty_selected == 1:
-        add_icon = ":material/content_copy:"
-        add_help = "Copy"
-    else:
-        add_icon = ":material/add:"
-        add_help = "Add"
-
-    with container:
-        add_col, edit_col, del_col, _empty_col = st.columns([1, 1, 1, 6])
-
-        add_btn = add_col.button(
-            "",
-            help=add_help,
-            icon=add_icon,
-            type="secondary",
-            disabled=disabled_add,
-            width="stretch",
-            key=f"{key}_stsql_action_add",
-        )
-
-        edit_btn = edit_col.button(
-            "",
-            help="Edit",
-            icon=":material/edit:",
-            type="secondary",
-            disabled=disabled_edit,
-            width="stretch",
-            key=f"{key}_stsql_action_edit",
-        )
-
-        del_btn = del_col.button(
-            "",
-            help="Delete",
-            icon=":material/delete:",
-            type="primary",
-            disabled=disabled_delete,
-            width="stretch",
-            key=f"{key}_stsql_action_delete",
-        )
-
-        if opened:
-            return None
-        if add_btn:
-            if qtty_selected == 1:
-                return "copy"
-            return "add"
-        if edit_btn:
-            return "edit"
-        if del_btn:
-            return "delete"
-
-        return None

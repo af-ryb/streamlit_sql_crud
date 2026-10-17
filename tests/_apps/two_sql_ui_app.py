@@ -18,7 +18,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud import SqlUi
-from streamlit_pydantic_crud.create_delete_model import CreateRow
+from streamlit_pydantic_crud.dialogs.create import CreateRow
 
 DB = os.environ["CRUD_TEST_DB"]
 ORDER = os.environ.get("CRUD_TEST_ORDER", "ab")
