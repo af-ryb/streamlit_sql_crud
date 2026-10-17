@@ -82,6 +82,34 @@ def test_schema_mode_clears_json_to_null(
     assert stored_row()[1] is None
 
 
+def test_schema_mode_cleared_json_is_sql_null(
+    open_form: Callable[[str], AppTest],
+) -> None:
+    """A plain JSON column stores None as JSON 'null' unless told otherwise."""
+    at = open_form("update_schema")
+    at.text_area(key=f"{PREFIX}_meta").set_value("")
+    save(at)
+    assert raw_meta_is_null("id = 1")
+
+
+def test_schema_create_without_json_is_sql_null(
+    open_form: Callable[[str], AppTest],
+) -> None:
+    at = open_form("create_schema")
+    at.number_input(key="t_create_count").set_value(3)
+    save(at)
+    assert raw_meta_is_null("count = 3")
+
+
+def raw_meta_is_null(where: str) -> bool:
+    """Return True when `meta` of the matching row is SQL NULL (not 'null')."""
+    with sqlite3.connect(os.environ["CRUD_TEST_DB"]) as con:
+        (is_null,) = con.execute(
+            f"SELECT meta IS NULL FROM doc WHERE {where}"
+        ).fetchone()
+    return bool(is_null)
+
+
 def test_no_schema_create_leaves_json_to_column_default(
     open_form: Callable[[str], AppTest],
 ) -> None:

@@ -1,7 +1,7 @@
 """Harness app editing a row with a JSON and a seconds-precise datetime column.
 
 `CRUD_TEST_MODE` picks no-schema (`update`, `create`) or Pydantic
-(`update_schema`) mode; the form is shown directly, as inside the open dialog.
+(`update_schema`, `create_schema`) mode; the form is shown directly, as inside the open dialog.
 """
 
 import os
@@ -50,6 +50,13 @@ class DocUpdate(BaseModel):
     created: datetime | None = None
 
 
+class DocCreate(BaseModel):
+    """Create schema; `meta` left empty means no JSON value."""
+
+    count: int = 0
+    meta: dict[str, Any] | None = None
+
+
 eng = create_engine(f"sqlite:///{DB}")
 Base.metadata.create_all(eng)
 with Session(eng) as s:
@@ -60,8 +67,9 @@ with Session(eng) as s:
 conn = st.connection("sql", url=f"sqlite:///{DB}")
 set_state(UPDATED_KEY, 0)
 
-if MODE == "create":
-    CreateRow(conn, Doc, key="t").show("Doc")
+if MODE in ("create", "create_schema"):
+    create_schema = DocCreate if MODE == "create_schema" else None
+    CreateRow(conn, Doc, key="t", create_schema=create_schema).show("Doc")
 else:
     schema = DocUpdate if MODE == "update_schema" else None
     UpdateRow(conn, Doc, 1, key="t", update_schema=schema).show()

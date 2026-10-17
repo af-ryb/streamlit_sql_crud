@@ -14,6 +14,7 @@ from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
     handle_save_error,
+    json_none_as_sql_null,
     load_related,
     pop_m2m_data,
 )
@@ -164,6 +165,7 @@ class CreateRow:
                 # Separate many-to-many fields from the main data
                 main_data = validated_data.model_dump()
                 m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
+                main_data = json_none_as_sql_null(self.model, main_data)
 
                 # Create the main object without m2m fields
                 row = self.model(**main_data)
@@ -202,7 +204,7 @@ class CreateRow:
     def save_sqlalchemy(self, created: dict) -> tuple[bool, str]:
         """Original SQLAlchemy save logic"""
         try:
-            row = self.model(**created)
+            row = self.model(**json_none_as_sql_null(self.model, created))
             with self.conn.session as s:
                 s.add(row)
                 s.commit()

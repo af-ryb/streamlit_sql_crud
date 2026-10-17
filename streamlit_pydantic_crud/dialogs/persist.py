@@ -3,6 +3,7 @@
 from typing import Any, Literal
 
 from loguru import logger
+from sqlalchemy import JSON, inspect, null
 from sqlalchemy.orm import DeclarativeBase, Session, selectinload
 from sqlalchemy.orm.interfaces import LoaderOption
 from streamlit import session_state as ss
@@ -38,6 +39,24 @@ def pop_m2m_data(
         if field_name in main_data:
             m2m_data[field_name] = main_data.pop(field_name)
     return m2m_data
+
+
+def json_none_as_sql_null(
+    model: type[DeclarativeBase], data: dict[str, Any]
+) -> dict[str, Any]:
+    """Return `data` with None values of JSON columns replaced by SQL NULL.
+
+    A JSON column without ``none_as_null=True`` would store None as JSON 'null'.
+    """
+    json_attrs = {
+        attr.key
+        for attr in inspect(model).column_attrs
+        if isinstance(attr.columns[0].type, JSON)
+    }
+    return {
+        name: null() if value is None and name in json_attrs else value
+        for name, value in data.items()
+    }
 
 
 def load_related(
