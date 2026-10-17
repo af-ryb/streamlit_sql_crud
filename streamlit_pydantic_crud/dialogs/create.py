@@ -1,17 +1,22 @@
+"""The create dialog: a form for a new row, in SQLAlchemy or Pydantic mode."""
+
 from functools import partial
 from typing import Any
 
 import streamlit as st
-from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
-from streamlit_pydantic_crud.db_errors import format_database_error
-from streamlit_pydantic_crud.dialogs import show_crud_dialog
+from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
+from streamlit_pydantic_crud.dialogs.persist import (
+    form_data_key,
+    handle_save_error,
+    load_related,
+    pop_m2m_data,
+)
 from streamlit_pydantic_crud.display import get_pretty_name
 from streamlit_pydantic_crud.form_options import ExistingData, load_form_options
 from streamlit_pydantic_crud.input_fields import NO_INPUT, InputFields
@@ -19,15 +24,15 @@ from streamlit_pydantic_crud.logs import log
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.sa_model import (
     column_label,
-    pk_attr,
-    pk_column,
     pk_name,
     tablename,
 )
-from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS, UPDATED_KEY, set_state
+from streamlit_pydantic_crud.state import UPDATED_KEY, set_state
 
 
 class CreateRow:
+    """Create dialog for one new row, optionally seeded from a copied row."""
+
     def __init__(
         self,
         conn: SQLConnection,
@@ -75,7 +80,7 @@ class CreateRow:
                 )
             return
 
-        session_key = f"{self.key_prefix}_form_data"
+        session_key = form_data_key(self.key_prefix)
 
         # Pre-populate form with initial_data if provided (for "copy" action)
         if self.initial_data:
@@ -157,12 +162,8 @@ class CreateRow:
         try:
             with self.conn.session as s:
                 # Separate many-to-many fields from the main data
-                m2m_data = {}
                 main_data = validated_data.model_dump()
-
-                for field_name in self.many_to_many_fields:
-                    if field_name in main_data:
-                        m2m_data[field_name] = main_data.pop(field_name)
+                m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
 
                 # Create the main object without m2m fields
                 row = self.model(**main_data)
@@ -174,15 +175,8 @@ class CreateRow:
                     relationship_name = self.many_to_many_fields[field_name][
                         "relationship"
                     ]
-                    related_model = getattr(
-                        self.model, relationship_name
-                    ).property.mapper.class_
-
-                    # Get the related objects from the database
-                    related_objects = (
-                        s.query(related_model)
-                        .filter(pk_attr(related_model).in_(selected_options))
-                        .all()
+                    related_objects = load_related(
+                        s, self.model, relationship_name, selected_options
                     )
 
                     # Append the related objects to the relationship
@@ -194,21 +188,16 @@ class CreateRow:
                 log("CREATE", table_name, row)
 
                 # Clear the form data after successful save
-                session_key = f"{self.key_prefix}_form_data"
+                session_key = form_data_key(self.key_prefix)
                 if session_key in st.session_state:
                     del st.session_state[session_key]
 
                 return True, f"Created successfully {row}"
 
         except Exception as e:
-            ss[UPDATED_KEY] += 1
-            table_name = tablename(self.model)
-            log("CREATE", table_name, validated_data.model_dump(), success=False)
-            logger.exception(f"Create failed for {table_name}")
-
-            # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = format_database_error(e)
-            return False, error_msg
+            return handle_save_error(
+                "CREATE", self.model, validated_data.model_dump(), e
+            )
 
     def save_sqlalchemy(self, created: dict) -> tuple[bool, str]:
         """Original SQLAlchemy save logic"""
@@ -222,14 +211,7 @@ class CreateRow:
                 log("CREATE", table_name, row)
                 return True, f"Created successfully {row}"
         except Exception as e:
-            ss[UPDATED_KEY] += 1
-            table_name = tablename(self.model)
-            log("CREATE", table_name, created, success=False)
-            logger.exception(f"Create failed for {table_name}")
-
-            # Handle specific SQLAlchemy errors with user-friendly messages
-            error_msg = format_database_error(e)
-            return False, error_msg
+            return handle_save_error("CREATE", self.model, created, e)
 
     def show_dialog(self) -> None:
         """Open the create dialog with a form seeded from defaults or the copy."""
@@ -247,86 +229,7 @@ class CreateRow:
         """
         if self.create_schema:
             self.pydantic_ui.clear_session_data()
-            session_key = f"{self.key_prefix}_form_data"
+            session_key = form_data_key(self.key_prefix)
             st.session_state[session_key] = dict(self.initial_data)
         else:
             self.input_fields.reset_state()
-
-
-class DeleteRows:
-    def __init__(
-        self,
-        conn: SQLConnection,
-        model: type[DeclarativeBase],
-        rows_id: list[int],
-        key: str,
-    ) -> None:
-        self.conn = conn
-        self.model = model
-        self.rows_id = rows_id
-        self.key = key
-        self.key_prefix = f"{key}_delete"
-
-    @st.cache_data(ttl=CACHE_TTL_SECONDS)
-    def get_rows_str(
-        _self, table_name: str, rows_id: list[int], updated: int
-    ) -> list[str]:
-        """Return the string form of the rows to delete.
-
-        `table_name` and the `updated` counter are cache-key inputs only.
-        """
-        id_col = pk_column(_self.model)
-        stmt = select(_self.model).where(id_col.in_(rows_id))
-
-        with _self.conn.session as s:
-            rows = s.execute(stmt).scalars()
-            rows_str = [str(row) for row in rows]
-
-        return rows_str
-
-    def show(self, pretty_name) -> tuple[bool | None, str | None]:
-        st.subheader("Delete selected items?")
-
-        table_name = tablename(self.model)
-        updated = ss.get(UPDATED_KEY, 0)
-        rows_str = self.get_rows_str(table_name, self.rows_id, updated)
-        st.dataframe({pretty_name: rows_str}, hide_index=True)
-
-        btn = st.button("Delete", key=f"{self.key_prefix}_del_btn")
-        if not btn:
-            return None, None
-
-        lancs: list[str] = []
-        missing: list[int] = []
-        with self.conn.session as s:
-            try:
-                for row_id in self.rows_id:
-                    lanc = s.get(self.model, row_id)
-                    if lanc is None:
-                        missing.append(row_id)
-                        continue
-                    lancs.append(str(lanc))
-                    s.delete(lanc)
-
-                s.commit()
-                ss[UPDATED_KEY] += 1
-            except Exception as e:
-                ss[UPDATED_KEY] += 1
-                log("DELETE", table_name, self.rows_id, success=False)
-                logger.exception(f"Delete failed for {table_name}")
-                return False, format_database_error(e)
-
-        missing_msg = f"Not found (already deleted?): {missing}" if missing else ""
-        if not lancs:
-            return False, missing_msg
-
-        log("DELETE", table_name, ", ".join(lancs))
-        msg = f"Successfully deleted {len(lancs)}"
-        return True, f"{msg}. {missing_msg}" if missing else msg
-
-    def show_dialog(self) -> None:
-        """Open the delete dialog."""
-        pretty_name = get_pretty_name(tablename(self.model))
-        show_crud_dialog(
-            f"Delete {pretty_name}", self.key, partial(self.show, pretty_name)
-        )

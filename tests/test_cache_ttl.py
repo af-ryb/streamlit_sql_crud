@@ -8,7 +8,7 @@ writes) stay invisible until the app restarts.
 from typing import Any
 
 from streamlit_pydantic_crud import filter_ui, query
-from streamlit_pydantic_crud.create_delete_model import DeleteRows
+from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.form_options import ExistingData
 
 

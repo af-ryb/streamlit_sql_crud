@@ -1,26 +1,25 @@
 import warnings
 from collections.abc import Callable
 from enum import Enum
+from typing import Literal
 
 import pandas as pd
 import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
-from sqlalchemy.orm import DeclarativeBase, selectinload
+from sqlalchemy.orm import DeclarativeBase
 from streamlit import session_state as ss
 from streamlit.connections import SQLConnection
+from streamlit.delta_generator import DeltaGenerator
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_pydantic_crud import (
-    create_delete_model,
-    filter_ui,
-    logs,
-    pagination,
-    query,
-    update_model,
-)
+from streamlit_pydantic_crud import filter_ui, logs, pagination, query
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.dialogs.create import CreateRow
+from streamlit_pydantic_crud.dialogs.delete import DeleteRows
+from streamlit_pydantic_crud.dialogs.edit import UpdateRow
+from streamlit_pydantic_crud.dialogs.persist import m2m_load_options
 from streamlit_pydantic_crud.display import (
     DfStyleFormatter,
     convert_arrow,
@@ -401,13 +400,9 @@ class SqlUi:
                     # Extract entity PKs from filtered results
                     entity_ids = [getattr(row, pk) for row in filtered_result]
 
-                    # Build options for eager loading
-                    options = []
-                    for config in self.many_to_many_fields.values():
-                        relationship_attr = getattr(
-                            self.edit_create_model, config["relationship"]
-                        )
-                        options.append(selectinload(relationship_attr))
+                    options = m2m_load_options(
+                        self.edit_create_model, self.many_to_many_fields
+                    )
 
                     # Load entities with relationships for just the filtered PKs
                     entities_with_relations = (
@@ -533,7 +528,7 @@ class SqlUi:
 
     def crud(self, df: pd.DataFrame, rows_selected: list[int]) -> None:
         qtty_rows = len(rows_selected)
-        action = update_model.action_btns(
+        action = action_btns(
             self.btns_container,
             qtty_selected=qtty_rows,
             opened=self.state.opened,
@@ -542,23 +537,11 @@ class SqlUi:
             key=self.key,
         )
 
-        if action == "add":
-            create_row = create_delete_model.CreateRow(
-                conn=self.conn,
-                model=self.edit_create_model,
-                default_values=self.edit_create_default_values,
-                create_schema=self.create_schema,
-                foreign_key_options=self.foreign_key_options,
-                many_to_many_fields=self.many_to_many_fields,
-                key=self.key,
-                dt_filters=self.col_filter.dt_filters,
-                no_dt_filters=self.col_filter.no_dt_filters,
-            )
-            create_row.show_dialog()
-        elif action == "copy":
-            selected_pos = rows_selected[0]
-            initial_data = row_to_python(df.iloc[selected_pos])
-            create_row = create_delete_model.CreateRow(
+        if action in ("add", "copy"):
+            initial_data = None
+            if action == "copy":
+                initial_data = row_to_python(df.iloc[rows_selected[0]])
+            create_row = CreateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
                 default_values=self.edit_create_default_values,
@@ -577,7 +560,7 @@ class SqlUi:
             row_id = convert_numpy_to_python(
                 df.iloc[selected_pos][pk], self.edit_create_model
             )
-            update_row = update_model.UpdateRow(
+            update_row = UpdateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
                 row_id=row_id,
@@ -594,10 +577,77 @@ class SqlUi:
             rows_id = convert_numpy_list_to_python(
                 df.iloc[rows_selected][pk].to_list(), self.edit_create_model
             )
-            delete_rows = create_delete_model.DeleteRows(
+            delete_rows = DeleteRows(
                 conn=self.conn,
                 model=self.edit_create_model,
                 rows_id=rows_id,
                 key=self.key,
             )
             delete_rows.show_dialog()
+
+
+def action_btns(
+    container: DeltaGenerator,
+    qtty_selected: int,
+    opened: bool,
+    show_create_btn: bool,
+    show_delete_btn: bool,
+    key: str,
+) -> Literal["copy", "add", "edit", "delete"] | None:
+    """Render the add/copy, edit and delete buttons; return the clicked action."""
+    disabled_add = (qtty_selected > 1) or not show_create_btn
+    disabled_edit = qtty_selected != 1
+    disabled_delete = (qtty_selected == 0) or not show_delete_btn
+
+    if qtty_selected == 1:
+        add_icon = ":material/content_copy:"
+        add_help = "Copy"
+    else:
+        add_icon = ":material/add:"
+        add_help = "Add"
+
+    with container:
+        add_col, edit_col, del_col, _empty_col = st.columns([1, 1, 1, 6])
+
+        add_btn = add_col.button(
+            "",
+            help=add_help,
+            icon=add_icon,
+            type="secondary",
+            disabled=disabled_add,
+            width="stretch",
+            key=f"{key}_stsql_action_add",
+        )
+
+        edit_btn = edit_col.button(
+            "",
+            help="Edit",
+            icon=":material/edit:",
+            type="secondary",
+            disabled=disabled_edit,
+            width="stretch",
+            key=f"{key}_stsql_action_edit",
+        )
+
+        del_btn = del_col.button(
+            "",
+            help="Delete",
+            icon=":material/delete:",
+            type="primary",
+            disabled=disabled_delete,
+            width="stretch",
+            key=f"{key}_stsql_action_delete",
+        )
+
+        if opened:
+            return None
+        if add_btn:
+            if qtty_selected == 1:
+                return "copy"
+            return "add"
+        if edit_btn:
+            return "edit"
+        if del_btn:
+            return "delete"
+
+        return None

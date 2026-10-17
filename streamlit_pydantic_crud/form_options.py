@@ -29,6 +29,7 @@ from streamlit_pydantic_crud.sa_model import (
     foreign_key_column_names,
     model_by_tablename,
     pk_name,
+    related_model,
     safe_python_type,
     tablename,
 )
@@ -120,9 +121,8 @@ def load_many_to_many_options(
     """Set the multiselect options of every ``many_to_many_fields`` field."""
     for field_name, m2m_config in many_to_many_fields.items():
         try:
-            relationship = getattr(model, m2m_config["relationship"])
-            related_model = relationship.property.mapper.class_
-            query = select(related_model)
+            related = related_model(model, m2m_config["relationship"])
+            query = select(related)
             if "filter" in m2m_config:
                 query = m2m_config["filter"](query)
 
@@ -132,7 +132,7 @@ def load_many_to_many_options(
                     field_name,
                     list(rows),
                     m2m_config["display_field"],
-                    pk_name(related_model),
+                    pk_name(related),
                 )
         except Exception:
             handle_option_load_error("many-to-many", field_name)
