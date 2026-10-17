@@ -219,10 +219,9 @@ The example project tests all major features:
 
 ## Key Dependencies
 
-- **streamlit** - Web app framework
+- **streamlit** (≥1.58) - Web app framework; native `st.pagination` and
+  `st.selectbox(accept_new_options=True)`, no third-party components
 - **sqlalchemy** - Database ORM
 - **pydantic** (≥2.0) - Data validation
 - **pandas** - Data manipulation
 - **loguru** - Logging
-- **streamlit_datalist** - Enhanced UI components
-- **streamlit_antd_components** - Additional UI widgets

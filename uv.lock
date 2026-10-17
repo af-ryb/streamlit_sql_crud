@@ -1010,29 +1010,6 @@ wheels = [
 ]
 
 [[package]]
-name = "streamlit-antd-components"
-version = "0.3.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "streamlit" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/dc/1ed6266b606e3b494b9af3e2c310ea6cbe2e967aa18873d03c5b267b4c81/streamlit_antd_components-0.3.2-py3-none-any.whl", hash = "sha256:5ae28496127202ed266ea167649436a15f3d548a4805ee5d992c6fc0fe103fd6", size = 2805502, upload-time = "2024-01-19T07:11:42.614Z" },
-]
-
-[[package]]
-name = "streamlit-datalist"
-version = "0.0.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "streamlit" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/18/d25be35c1be8566d55c723dfd6d5a745d3eeb14f9c70cfe1f20798ec29af/streamlit_datalist-0.0.5.tar.gz", hash = "sha256:281b6042e3cc1cb74fa16993754ce60dcf40ee702d076aecac682cff7f8e08fa", size = 499844, upload-time = "2023-03-06T00:19:32.526Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/48/ff/5e59c9e69c0a198f99b366dee3fe0690c7b73e901810f796499dc00633ae/streamlit_datalist-0.0.5-py3-none-any.whl", hash = "sha256:40b135b41e7482816ca2dc06ac534ed840b0e1dff21af8a54cb800646a400e58", size = 974990, upload-time = "2023-03-06T00:19:30.644Z" },
-]
-
-[[package]]
 name = "streamlit-pydantic-crud"
 version = "0.6.3"
 source = { editable = "." }
@@ -1042,8 +1019,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "sqlalchemy" },
     { name = "streamlit" },
-    { name = "streamlit-antd-components" },
-    { name = "streamlit-datalist" },
 ]
 
 [package.dev-dependencies]
@@ -1067,8 +1042,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "sqlalchemy" },
     { name = "streamlit", specifier = ">=1.58.0" },
-    { name = "streamlit-antd-components" },
-    { name = "streamlit-datalist" },
 ]
 
 [package.metadata.requires-dev]

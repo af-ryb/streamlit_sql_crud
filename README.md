@@ -17,7 +17,7 @@ Key enhancements over the original streamlit_sql package:
 ## Features
 
 ### READ
-- Display as a standard st.dataframe with pagination
+- Display as a standard st.dataframe with native `st.pagination` and a page-size selector
 - Configure using SQLAlchemy select statements (JOIN, ORDER BY, WHERE, etc.)
 - **Display fields from joined tables efficiently**
 - Conditional row styling based on values
@@ -101,7 +101,8 @@ class AlertReadSchema(BaseModel):
 ## Requirements
 
 1. Python 3.12+
-2. Core dependencies: streamlit, sqlalchemy, pandas, pydantic (≥2.0)
+2. Core dependencies: streamlit (≥1.58), sqlalchemy, pandas, loguru, pydantic (≥2.0);
+   no third-party Streamlit components
 3. SQLAlchemy models require a `__str__` method
 4. A single-column primary key (any name); composite primary keys are not supported
 5. Foreign key relationships must be defined
