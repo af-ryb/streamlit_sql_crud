@@ -14,7 +14,7 @@ from streamlit_pydantic_crud.config_types import (
     OperationType,
 )
 from streamlit_pydantic_crud.display import field_label
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator
+from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
 from streamlit_pydantic_crud.schema_builder import (
     create_pydantic_model_from_json_schema,
 )

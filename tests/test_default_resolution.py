@@ -10,7 +10,16 @@ from unittest.mock import MagicMock, patch
 
 from pydantic import BaseModel, Field
 
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator as G
+from streamlit_pydantic_crud.pydantic_form.generator import PydanticInputGenerator
+from streamlit_pydantic_crud.pydantic_form.option_resolve import (
+    match_option,
+    resolve_multiselect_default,
+    resolve_select_index,
+)
+from streamlit_pydantic_crud.pydantic_form.widgets import (
+    render_multiselect,
+    render_selectbox,
+)
 
 
 class StrColor(str, Enum):  # noqa: UP042 - exercises the str-mixin Enum case
@@ -27,87 +36,85 @@ class PlainColor(Enum):
 
 
 def test_match_option_by_value() -> None:
-    assert G.match_option("blue", ["red", "blue"]) == 1
+    assert match_option("blue", ["red", "blue"]) == 1
 
 
 def test_match_option_str_enum_member() -> None:
-    assert G.match_option(StrColor.BLUE, [StrColor.RED, StrColor.BLUE]) == 1
+    assert match_option(StrColor.BLUE, [StrColor.RED, StrColor.BLUE]) == 1
 
 
 def test_match_option_plain_enum_value_against_members() -> None:
-    assert G.match_option("blue", [PlainColor.RED, PlainColor.BLUE]) == 1
+    assert match_option("blue", [PlainColor.RED, PlainColor.BLUE]) == 1
 
 
 def test_match_option_plain_enum_member_against_values() -> None:
-    assert G.match_option(PlainColor.BLUE, ["red", "blue"]) == 1
+    assert match_option(PlainColor.BLUE, ["red", "blue"]) == 1
 
 
 def test_match_option_falsy_zero() -> None:
-    assert G.match_option(0, [2, 1, 0]) == 2
+    assert match_option(0, [2, 1, 0]) == 2
 
 
 def test_match_option_not_found() -> None:
-    assert G.match_option("green", ["red", "blue"]) is None
+    assert match_option("green", ["red", "blue"]) is None
 
 
-# --- _resolve_select_index: precedence ------------------------------------
+# --- resolve_select_index: precedence ------------------------------------
 
 
 def test_select_index_uses_field_default() -> None:
-    assert G._resolve_select_index(None, None, "blue", ["red", "blue"]) == 1
+    assert resolve_select_index(None, None, "blue", ["red", "blue"]) == 1
 
 
 def test_select_index_explicit_kw_overrides_default() -> None:
-    assert G._resolve_select_index(None, 0, "blue", ["red", "blue"]) == 0
+    assert resolve_select_index(None, 0, "blue", ["red", "blue"]) == 0
 
 
 def test_select_index_session_overrides_explicit_and_default() -> None:
-    assert G._resolve_select_index("red", 1, "blue", ["red", "blue"]) == 0
+    assert resolve_select_index("red", 1, "blue", ["red", "blue"]) == 0
 
 
 def test_select_index_fallback_zero_when_no_match() -> None:
-    assert G._resolve_select_index(None, None, None, ["red", "blue"]) == 0
+    assert resolve_select_index(None, None, None, ["red", "blue"]) == 0
 
 
 def test_select_index_none_for_empty_options() -> None:
-    assert G._resolve_select_index(None, None, None, []) is None
+    assert resolve_select_index(None, None, None, []) is None
 
 
-# --- _resolve_multiselect_default -----------------------------------------
+# --- resolve_multiselect_default ------------------------------------------
 
 
 def test_multiselect_default_from_field_default_list() -> None:
-    assert G._resolve_multiselect_default(None, None, ["a", "b"]) == ["a", "b"]
+    assert resolve_multiselect_default(None, None, ["a", "b"]) == ["a", "b"]
 
 
 def test_multiselect_default_wraps_scalar() -> None:
-    assert G._resolve_multiselect_default(None, None, "a") == ["a"]
+    assert resolve_multiselect_default(None, None, "a") == ["a"]
 
 
 def test_multiselect_explicit_overrides_default() -> None:
-    assert G._resolve_multiselect_default(None, ["x"], ["a"]) == ["x"]
+    assert resolve_multiselect_default(None, ["x"], ["a"]) == ["x"]
 
 
 def test_multiselect_session_empty_respected() -> None:
-    assert G._resolve_multiselect_default([], ["x"], ["a"]) == []
+    assert resolve_multiselect_default([], ["x"], ["a"]) == []
 
 
 # --- integration: widget wiring -------------------------------------------
 
 
-@patch("streamlit_pydantic_crud.pydantic_utils.st")
+@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
 def test_selectbox_uses_field_default(mock_st: MagicMock) -> None:
-    G._render_selectbox_widget(
-        "L", {"options": ["red", "blue"]}, None, "k", field_default="blue"
-    )
+    render_selectbox("L", {"options": ["red", "blue"]}, None, "k", field_default="blue")
     mock_st.selectbox.assert_called_once_with(
         "L", options=["red", "blue"], index=1, key="k"
     )
 
 
-@patch("streamlit_pydantic_crud.pydantic_utils.st")
+@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
 def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) -> None:
-    G._render_selectbox_widget(
+    render_selectbox(
         "L", {"options": ["red", "blue"], "index": 0}, None, "k", field_default="blue"
     )
     mock_st.selectbox.assert_called_once_with(
@@ -115,9 +122,9 @@ def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) ->
     )
 
 
-@patch("streamlit_pydantic_crud.pydantic_utils.st")
+@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
 def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
-    G._render_multiselect_widget(
+    render_multiselect(
         "L", {"options": ["a", "b", "c"]}, None, "k", field_default=["b"]
     )
     mock_st.multiselect.assert_called_once_with(
@@ -125,7 +132,7 @@ def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
     )
 
 
-@patch("streamlit_pydantic_crud.pydantic_utils.st")
+@patch("streamlit_pydantic_crud.pydantic_form.widgets.st")
 def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) -> None:
     """End to end: a selectbox field with no session value selects its default."""
 
@@ -138,7 +145,7 @@ def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) ->
             },
         )
 
-    gen = G(schema=Schema, key_prefix="t")
+    gen = PydanticInputGenerator(schema=Schema, key_prefix="t")
     mock_st.selectbox.return_value = "blue"
     gen.render_field("color", gen.field_info["color"], str, None, "t_color")
     assert mock_st.selectbox.call_args.kwargs["index"] == 1

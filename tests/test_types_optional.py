@@ -7,10 +7,11 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from streamlit_pydantic_crud.pydantic_utils import (
-    PydanticInputGenerator,
-    PydanticSQLAlchemyConverter,
+from streamlit_pydantic_crud.pydantic_form.field_info import (
+    get_pydantic_field_info,
+    get_streamlit_input_type,
 )
+from streamlit_pydantic_crud.pydantic_form.widgets import render_enum_select
 from streamlit_pydantic_crud.typing_helpers import (
     is_enum_annotation,
     is_enum_list_annotation,
@@ -54,7 +55,7 @@ def test_unwrap_optional(annotation: object, expected: tuple[object, bool]) -> N
 
 
 def test_field_info_pep604_inner_type() -> None:
-    info = PydanticSQLAlchemyConverter.get_pydantic_field_info(Pep604)
+    info = get_pydantic_field_info(Pep604)
     assert info["count"]["inner_type"] is int
     assert info["count"]["is_optional"] is True
     assert info["tags"]["inner_type"] is list
@@ -69,13 +70,13 @@ def test_field_info_pep604_inner_type() -> None:
     ],
 )
 def test_input_type_pep604(field: str, expected: str) -> None:
-    info = PydanticSQLAlchemyConverter.get_pydantic_field_info(Pep604)
-    assert PydanticSQLAlchemyConverter.get_streamlit_input_type(info[field]) == expected
+    info = get_pydantic_field_info(Pep604)
+    assert get_streamlit_input_type(info[field]) == expected
 
 
 def test_input_type_typing_optional_list() -> None:
-    info = PydanticSQLAlchemyConverter.get_pydantic_field_info(TypingOptional)
-    result = PydanticSQLAlchemyConverter.get_streamlit_input_type(info["tags"])
+    info = get_pydantic_field_info(TypingOptional)
+    result = get_streamlit_input_type(info["tags"])
     assert result == "multiselect"
 
 
@@ -98,11 +99,9 @@ def test_enum_list_detection_pep604() -> None:
 
 def test_render_enum_input_pep604() -> None:
     """The selectbox receives the enum values, not a crash on UnionType."""
-    with patch("streamlit_pydantic_crud.pydantic_utils.st.selectbox") as sb:
+    with patch("streamlit_pydantic_crud.pydantic_form.widgets.st.selectbox") as sb:
         sb.return_value = "blue"
-        result = PydanticInputGenerator._render_enum_input(
-            "Color", Color | None, Color.BLUE, key="k"
-        )
+        result = render_enum_select("Color", Color | None, Color.BLUE, key="k")
     assert result == "blue"
     args, kwargs = sb.call_args
     assert args[1] == ["red", "blue"]

@@ -10,7 +10,10 @@ from types import SimpleNamespace
 from pydantic import BaseModel
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.pydantic_utils import PydanticInputGenerator as G
+from streamlit_pydantic_crud.pydantic_form.option_resolve import (
+    enum_list_defaults,
+    known_defaults,
+)
 
 
 class Dept(Enum):
@@ -24,19 +27,19 @@ class Form(BaseModel):
 
 def test_enum_list_defaults_map_members_values_names() -> None:
     raw = [Dept.ENGINEERING, "hr", "HR", "Dept.HR", "unknown"]
-    assert G.enum_list_defaults(raw, Dept) == ["engineering", "hr"]
+    assert enum_list_defaults(raw, Dept) == ["engineering", "hr"]
 
 
 def test_enum_list_defaults_from_pg_array_literal() -> None:
-    assert G.enum_list_defaults("{ENGINEERING,hr}", Dept) == ["engineering", "hr"]
+    assert enum_list_defaults("{ENGINEERING,hr}", Dept) == ["engineering", "hr"]
 
 
 def test_enum_list_defaults_none() -> None:
-    assert G.enum_list_defaults(None, Dept) == []
+    assert enum_list_defaults(None, Dept) == []
 
 
 def test_known_defaults_drops_unknown() -> None:
-    assert G.known_defaults(["a", "zz", Dept.HR], ["a", "hr"], "lbl") == [
+    assert known_defaults(["a", "zz", Dept.HR], ["a", "hr"], "lbl") == [
         "a",
         "hr",
     ]
@@ -45,7 +48,7 @@ def test_known_defaults_drops_unknown() -> None:
 def _render_enum_list() -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
 
-    from streamlit_pydantic_crud.pydantic_utils import (  # noqa: PLC0415
+    from streamlit_pydantic_crud.pydantic_form.generator import (  # noqa: PLC0415
         PydanticInputGenerator,
     )
     from tests.test_multiselect_defaults import Dept, Form  # noqa: PLC0415
@@ -66,13 +69,11 @@ def test_enum_list_form_renders_existing_members() -> None:
 
 def test_multiselect_widget_drops_unknown_default() -> None:
     def app() -> None:
-        from streamlit_pydantic_crud.pydantic_utils import (  # noqa: PLC0415
-            PydanticInputGenerator,
+        from streamlit_pydantic_crud.pydantic_form.widgets import (  # noqa: PLC0415
+            render_multiselect,
         )
 
-        PydanticInputGenerator._render_multiselect_widget(
-            "x", {"options": ["a", "b"]}, ["a", "zz"], "k"
-        )
+        render_multiselect("x", {"options": ["a", "b"]}, ["a", "zz"], "k")
 
     at = AppTest.from_function(app).run()
     assert not at.exception
@@ -81,14 +82,19 @@ def test_multiselect_widget_drops_unknown_default() -> None:
 
 def test_many_to_many_drops_unknown_ids() -> None:
     def app() -> None:
-        from streamlit_pydantic_crud.pydantic_utils import (  # noqa: PLC0415
+        from streamlit_pydantic_crud.pydantic_form.generator import (  # noqa: PLC0415
             PydanticInputGenerator,
+        )
+        from streamlit_pydantic_crud.pydantic_form.widgets import (  # noqa: PLC0415
+            render_many_to_many_multiselect,
         )
         from tests.test_multiselect_defaults import Form, opts  # noqa: PLC0415
 
         gen = PydanticInputGenerator(Form)
         gen.set_many_to_many_options("tags", opts(), "name")
-        gen._render_many_to_many_multiselect("Tags", "tags", [1, 99], "m")
+        render_many_to_many_multiselect(
+            "Tags", gen.many_to_many_data["tags"], [1, 99], "m"
+        )
 
     at = AppTest.from_function(app).run()
     assert not at.exception
