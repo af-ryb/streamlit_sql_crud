@@ -106,6 +106,8 @@ class SqlUi:
         Arguments:
             conn (SessionSource): Any object whose `session` property returns a new sqlalchemy Session, e.g. st.connection("sql", url="<sqlalchemy url>") or a duck-typed wrapper over an engine
             model (type[MappedModel]): mapped model class (a SQLAlchemy DeclarativeBase subclass or a SQLModel table) used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
+            read_instance (Select | CTE | type[MappedModel]): the read query for a custom table (WHERE, JOINs with labeled columns), used with edit_create_model. A Select's ORDER BY is honored with the primary key as a tiebreaker; a model or CTE is paged in primary-key order.
+            edit_create_model (type[MappedModel]): the mapped model that create, edit and delete act on when read_instance is given.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
             df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details.
