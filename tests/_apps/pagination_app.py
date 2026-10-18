@@ -2,8 +2,8 @@
 
 Rows 1-75 have `grp` "x", the rest "y". When session state `KEEP_ROWS` is
 set, rows with a larger id are deleted before rendering, standing in for a
-delete made through the UI. The rendered row ids and the row count are
-printed as markdown.
+delete made through the UI. Session state `TABLE_KW` holds extra SqlUi kwargs.
+The rendered row ids and the row count are printed as markdown.
 """
 
 import os
@@ -54,6 +54,7 @@ ui = SqlUi(
     edit_create_model=Row,
     available_filter=["grp"],
     key="p",
+    **st.session_state.get("TABLE_KW", {}),
 )
 ids = [r["id"] for r in ui.rows]
 st.write(f"QTTY={ui.qtty_rows}")

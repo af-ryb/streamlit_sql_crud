@@ -479,6 +479,27 @@ SqlUi(conn=conn, model=Invoice, width="stretch", height=400)
 
 `read_use_container_width=True` becomes `width="stretch"`.
 
+## Pagination (`page_size`, `page_size_options`)
+
+```python
+SqlUi(conn=conn, model=Invoice, page_size=25, page_size_options=(25, 100, None))
+```
+
+- `page_size`: rows per page selected by default (default `50`); `None` shows
+  all rows. A value missing from `page_size_options` is added to them.
+- `page_size_options`: the sizes offered in the selector (default
+  `(50, 100, 200, 500, 1000, None)`), shown ints ascending; `None` is the
+  "Show All" entry, so leave it out to disallow showing everything at once.
+- `page_size_options=()` (or `None`) hides the selector: the table is paged by a
+  fixed `page_size`, and with `page_size=None` too it shows all rows without a
+  pager.
+
+A size that is not a positive `int` (or `None`) raises `ValueError`.
+
+`items_per_page_default` (an index into the default options) is deprecated:
+`items_per_page_default=1` becomes `page_size=100`, and
+`items_per_page_default=5` ("Show All") becomes `page_size=None`.
+
 ## Deprecated API (removed in 0.10.0)
 
 These still work in 0.9 but emit a `DeprecationWarning` and are removed in
@@ -491,6 +512,7 @@ These still work in 0.9 but emit a `DeprecationWarning` and are removed in
 | `SqlUi(...).df` | `SqlUi(...).rows` (raw records of the current page) |
 | `SqlUi(base_key=...)` | `key` |
 | `SqlUi(read_use_container_width=True)` | `width="stretch"` (if both are given, `width` wins) |
+| `SqlUi(items_per_page_default=5)` (index) | `page_size=None` (the value: `0`→`50`, `1`→`100`, ... `5`→`None` = show all; a non-default `page_size` wins) |
 
 While `df_style_formatter` or `style_fn` is set, the table still renders
 through a pandas `Styler`, exactly as before; that is the only pandas code path

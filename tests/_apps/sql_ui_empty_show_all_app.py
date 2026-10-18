@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from streamlit_pydantic_crud import SqlUi
-from streamlit_pydantic_crud.table.pagination import OPTS_ITEMS_PAGE
 
 DB = os.environ["CRUD_TEST_DB"]
 
@@ -37,6 +36,6 @@ ui = SqlUi(
     read_instance=select(Note),
     edit_create_model=Note,
     key="note",
-    items_per_page_default=OPTS_ITEMS_PAGE.index(None),
+    page_size=None,
 )
 st.write(f"QTTY={ui.qtty_rows}")

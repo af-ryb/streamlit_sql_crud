@@ -93,10 +93,10 @@ def test_page_survives_reruns(app: AppTest) -> None:
     assert line(app, "RANGE") == "51-100"
 
 
-def test_default_size_index_preselects_option(
+def test_page_size_none_preselects_show_all(
     run_app: Callable[[str], AppTest],
 ) -> None:
-    """items_per_page_default indexes OPTS_ITEMS_PAGE; None is "Show All"."""
+    """page_size=None preselects the "Show All" option."""
     at = run_app("sql_ui_empty_show_all_app.py")
     assert not at.exception
     assert at.selectbox(key="note_page_size").value == SHOW_ALL

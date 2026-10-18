@@ -127,6 +127,7 @@ def show_rel(
         items_per_page, page = pagination.show_pagination(
             qtty_rows,
             pagination.REL_OPTS_ITEMS_PAGE,
+            pagination.DEFAULT_PAGE_SIZE,
             key=f"stsql_read_many_pag_{read_many_rel.suffix_key}",
         )
 

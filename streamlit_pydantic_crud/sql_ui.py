@@ -1,4 +1,5 @@
 import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -99,10 +100,12 @@ class SqlUi:
         many_to_many_fields: ManyToManyFields | None = None,
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
-        items_per_page_default: int = 0,
+        items_per_page_default: int | None = None,
         column_config: dict[str, Any] | None = None,
         width: TableWidth | None = None,
         height: TableHeight = 650,
+        page_size: int | None = pagination.DEFAULT_PAGE_SIZE,
+        page_size_options: Sequence[int | None] | None = pagination.OPTS_ITEMS_PAGE,
     ) -> None:
         """The CRUD interface will be displayes just by initializing the class
 
@@ -127,7 +130,9 @@ class SqlUi:
             many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
-            items_per_page_default (int, optional): Index (0-5) for default items per page selection. Options are: 0=50, 1=100, 2=200, 3=500, 4=1000, 5=Show All. Defaults to 0 (50 items per page)
+            items_per_page_default (int, optional): Deprecated, removed in 0.10.0; use page_size. Index (0-5) into (50, 100, 200, 500, 1000, Show All), e.g. 5 becomes page_size=None. Ignored (with a warning) when page_size is changed from its default
+            page_size (int | None, optional): Default rows per page; None shows all rows. Added to page_size_options when missing. Defaults to 50
+            page_size_options (Sequence[int | None] | None, optional): Page sizes offered in the selector, ints ascending; None is the "Show All" entry. Empty or None hides the selector and pages by page_size. Defaults to (50, 100, 200, 500, 1000, None)
             width ("stretch" | "content" | int, optional): Width of the table, passed to st.dataframe: "content" fits the columns, "stretch" fills the container, an int sets pixels. Defaults to "content"
             height ("auto" | "stretch" | "content" | int, optional): Height of the table, passed to st.dataframe (pixels or a keyword). Defaults to 650
             column_config (dict, optional): Per-column config passed to st.dataframe (a st.column_config.* object, a label string or None to hide), keyed by column name. Merged over the defaults (number format by Numeric scale, list column for ARRAY); a column given here replaces its default. Defaults to None
@@ -226,16 +231,12 @@ class SqlUi:
         self.show_delete_btn = show_delete_btn
         self.show_create_btn = show_create_btn
 
-        # Validate items_per_page_default
-        if not isinstance(items_per_page_default, int):
-            msg = f"items_per_page_default must be an integer index (0-{len(pagination.OPTS_ITEMS_PAGE) - 1}), got {type(items_per_page_default)}"
-            raise ValueError(msg)
-        if items_per_page_default < 0 or items_per_page_default >= len(
-            pagination.OPTS_ITEMS_PAGE
-        ):
-            msg = f"items_per_page_default must be between 0 and {len(pagination.OPTS_ITEMS_PAGE) - 1}, got {items_per_page_default}"
-            raise ValueError(msg)
-        self.items_per_page_default = items_per_page_default
+        self.page_size: int | None = self.resolve_page_size(
+            page_size, items_per_page_default
+        )
+        self.page_size_options: pagination.PageSizes = pagination.merge_page_sizes(
+            self.page_size, page_size_options
+        )
 
         if key is not None and base_key is not None:
             warnings.warn(
@@ -351,6 +352,42 @@ class SqlUi:
             return width
         return "stretch" if use_container_width else "content"
 
+    @staticmethod
+    def resolve_page_size(
+        page_size: int | None, items_per_page_default: int | None
+    ) -> int | None:
+        """Return the default page size; the deprecated index maps to a value.
+
+        Called from __init__: stacklevel 3 points the warning at the caller.
+        """
+        if items_per_page_default is None:
+            return page_size
+        opts = pagination.OPTS_ITEMS_PAGE
+        if isinstance(items_per_page_default, bool) or not isinstance(
+            items_per_page_default, int
+        ):
+            msg = (
+                f"items_per_page_default must be an integer index (0-{len(opts) - 1}), "
+                f"got {type(items_per_page_default)}"
+            )
+            raise ValueError(msg)
+        if not 0 <= items_per_page_default < len(opts):
+            msg = (
+                f"items_per_page_default must be between 0 and {len(opts) - 1}, "
+                f"got {items_per_page_default}"
+            )
+            raise ValueError(msg)
+        value = opts[items_per_page_default]
+        msg = (
+            "'items_per_page_default' is deprecated and will be removed in 0.10.0. "
+            f"Use page_size={value} (None shows all rows)."
+        )
+        both = page_size != pagination.DEFAULT_PAGE_SIZE
+        if both:
+            msg += f" Both given: 'page_size' ({page_size}) is used."
+        warnings.warn(msg, DeprecationWarning, stacklevel=3)
+        return page_size if both else value
+
     def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
         """Raise ValueError if `schema` is incompatible with the edited model."""
         if not validate_schema_compatibility(schema, self.edit_create_model, operation):
@@ -456,9 +493,9 @@ class SqlUi:
         with self.containers.pag:
             return pagination.show_pagination(
                 qtty_rows,
-                pagination.OPTS_ITEMS_PAGE,
+                self.page_size_options,
+                self.page_size,
                 self.key,
-                self.items_per_page_default,
                 reset=filters_changed,
             )
 
