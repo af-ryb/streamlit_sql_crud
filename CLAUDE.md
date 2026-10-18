@@ -90,7 +90,8 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    │   ├── sa_model.py    # SQLAlchemy introspection (PK, table name, column
    │   │                  #   label/types, related_model)
    │   ├── values.py      # value coercion (PG arrays, numpy/DataFrame cells, enum, JSON)
-   │   ├── display.py     # labels and table formatting (get_pretty_name, convert_arrow)
+   │   ├── display.py     # labels and table display (get_pretty_name, display_records,
+   │   │                  #   column_configs)
    │   ├── logs.py        # CRUD action logging, set_logging
    │   └── db_errors.py   # user-friendly database error messages
    ├── table/             # read side of SqlUi
