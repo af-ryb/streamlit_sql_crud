@@ -10,8 +10,14 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from sqlalchemy import ForeignKey
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, create_engine
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    relationship,
+)
 from streamlit.testing.v1 import AppTest
 
 from streamlit_pydantic_crud.dialogs.one_to_many import ReadManyRel
@@ -47,8 +53,8 @@ class Child(Base):
 
 
 def child_ids(at: AppTest) -> list[int]:
-    """Return the child ids shown in the panel's Read tab."""
-    return at.dataframe[0].value.index.to_list()
+    """Return the child ids of the records shown in the panel's Read tab."""
+    return at.dataframe[0].value["id"].to_list()
 
 
 @pytest.fixture
@@ -89,6 +95,43 @@ def test_delete_refreshes_read_tab(app: AppTest) -> None:
     assert child_ids(app)[:2] == [3, 4]
     assert any(c.value == "1-50 / 118" for c in app.caption)
     assert not [b for b in app.button if b.key == DELETE]
+
+
+def test_panel_renders_records_with_one_visible_column(app: AppTest) -> None:
+    table = app.dataframe[0]
+
+    assert list(table.value.columns) == ["Child - Parent Id", "id"]
+    assert list(table.proto.column_order) == ["Child - Parent Id"]
+    assert table.value.iloc[0].to_list() == ["C1", 1]
+
+
+def test_delete_targets_selected_pks_on_current_page(
+    app: AppTest, tmp_path: Path
+) -> None:
+    app.pagination(key=PAGE).set_value(2).run()
+    app.session_state["SELECT"] = (f"{DF}_0", [0, 2])
+    app.run()
+    app.button(key=DELETE).click().run()
+
+    assert not app.exception
+    with sqlite3.connect(tmp_path / "crud.db") as db:
+        gone = db.execute("SELECT id FROM child WHERE id IN (51, 52, 53)").fetchall()
+    assert sorted(row[0] for row in gone) == [52]
+
+
+def test_get_data_returns_label_then_pk_records(tmp_path: Path) -> None:
+    eng = create_engine(f"sqlite:///{tmp_path / 'rel.db'}")
+    Base.metadata.create_all(eng)
+    with Session(eng) as s:
+        s.add_all([Parent(id=1), Child(id=7, parent_id=1), Child(id=8, parent_id=1)])
+        s.commit()
+        rel = ReadManyRel(Parent, 1, Parent.children.property)
+
+        records = rel.get_data(s, 50, 1, "Kids")
+
+    assert [list(r) for r in records] == [["Kids", "id"], ["Kids", "id"]]
+    assert [r["id"] for r in records] == [7, 8]
+    assert isinstance(records, list)
 
 
 def test_create_refreshes_read_tab(app: AppTest) -> None:

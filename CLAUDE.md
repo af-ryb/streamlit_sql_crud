@@ -89,7 +89,7 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    │   ├── typing.py      # annotation inspection (Optional, enum, list, model_fields)
    │   ├── sa_model.py    # SQLAlchemy introspection (PK, table name, column
    │   │                  #   label/types, related_model)
-   │   ├── values.py      # value coercion (PG arrays, numpy/DataFrame cells, enum, JSON)
+   │   ├── values.py      # value coercion (PG arrays, numpy-like scalars, enum, JSON)
    │   ├── display.py     # labels and table display (get_pretty_name, display_records,
    │   │                  #   column_configs)
    │   ├── logs.py        # CRUD action logging, set_logging

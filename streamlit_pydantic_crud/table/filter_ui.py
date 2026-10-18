@@ -4,7 +4,6 @@ from collections.abc import Callable
 from datetime import date
 from typing import Any
 
-import pandas as pd
 import streamlit as st
 from loguru import logger
 from sqlalchemy import CTE, select
@@ -185,7 +184,6 @@ class ColFilter:
 
 
 hash_funcs: dict[Any, Callable[[Any], Any]] = {
-    pd.Series: lambda serie: serie.to_dict(),
     **SQL_HASH_FUNCS,
     ColFilter: lambda cl: (cl.dt_filters, cl.no_dt_filters),
 }

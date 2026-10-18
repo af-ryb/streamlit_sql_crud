@@ -1,7 +1,7 @@
 """Edit-form prefill (Pydantic mode) keeps each column's own value type.
 
-The PK-typed numpy conversion applies to the primary key only: a numpy value
-in another column must not be cast to the PK's type (a str here).
+A numpy scalar loaded by a custom type becomes its Python value; it is not
+cast to the PK's type (a str here).
 """
 
 import enum
