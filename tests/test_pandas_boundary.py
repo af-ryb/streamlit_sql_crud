@@ -10,8 +10,6 @@ PKG_DIR = Path(__file__).resolve().parent.parent / "streamlit_pydantic_crud"
 """Modules importing pandas at runtime, with the reason they still may."""
 RUNTIME_PANDAS = {
     "table/styler_compat.py": "deprecated df_style_formatter / style_fn / SqlUi.df",
-    "table/filter_ui.py": "removed by Task 7 (pd.Series hash func)",
-    "dialogs/one_to_many.py": "removed by Task 7 (related-rows DataFrame)",
 }
 """Modules importing pandas only under ``if TYPE_CHECKING:`` (annotations)."""
 TYPE_ONLY_PANDAS = {
@@ -23,7 +21,7 @@ def test_runtime_pandas_imports_match_allowlist() -> None:
     found = {name for name, (runtime, _) in pandas_imports().items() if runtime}
     assert found == set(RUNTIME_PANDAS), (
         "pandas belongs in table/styler_compat.py only; update RUNTIME_PANDAS if "
-        "a listed module dropped pandas (e.g. after Task 7 merged)"
+        "a listed module dropped pandas"
     )
 
 
