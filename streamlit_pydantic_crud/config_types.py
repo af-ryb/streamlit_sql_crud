@@ -1,10 +1,11 @@
-"""Shared typing aliases for the CRUD configuration dicts and the FkOpt option."""
+"""Shared typing aliases: CRUD configuration dicts, protocols and FkOpt."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal, NotRequired, Protocol, TypedDict
 
 from sqlalchemy import MetaData
+from sqlalchemy.orm import Session
 
 OperationType = Literal["create", "update"]
 
@@ -20,6 +21,20 @@ class MappedModel(Protocol):
     """
 
     metadata: ClassVar[MetaData]
+
+
+class SessionSource(Protocol):
+    """Anything with a read-only `session` property returning a new Session.
+
+    `st.connection("sql")` (SQLConnection) satisfies it, and so does a
+    duck-typed wrapper over an engine. The library only uses
+    `with conn.session as s:`, so each access must return a fresh Session.
+    """
+
+    @property
+    def session(self) -> Session:
+        """A new SQLAlchemy Session, used as a context manager."""
+        ...
 
 
 class ForeignKeyConfig(TypedDict):

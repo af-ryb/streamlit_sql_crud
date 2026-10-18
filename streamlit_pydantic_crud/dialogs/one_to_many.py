@@ -15,9 +15,9 @@ from sqlalchemy.orm import (
     RelationshipProperty,
     Session,
 )
-from streamlit.connections.sql_connection import SQLConnection
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
+from streamlit_pydantic_crud.config_types import SessionSource
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
@@ -82,7 +82,7 @@ class ReadManyRel:
         stmt = stmt.where(self.other_col == self.model_id)
         return stmt
 
-    def get_qtty_rows(self, conn: SQLConnection) -> int:
+    def get_qtty_rows(self, conn: SessionSource) -> int:
         """Count the child rows; cached per statement and data version."""
         return query.get_qtty_rows(conn, self.base_stmt, data_version())
 
@@ -104,7 +104,7 @@ class ReadManyRel:
 
 @st.fragment
 def show_rel(
-    conn: SQLConnection,
+    conn: SessionSource,
     model: type[DeclarativeBase],
     model_id: int | str,
     rel: RelationshipProperty,
@@ -180,7 +180,7 @@ def show_rel(
 
 
 def show_rels(
-    conn: SQLConnection, model: type[DeclarativeBase], model_id: int | str
+    conn: SessionSource, model: type[DeclarativeBase], model_id: int | str
 ) -> None:
     """Render a panel for every one-to-many relationship of `model`."""
     rels = [

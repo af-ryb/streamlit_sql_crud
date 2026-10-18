@@ -9,7 +9,6 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
-from streamlit.connections import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 from streamlit.elements.arrow import DataframeState
 
@@ -17,6 +16,7 @@ from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
     MappedModel,
+    SessionSource,
 )
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
@@ -80,7 +80,7 @@ class SqlUi:
 
     def __init__(
         self,
-        conn: SQLConnection,
+        conn: SessionSource,
         read_instance: Select | CTE | type[MappedModel] | None = None,
         edit_create_model: type[MappedModel] | None = None,
         model: type[MappedModel] | None = None,
@@ -105,7 +105,7 @@ class SqlUi:
         """The CRUD interface will be displayes just by initializing the class
 
         Arguments:
-            conn (SQLConnection): A sqlalchemy connection created with st.connection("sql", url="<sqlalchemy url>")
+            conn (SessionSource): Any object whose `session` property returns a new sqlalchemy Session, e.g. st.connection("sql", url="<sqlalchemy url>") or a duck-typed wrapper over an engine
             model (type[MappedModel]): mapped model class (a SQLAlchemy DeclarativeBase subclass or a SQLModel table) used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options

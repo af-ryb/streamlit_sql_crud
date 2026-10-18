@@ -1,14 +1,13 @@
 """DeleteRows: row preview and delete error handling."""
 
 from collections.abc import Iterator
-from typing import Any, cast
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 import streamlit as st
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
-from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.state import UPDATED_KEY
@@ -16,7 +15,7 @@ from tests.conftest import Department, Employee
 
 
 class FakeConn:
-    """Minimal stand-in for SQLConnection exposing a `session` context."""
+    """Duck-typed SessionSource: `session` opens a new Session per use."""
 
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
@@ -54,15 +53,10 @@ def clicked() -> Iterator[MagicMock]:
         yield mock_log
 
 
-def as_conn(obj: object) -> SQLConnection:
-    """Type a fake connection as SQLConnection for the constructor."""
-    return cast("SQLConnection", obj)
-
-
 def test_rows_preview_is_per_table(engine: Engine, session: Session) -> None:
     """Same ids on two tables must show each table's own rows."""
     st.cache_data.clear()
-    conn = as_conn(FakeConn(engine))
+    conn = FakeConn(engine)
 
     depts = DeleteRows(conn, Department, [1], key="d").get_rows_str(
         "department", [1], 0
@@ -76,7 +70,7 @@ def test_rows_preview_is_per_table(engine: Engine, session: Session) -> None:
 def test_rows_preview_reflects_edits(engine: Engine, session: Session) -> None:
     """The preview is refreshed once the data version moves."""
     st.cache_data.clear()
-    conn = as_conn(FakeConn(engine))
+    conn = FakeConn(engine)
     rows = DeleteRows(conn, Department, [1], key="d")
     assert rows.get_rows_str("department", [1], 0) == ["Dept 1"]
 
@@ -101,7 +95,7 @@ def test_delete_several_existing_rows(
     clicked: MagicMock, engine: Engine, session: Session
 ) -> None:
     """Every listed row is deleted, the others stay."""
-    conn = as_conn(FakeConn(engine))
+    conn = FakeConn(engine)
 
     status, _msg = DeleteRows(conn, Department, [1, 2], key="d").show("Dept")
 
@@ -116,7 +110,7 @@ def test_delete_skips_rows_already_gone(
     clicked: MagicMock, engine: Engine, session: Session
 ) -> None:
     """A row deleted meanwhile is skipped, the others are still deleted."""
-    conn = as_conn(FakeConn(engine))
+    conn = FakeConn(engine)
 
     status, msg = DeleteRows(conn, Department, [1, 999], key="d").show("Dept")
 
@@ -132,7 +126,7 @@ def test_delete_with_no_rows_left_fails_gracefully(
     clicked: MagicMock, engine: Engine, session: Session
 ) -> None:
     """When none of the rows exist any more nothing is deleted."""
-    conn = as_conn(FakeConn(engine))
+    conn = FakeConn(engine)
 
     status, msg = DeleteRows(conn, Department, [999], key="d").show("Dept")
 
