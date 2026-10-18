@@ -33,8 +33,6 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     declarative_model,
     is_json_type,
-    m2m_load_options,
-    pk_attr,
     pk_name,
     tablename,
 )
@@ -54,6 +52,7 @@ from streamlit_pydantic_crud.state import (
     session_writes,
 )
 from streamlit_pydantic_crud.table import filter_ui, pagination, query
+from streamlit_pydantic_crud.table.read import read_records
 
 
 @dataclass(frozen=True)
@@ -117,7 +116,7 @@ class SqlUi:
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
             create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
-            read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, uses Pydantic model_validate for data processing and avoids pandas read_sql issues with JSON columns. Defaults to None
+            read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, each row (or its reloaded entity) is validated with model_validate(from_attributes=True) and only the schema fields are shown. Defaults to None
             foreign_key_options (dict, optional): Custom foreign key selectbox configuration. Dict with field names as keys and config dicts as values. Each config should have 'query' (SQLAlchemy select statement), 'display_field' (column name for display), and 'value_field' (column name for value). Defaults to None
             many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
             show_delete_btn (bool, optional): Show delete button. Defaults to True
@@ -395,114 +394,51 @@ class SqlUi:
                 reset=filters_changed,
             )
 
-    def get_df(
-        self,
-        stmt_pag: Select,
-    ) -> pd.DataFrame:
-        needs_orm_execution = bool(self.read_schema or self.many_to_many_fields)
-        if needs_orm_execution:
-            df = self._execute_with_pydantic_schema(stmt_pag)
-        else:
-            with self.conn.session as s:
-                df = pd.read_sql(stmt_pag, s.connection())
-            df = convert_arrow(self.cte.columns, df)
+    def get_df(self, stmt_pag: Select) -> pd.DataFrame:
+        """Read the page records and build the displayed DataFrame from them."""
+        records = read_records(
+            self.conn,
+            stmt_pag,
+            self.edit_create_model,
+            self.read_schema,
+            self.many_to_many_fields,
+        )
+        if self.read_schema or self.many_to_many_fields:
+            return pd.DataFrame([self.schema_display_row(r) for r in records])
+        return self.plain_df(records)
 
-        return df
+    def plain_df(self, records: list[dict]) -> pd.DataFrame:
+        """DataFrame of plain-mode records, as ``pd.read_sql`` + Arrow fixes made it.
 
-    def _execute_with_pydantic_schema(self, stmt: Select) -> pd.DataFrame:
-        """Execute query using ORM execution for many-to-many or selectinload support"""
-        with self.conn.session as s:
-            if self.many_to_many_fields:
-                # Use the filtered statement first to get the correct data
-                filtered_result = s.execute(stmt).all()
+        Kept until display is unified: Decimal → float, tz-aware → UTC.
+        """
+        columns = list(self.cte.columns.keys())
+        df = pd.DataFrame.from_records(
+            [tuple(r[c] for c in columns) for r in records],
+            columns=columns,
+            coerce_float=True,
+        )
+        for name, dtype in df.dtypes.items():
+            if isinstance(dtype, pd.DatetimeTZDtype):
+                df[name] = df[name].dt.tz_convert("UTC")
+        return convert_arrow(self.cte.columns, df)
 
-                # If we have many-to-many fields and filtered results, load relationships separately
-                if self.many_to_many_fields and filtered_result:
-                    pk = pk_name(self.edit_create_model)
-                    # Extract entity PKs from filtered results
-                    entity_ids = [getattr(row, pk) for row in filtered_result]
-
-                    options = m2m_load_options(
-                        self.edit_create_model, self.many_to_many_fields
-                    )
-
-                    # Load entities with relationships for just the filtered PKs
-                    entities_with_relations = (
-                        s.query(self.edit_create_model)
-                        .filter(pk_attr(self.edit_create_model).in_(entity_ids))
-                        .options(*options)
-                        .all()
-                    )
-
-                    # Create a mapping of pk -> entity with relationships
-                    entity_map = {
-                        getattr(entity, pk): entity
-                        for entity in entities_with_relations
-                    }
-
-                    # Merge filtered data with relationship data
-                    result = []
-                    for row in filtered_result:
-                        entity = entity_map.get(getattr(row, pk))
-                        if entity:
-                            # Use the entity with relationships loaded
-                            result.append(entity)
-                        else:
-                            # Fallback to row data if entity not found
-                            result.append(row)
-                else:
-                    # No many-to-many fields or no results, use filtered results as-is
-                    result = filtered_result
+    def schema_display_row(self, record: dict) -> dict:
+        """Make one ORM-path record Arrow-displayable: JSON text, enum values."""
+        json_cols = {c.name for c in self.cte.columns if is_json_type(c.type)}
+        row = dict(record)
+        for key, value in row.items():
+            if key in json_cols:
+                """JSON as text: Arrow rejects dicts/lists mixing types."""
+                row[key] = None if value is None else json_to_text(value)
+            elif isinstance(value, list):
+                row[key] = [
+                    item.value if isinstance(item, Enum) else str(item)
+                    for item in value
+                ]
             else:
-                result = s.execute(stmt).all()
-
-            json_cols = {c.name for c in self.cte.columns if is_json_type(c.type)}
-            validated_rows = []
-            for row in result:
-                if self.read_schema:
-                    # Use Pydantic validation if schema is provided
-                    validated_data = self.read_schema.model_validate(
-                        row, from_attributes=True
-                    ).model_dump()
-                else:
-                    # Convert ORM/Row object to dict directly
-                    if hasattr(row, "__dict__"):
-                        # ORM object
-                        validated_data = {
-                            key: value
-                            for key, value in row.__dict__.items()
-                            if not key.startswith("_")
-                        }
-                    else:
-                        # Row object
-                        validated_data = row._asdict()
-
-                # Ensure the primary key is always present for CRUD operations
-                pk = pk_name(self.edit_create_model)
-                if pk not in validated_data and hasattr(row, pk):
-                    validated_data[pk] = getattr(row, pk)
-
-                # Convert enum objects to strings for PyArrow compatibility
-                for key, value in validated_data.items():
-                    if key in json_cols:
-                        """JSON as text: Arrow rejects dicts/lists mixing types."""
-                        validated_data[key] = (
-                            None if value is None else json_to_text(value)
-                        )
-                    elif isinstance(value, list):
-                        # Handle list of enums
-                        validated_data[key] = [
-                            item.value if isinstance(item, Enum) else str(item)
-                            for item in value
-                        ]
-                    else:
-                        validated_data[key] = enum_value(value)
-
-                validated_rows.append(validated_data)
-
-            # Create DataFrame from validated data
-            df = pd.DataFrame(validated_rows)
-            return df
+                row[key] = enum_value(value)
+        return row
 
     def show_df(self, df: pd.DataFrame) -> DataframeState | None:
         if df.empty:
