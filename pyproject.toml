@@ -44,7 +44,7 @@ filterwarnings = [
 
 [project]
 name = "streamlit_pydantic_crud"
-version = "0.7.1"
+version = "0.7.2"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
 requires-python = ">=3.12"
