@@ -1,7 +1,8 @@
 """Harness rendering SqlUi in the consumer's read shapes (`CRUD_TEST_MODE`).
 
-Modes: `plain` (no schema), `schema` (read_schema), `join` (JOIN labels),
-`m2m` (WHERE + ORDER BY subquery + M2M + @property). AppTest cannot select
+Modes: `plain` (no schema), `styled` (plain + df_style_formatter/style_fn),
+`schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
++ M2M + @property). AppTest cannot select
 dataframe rows, so session state `SELECT` (row positions) is reported as the
 selection; the CRUD dialogs are replaced by recorders writing `CALLS`.
 """
@@ -83,6 +84,11 @@ M2M: ManyToManyFields = {
 FILTER = ["name", "app_name"]
 
 
+def bold_rows(row: Any) -> list[str]:
+    """Row style function: every cell bold."""
+    return ["font-weight: bold"] * len(row)
+
+
 def render() -> SqlUi:
     """Build the SqlUi of the current mode."""
     if MODE == "plain":
@@ -91,6 +97,15 @@ def render() -> SqlUi:
             read_instance=select(Item),
             edit_create_model=Item,
             available_filter=["name"],
+            key="rp",
+        )
+    if MODE == "styled":
+        return SqlUi(
+            conn=conn,
+            read_instance=select(Item),
+            edit_create_model=Item,
+            df_style_formatter={"price": "${:,.2f}", "meta": "{:>4}"},
+            style_fn=bold_rows,
             key="rp",
         )
     if MODE == "schema":

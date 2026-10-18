@@ -1,81 +1,118 @@
-"""Format values, labels and DataFrame columns for display.
+"""Format values, labels and table columns for display.
 
 Depends on `sa_model` and `values` only; never on Streamlit state.
 """
 
-import math
 from collections.abc import Callable, Iterable
+from datetime import date, time, timedelta
 from decimal import Decimal
-from functools import cache, partial
-from typing import Any
+from enum import Enum
+from functools import cache
+from typing import Any, Literal
 
-import pandas as pd
-from sqlalchemy import CTE, Numeric
+import streamlit as st
+from sqlalchemy import CTE, Float, Numeric
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
+from sqlalchemy.types import TypeEngine
+from streamlit.elements.lib.column_types import ColumnConfig
 
 from streamlit_pydantic_crud.helpers.sa_model import is_array_type, is_json_type
 from streamlit_pydantic_crud.helpers.values import enum_value, json_to_text, to_list
 
 """Per-column formatter accepted by pandas ``Styler.format``."""
 DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
+"""How a column's values are displayed, decided by its SQLAlchemy type."""
+ColumnKind = Literal["enum", "json", "array"]
+"""Item types a list cell shows as they are; any other item becomes str()."""
+PLAIN_ITEM_TYPES = (str, int, float, Decimal, date, time, timedelta)
 
 
-def convert_arrow(
-    columns: Iterable[KeyedColumnElement[Any]], df: pd.DataFrame
-) -> pd.DataFrame:
-    """Make enum, JSON and ARRAY columns of `df` displayable by Arrow, in place.
+def display_records(
+    columns: Iterable[KeyedColumnElement[Any]], records: Iterable[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Return copies of `records` with every value ready for ``st.dataframe``.
 
-    Enums become their values, JSON indented text and arrays a joined string.
+    A key matching an enum, JSON or ARRAY column of `columns` is converted by
+    that type: enum → value, JSON → text, ARRAY → list of (enum) values; a PG
+    array literal string is parsed. Any other value (other column types, or a
+    key without a column, like a ``read_schema`` ``@property``) is converted by
+    its own type: Enum → value, list → list of `display_item`. Decimal, dates
+    and None stay unchanged.
     """
-    for col in columns:
-        col_name = col.name
-        if col_name in df.columns:
-            if isinstance(col.type, SQLEnum):
-                df[col_name] = df[col_name].map(enum_value)
-            elif is_json_type(col.type):
-                df[col_name] = df[col_name].apply(
-                    lambda x: json_to_text(x) if x is not None else None
-                )
-            elif is_array_type(col.type):
-                df[col_name] = df[col_name].map(array_to_text)
-
-    return df
+    kinds = {
+        col.name: kind for col in columns if (kind := column_kind(col.type)) is not None
+    }
+    return [
+        {key: display_cell(kinds.get(key), value) for key, value in record.items()}
+        for record in records
+    ]
 
 
-def array_to_text(value: Any) -> str | None:
-    """Join an ARRAY cell into text; enum members show their values.
-
-    A PG array literal string is parsed first; None stays None.
-    """
+def display_cell(kind: ColumnKind | None, value: Any) -> Any:
+    """Convert one cell `value` for display, by its column `kind` if known."""
     if value is None:
         return None
-    return ", ".join(str(enum_value(item)) for item in to_list(value))
+    if kind == "json":
+        return json_to_text(value)
+    if kind == "array":
+        return [enum_value(item) for item in to_list(value)]
+    if isinstance(value, list | tuple):
+        return [display_item(item) for item in value]
+    return enum_value(value)
 
 
-def numeric_formatters(cte: CTE, columns: Iterable[str]) -> DfStyleFormatter:
-    """Return Styler formatters for the Numeric/Float columns of `cte` in `columns`.
+def display_item(item: Any) -> Any:
+    """Return a list item displayable by Arrow: enum value, plain scalar or str().
 
-    Styler otherwise shows every float with 6 decimals (50000.000000).
+    ORM objects of a loaded relationship, nested dicts and the like become str().
+    """
+    if item is None or isinstance(item, PLAIN_ITEM_TYPES):
+        return item
+    if isinstance(item, Enum):
+        return item.value
+    return str(item)
+
+
+def column_kind(col_type: TypeEngine[Any]) -> ColumnKind | None:
+    """Return the display kind of a column type, None when values pass as is."""
+    if isinstance(col_type, SQLEnum):
+        return "enum"
+    if is_json_type(col_type):
+        return "json"
+    if is_array_type(col_type):
+        return "array"
+    return None
+
+
+def column_configs(cte: CTE, columns: Iterable[str]) -> dict[str, ColumnConfig]:
+    """Return default ``st.dataframe`` column configs for the `cte` `columns`.
+
+    Numeric/Float get a number format by scale, ARRAY columns a list column.
     """
     names = set(columns)
-    return {
-        col.name: partial(format_number, scale=col.type.scale)
-        for col in cte.columns
-        if col.name in names and isinstance(col.type, Numeric)
-    }
+    configs: dict[str, ColumnConfig] = {}
+    for col in cte.columns:
+        if col.name not in names:
+            continue
+        if isinstance(col.type, Numeric | Float):
+            """SQLAlchemy 2.1 no longer derives Float from Numeric."""
+            configs[col.name] = st.column_config.NumberColumn(
+                format=number_format(getattr(col.type, "scale", None))
+            )
+        elif is_array_type(col.type):
+            configs[col.name] = st.column_config.ListColumn()
+    return configs
 
 
-def format_number(value: object, scale: int | None = None) -> str:
-    """Format a number with `scale` decimals, or its shortest repr if None.
+def number_format(scale: int | None) -> str:
+    """Return a ``NumberColumn`` format: `scale` decimals, else the shortest repr.
 
-    Missing, infinite and non-numeric values keep their plain str().
+    Matches the former Styler formatter (``f"{v:.2f}"`` / ``str(v)``): the
+    browser's ``%g`` has no precision limit, while ``plain`` shows float noise
+    (3.1415900000000003) and the default rounds to 4 decimals.
     """
-    if not isinstance(value, float | int | Decimal) or not math.isfinite(value):
-        return str(value)
-    if scale is not None:
-        return f"{value:.{scale}f}"
-    return str(value)
+    return "%g" if scale is None else f"%.{scale}f"
 
 
 def display_value(value: Any) -> str:
