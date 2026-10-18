@@ -5,6 +5,7 @@ through its session-state key (page 1 on a reset or size change, clamped to
 the last page when rows disappear) instead of remounting the widget.
 """
 
+from collections.abc import Sequence
 from math import ceil
 
 import streamlit as st
@@ -12,53 +13,110 @@ from streamlit import session_state as ss
 
 SHOW_ALL = "Show All"
 
-OPTS_ITEMS_PAGE: tuple[int | None, ...] = (50, 100, 200, 500, 1000, None)
-"""SqlUi page sizes; None is "Show All" (``items_per_page_default`` indexes it)."""
+PageSizes = tuple[int | None, ...]
+"""Page-size options; None is the "Show All" entry."""
 
-REL_OPTS_ITEMS_PAGE: tuple[int | None, ...] = (50, 100, 200, 500, 1000)
+OPTS_ITEMS_PAGE: PageSizes = (50, 100, 200, 500, 1000, None)
+"""SqlUi default page sizes; the deprecated ``items_per_page_default`` indexes it."""
+
+DEFAULT_PAGE_SIZE = 50
+"""Rows per page selected by default in SqlUi and the one-to-many panels."""
+
+REL_OPTS_ITEMS_PAGE: PageSizes = (50, 100, 200, 500, 1000)
 """One-to-many panel page sizes; deliberately without "Show All"."""
 
 
 def show_pagination(
     count: int,
-    opts_items_page: tuple[int | None, ...],
+    options: PageSizes,
+    page_size: int | None,
     key: str = "",
-    default_index: int = 0,
     reset: bool = False,
 ) -> tuple[int, int]:
     """Render the page-size selectbox and pager; return (page size, page).
 
-    A None option in `opts_items_page` is shown as "Show All". `reset` moves
-    the pager back to page 1 (e.g. after a filter change).
+    `options` come from `merge_page_sizes` (`page_size` among them). No
+    options: no selectbox, fixed `page_size`; None then shows all rows, no pager.
     """
     page_key = f"{key}_pagination"
     size_col, pag_col, total_col = st.columns(
         [0.2, 0.6, 0.2], vertical_alignment="center"
     )
 
-    labels = [option_label(item) for item in opts_items_page]
-    with size_col:
-        selected = st.selectbox(
-            "Items per page",
-            labels,
-            index=min(default_index, len(labels) - 1),
-            key=f"{key}_page_size",
-            label_visibility="collapsed",
-            on_change=handle_page_size_change,
-            args=(page_key,),
-        )
+    if options:
+        with size_col:
+            selected = page_size_select(options, page_size, key, page_key)
+    else:
+        selected = option_label(page_size)
 
-    items_per_page = resolve_page_size(selected or labels[0], count)
+    items_per_page = resolve_page_size(selected, count)
     num_pages = page_count(count, items_per_page)
     sync_page_state(page_key, num_pages, reset)
 
-    with pag_col:
-        page = st.pagination(num_pages, key=page_key)
+    page = 1
+    if options or page_size is not None:
+        with pag_col:
+            page = st.pagination(num_pages, key=page_key)
 
     with total_col:
         st.caption(page_range_text(count, items_per_page, page))
 
     return items_per_page, page
+
+
+def page_size_select(
+    options: PageSizes, page_size: int | None, key: str, page_key: str
+) -> str:
+    """Render the page-size selectbox; return the selected label.
+
+    Options are string labels, as before: a stored label stays valid.
+    """
+    labels = [option_label(item) for item in options]
+    default = option_label(page_size)
+    selected = st.selectbox(
+        "Items per page",
+        labels,
+        index=labels.index(default) if default in labels else 0,
+        key=f"{key}_page_size",
+        label_visibility="collapsed",
+        on_change=handle_page_size_change,
+        args=(page_key,),
+    )
+    return selected or labels[0]
+
+
+def merge_page_sizes(
+    page_size: int | None, options: Sequence[int | None] | None
+) -> PageSizes:
+    """Validate the page sizes; return the options with `page_size` among them.
+
+    Ints ascend, None ("Show All") goes last; empty or None options stay empty.
+    """
+    check_page_size(page_size, "page_size")
+    if options is None:
+        return ()
+    if isinstance(options, str | bytes) or not isinstance(options, Sequence):
+        msg = (
+            "page_size_options must be a sequence of positive ints and/or None, "
+            f"got {options!r}"
+        )
+        raise ValueError(msg)
+    for item in options:
+        check_page_size(item, "page_size_options item")
+    if not options:
+        return ()
+    merged = {*options, page_size}
+    ints = sorted(item for item in merged if item is not None)
+    return (*ints, None) if None in merged else tuple(ints)
+
+
+def check_page_size(value: object, name: str) -> None:
+    """Raise ValueError unless `value` is a positive int (not bool) or None."""
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        msg = f"{name} must be a positive int or None (show all), got {value!r}"
+        raise ValueError(msg)
 
 
 def handle_page_size_change(page_key: str) -> None:
