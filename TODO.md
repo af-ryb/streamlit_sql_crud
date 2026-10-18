@@ -109,7 +109,13 @@ Leftovers:
 
 ## Step 4 — API decisions
 
-- [ ] Remove deprecated `base_key` and `read_instance` + `edit_create_model` (before 1.0?)
+- [x] Remove deprecated `base_key` and `read_instance` + `edit_create_model` (before 1.0?)
+  — decided 2026-10-18 after auditing the only consumer (hitapps web_app): it
+  passes a custom `Select` (JOINs, ORDER BY) as `read_instance` in 4 of 6 tables,
+  so `read_instance` + `edit_create_model` stay as the supported custom-query
+  form (`model=` is the shortcut). Deprecated in 0.9.0, removed in 0.10.0:
+  `base_key`, `df_style_formatter`, `style_fn`, `SqlUi.df`,
+  `read_use_container_width`, `items_per_page_default` (see Step 6)
 
 ## Step 5 — Module reorganization (done)
 
@@ -262,9 +268,47 @@ Side findings (0.7.2, not fixed):
 - [ ] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
   like the Pydantic ones did before #16, so they may show stale browser values
   after a programmatic reset (only number inputs seed their state)
-- [ ] Schema and no-schema read paths show ARRAY cells differently (list chips vs
-  a comma-joined string)
+- [x] Schema and no-schema read paths show ARRAY cells differently (list chips vs
+  a comma-joined string) — 0.9.0 (#28): one display path, lists in both modes
 - [ ] `PydanticUi.from_json_schema` is annotated `-> "PydanticUi"` but returns
   `cls(...)`; `Self` would type `PydanticCrudUi.from_json_schema` correctly
 - [ ] `one_to_many.rerun_panel` reads the internal
   `ScriptRunContext.fragment_ids_this_run`; recheck on Streamlit upgrades
+
+## Step 6 — Single read path without pandas (0.9.0)
+
+Spec/plan: `tasks/` (local). PRs #25–#33.
+- [x] `SessionSource` protocol for `conn` (#25); consumer-shaped read-path tests (#26)
+- [x] `table/read.read_records`: one read path; `read_instance` ORDER BY honored
+  with the PK as tiebreaker; M2M keeps query-row columns (#27)
+- [x] One display normalization + `st.column_config` (#28); records rendered
+  directly, `column_config`, `SqlUi.rows`, copy passes raw records (#30)
+- [x] SQLAlchemy 2.1 compatibility + CI job (#29)
+- [x] Deprecations, Styler adapter, `width` / `height` (#32); one-to-many panel
+  on records, no numpy (#31); `page_size` / `page_size_options` (#33)
+- [ ] 0.10.0: remove `base_key`, `df_style_formatter`, `style_fn`, `SqlUi.df`,
+  `read_use_container_width`, `items_per_page_default`, `table/styler_compat.py`;
+  migrate the example project (uses `df_style_formatter`,
+  `read_use_container_width`)
+- [ ] Switch the build backend to `uv_build` (no `build/` / `*.egg-info` in the tree)
+
+Side findings (Step 6, not fixed):
+- [ ] `seed_widget_state` plus `value=` triggers Streamlit's one-time "created with
+  a default value but also had its value set via the Session State API" warning
+  (edit dialog ID field, ProphetConfigUi in the consumer); drop `value=` when the
+  widget is seeded
+- [ ] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
+  `InputFields.input_array` mixes raw members with `.enums` names (edit and copy)
+- [ ] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
+  JSON columns
+- [ ] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it
+  is skipped with a warning on every render
+- [ ] The ORDER BY lifting relies on SQLAlchemy private attributes
+  (`_order_by_clauses`, `_limit_clause`, ...); covered by
+  `tests/test_pagination_order.py`
+- [ ] `items_per_page_default` + an explicit `page_size=50`: the index wins (can't
+  tell 50 from the default); only during the deprecation window
+- [ ] Consumer: `ConfidenceIntervalRule` has no `__str__` (delete dialog shows the
+  object repr); copy in its alert-configuration table leaves the FK
+  `template_id` selectbox empty (same on v0.7.0)
+
