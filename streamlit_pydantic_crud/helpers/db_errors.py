@@ -42,6 +42,7 @@ def format_database_error(error: Exception) -> str:
     if (
         "NOT NULL constraint failed" in error_str
         or "cannot be null" in error_str.lower()
+        or "violates not-null constraint" in error_str
     ):
         return (
             "📝 Missing Required Fields: Some required fields are missing. "

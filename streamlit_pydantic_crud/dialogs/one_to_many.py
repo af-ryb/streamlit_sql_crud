@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import (
     DeclarativeBase,
     RelationshipDirection,
@@ -16,11 +16,22 @@ from sqlalchemy.orm import (
     Session,
 )
 from streamlit.connections.sql_connection import SQLConnection
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
-from streamlit_pydantic_crud.helpers.sa_model import pk_attr, pk_name
+from streamlit_pydantic_crud.helpers.sa_model import (
+    model_by_tablename,
+    pk_attr,
+    pk_column,
+    tablename,
+)
+from streamlit_pydantic_crud.state import (
+    clear_state_keys,
+    data_version,
+    session_writes,
+)
 from streamlit_pydantic_crud.table import pagination, query
 
 
@@ -29,7 +40,7 @@ class ReadManyRel:
 
     def __init__(
         self,
-        model: Any,
+        model: type[DeclarativeBase],
         model_id: int | str,
         rel: RelationshipProperty,
     ) -> None:
@@ -47,24 +58,19 @@ class ReadManyRel:
         return col
 
     @cached_property
-    def other_model(self) -> Any:
-        other_col = self.other_col
-        other_colname: str = other_col.table.name
-        mappers = self.model.registry.mappers
-
-        other_model = next(
-            mapper.class_
-            for mapper in mappers
-            if mapper
-            if mapper.class_.__tablename__ == other_colname
-        )
+    def other_model(self) -> type[DeclarativeBase]:
+        """The model mapped to the child table, from `model`'s registry."""
+        table_name: str = self.other_col.table.name
+        other_model = model_by_tablename(self.model, table_name)
+        if other_model is None:
+            msg = f"No mapped model for table '{table_name}' of relationship {self.rel}"
+            raise ValueError(msg)
         return other_model
 
     @cached_property
     def suffix_key(self) -> str:
-        model_name: str = self.model.__table__.name
-        key = f"{model_name}_{self.other_col.name}_{self.rel.target}"
-        return key
+        """Widget-key suffix: parent table, child FK column and child table."""
+        return f"{tablename(self.model)}_{self.other_col.name}_{self.rel.target}"
 
     @property
     def base_stmt(self) -> Select[Any]:
@@ -76,14 +82,15 @@ class ReadManyRel:
         stmt = stmt.where(self.other_col == self.model_id)
         return stmt
 
-    def get_qtty_rows(self, session: Session) -> int:
-        subq = self.base_stmt.subquery()
-        stmt = select(func.count(subq.c[pk_name(self.other_model)]))
-        qtty = session.execute(stmt).scalar_one()
-        return qtty
+    def get_qtty_rows(self, conn: SQLConnection) -> int:
+        """Count the child rows; cached per statement and data version."""
+        return query.get_qtty_rows(conn, self.base_stmt, data_version())
 
     def get_stmt_pag(self, items_per_page: int, page: int) -> Select[Any]:
-        return query.get_stmt_pag(self.base_stmt, items_per_page, page)
+        """Return page `page` of the child rows, ordered by primary key."""
+        return query.get_stmt_pag(
+            self.base_stmt, items_per_page, page, pk_column(self.other_model)
+        )
 
     def get_data(
         self, session: Session, items_per_page: int, page: int
@@ -113,17 +120,19 @@ def show_rel(
         data_container = tab_read.container()
         pag_container = tab_read.container()
 
-    with pag_container, conn.session as s:
-        qtty_rows = read_many_rel.get_qtty_rows(s)
+    with pag_container:
+        qtty_rows = read_many_rel.get_qtty_rows(conn)
         items_per_page, page = pagination.show_pagination(
             qtty_rows,
             pagination.REL_OPTS_ITEMS_PAGE,
             key=f"stsql_read_many_pag_{read_many_rel.suffix_key}",
         )
 
+    with conn.session as s:
         data = read_many_rel.get_data(s, items_per_page, page)
 
     with data_container:
+        """A write renews the key, dropping a selection of rows that moved."""
         df = pd.DataFrame(data, columns=["id", pretty_name]).set_index("id", drop=True)
         selection_state = st.dataframe(
             df,
@@ -131,7 +140,7 @@ def show_rel(
             width="stretch",
             selection_mode="multi-row",
             on_select="rerun",
-            key=f"stsql_many_df_{read_many_rel.suffix_key}",
+            key=f"stsql_many_df_{read_many_rel.suffix_key}_{session_writes()}",
         )
 
         rows_pos = []
@@ -140,26 +149,34 @@ def show_rel(
 
         with tab_create:
             default_values = {read_many_rel.other_col.name: model_id}
+            create_key = f"stsql_create_many_{read_many_rel.suffix_key}"
+            gen_key = f"{create_key}_gen"
             create_row = CreateRow(
                 conn,
                 read_many_rel.other_model,
                 default_values,
-                key=f"stsql_create_many_{read_many_rel.suffix_key}",
+                key=f"{create_key}_{st.session_state.get(gen_key, 0)}",
             )
-            create_row.show(pretty_name)
+            ok, msg = create_row.show(pretty_name)
+            if ok:
+                """New widget keys: the browser keeps a form widget's value when
+                only its session state is dropped."""
+                create_row.reset_form_state()
+                st.session_state[gen_key] = st.session_state.get(gen_key, 0) + 1
+            handle_panel_result(create_key, ok, msg)
 
         with tab_delete:
+            delete_key = f"st_sql_many_delete_{read_many_rel.suffix_key}"
             rows_id = df.iloc[rows_pos].index.to_list()
+            ok, msg = None, None
             if len(rows_id) == 0:
                 st.text("First select the rows to delete")
             else:
                 delete_rows = DeleteRows(
-                    conn,
-                    read_many_rel.other_model,
-                    rows_id,
-                    f"st_sql_many_delete_{read_many_rel.suffix_key}",
+                    conn, read_many_rel.other_model, rows_id, delete_key
                 )
-                delete_rows.show(pretty_name)
+                ok, msg = delete_rows.show(pretty_name)
+            handle_panel_result(delete_key, ok, msg)
 
 
 def show_rels(
@@ -174,3 +191,30 @@ def show_rels(
 
     for rel in rels:
         show_rel(conn, model, model_id, rel)
+
+
+def handle_panel_result(key: str, ok: bool | None, msg: str | None) -> None:
+    """Report the outcome of a panel create/delete with widget key `key`.
+
+    A failure is shown at once, keeping the form; a success reruns the panel
+    and shows its message on that rerun.
+    """
+    notice_key = f"{key}_notice"
+    if ok:
+        st.session_state[notice_key] = msg
+        rerun_panel()
+    elif ok is False:
+        st.error(msg)
+    elif notice_key in st.session_state:
+        st.success(st.session_state[notice_key])
+        clear_state_keys([notice_key])
+
+
+def rerun_panel() -> None:
+    """Rerun only the panel fragment, so the edit dialog around it stays open.
+
+    A full-app run (first render, AppTest) cannot rerun a fragment: rerun the app.
+    """
+    ctx = get_script_run_ctx()
+    in_fragment_run = ctx is not None and bool(ctx.fragment_ids_this_run)
+    st.rerun(scope="fragment" if in_fragment_run else "app")

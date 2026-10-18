@@ -2,10 +2,14 @@
 
 Parent 1 has 120 children, parent 2 has 10. Session state `PARENT` picks the
 parent whose panel is rendered (1 by default), standing in for opening the
-edit dialog of another row.
+edit dialog of another row. AppTest cannot select dataframe rows, so session
+state `SELECT = (key, rows)` makes the dataframe with widget key `key` report
+the row positions `rows` as selected.
 """
 
 import os
+from typing import Any
+from unittest.mock import patch
 
 import streamlit as st
 from sqlalchemy import ForeignKey, create_engine
@@ -62,5 +66,22 @@ with Session(eng) as s:
         s.add_all(Child(id=i, name=f"C{i}", parent_id=2) for i in range(121, 131))
         s.commit()
 
+real_dataframe = st.dataframe
+
+
+def fake_dataframe(*args: Any, **kwargs: Any) -> Any:
+    """Render the dataframe; report the `SELECT` rows if its key matches."""
+    result = real_dataframe(*args, **kwargs)
+    key, rows = st.session_state["SELECT"]
+    if kwargs.get("key") == key:
+        return {"selection": {"rows": rows, "columns": []}}
+    return result
+
+
 conn = st.connection("sql", url=f"sqlite:///{DB}")
-show_rel(conn, Parent, st.session_state.get("PARENT", 1), Parent.children.property)
+parent_id = st.session_state.get("PARENT", 1)
+if "SELECT" in st.session_state:
+    with patch.object(st, "dataframe", fake_dataframe):
+        show_rel(conn, Parent, parent_id, Parent.children.property)
+else:
+    show_rel(conn, Parent, parent_id, Parent.children.property)
