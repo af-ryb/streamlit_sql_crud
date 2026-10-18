@@ -6,7 +6,6 @@ Each panel lists, creates and deletes the child rows of the edited row.
 from functools import cached_property
 from typing import Any
 
-import pandas as pd
 import streamlit as st
 from sqlalchemy import Select, select
 from sqlalchemy.orm import (
@@ -25,6 +24,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     model_by_tablename,
     pk_attr,
     pk_column,
+    pk_name,
     tablename,
 )
 from streamlit_pydantic_crud.state import (
@@ -93,13 +93,15 @@ class ReadManyRel:
         )
 
     def get_data(
-        self, session: Session, items_per_page: int, page: int
-    ) -> list[tuple[int, str]]:
-        stmt = self.get_stmt_pag(items_per_page, page)
-        rows = session.execute(stmt)
+        self, session: Session, items_per_page: int, page: int, label: str
+    ) -> list[dict[str, Any]]:
+        """Return page `page` as records: the child's `str()` under `label`, PK.
 
-        result: list[tuple[int, str]] = [(row[0], str(row[1])) for row in rows]
-        return result
+        The PK sits under the child's PK attribute name, after the label.
+        """
+        stmt = self.get_stmt_pag(items_per_page, page)
+        pk = pk_name(self.other_model)
+        return [{label: str(row[1]), pk: row[0]} for row in session.execute(stmt)]
 
 
 @st.fragment
@@ -129,14 +131,14 @@ def show_rel(
         )
 
     with conn.session as s:
-        data = read_many_rel.get_data(s, items_per_page, page)
+        records = read_many_rel.get_data(s, items_per_page, page, pretty_name)
 
     with data_container:
         """A write renews the key, dropping a selection of rows that moved."""
-        df = pd.DataFrame(data, columns=["id", pretty_name]).set_index("id", drop=True)
         selection_state = st.dataframe(
-            df,
+            records,
             hide_index=True,
+            column_order=[pretty_name],
             width="stretch",
             selection_mode="multi-row",
             on_select="rerun",
@@ -167,7 +169,8 @@ def show_rel(
 
         with tab_delete:
             delete_key = f"st_sql_many_delete_{read_many_rel.suffix_key}"
-            rows_id = df.iloc[rows_pos].index.to_list()
+            pk = pk_name(read_many_rel.other_model)
+            rows_id = [records[pos][pk] for pos in rows_pos if pos < len(records)]
             ok, msg = None, None
             if len(rows_id) == 0:
                 st.text("First select the rows to delete")
