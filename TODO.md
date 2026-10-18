@@ -159,32 +159,32 @@ Side findings (stage 1, not fixed — behavior-preserving refactor):
 - [x] `stsql_updated` is seeded with 1 by `SqlUi` but with 0 by the dialogs and
   `show_crud_dialog` (`set_state(UPDATED_KEY, ...)`) — 0.7.1: no longer seeded;
   `record_write` increments it and `session_writes` reads it with default 0
-- [ ] `PydanticCrudUi.__init__` builds `PydanticInputGenerator` and session state twice
+- [x] `PydanticCrudUi.__init__` builds `PydanticInputGenerator` and session state twice — 0.7.2 (#19)
 - [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`;
   `if col_name is None` after `column_label` (the guards in
   `_render_foreign_key_selectbox`/`_render_many_to_many_multiselect` and
   `if operation == "read": pass` were removed in stage 4)
-- [ ] `one_to_many.ReadManyRel.other_model` looks the model up inline (raises
-  StopIteration/AttributeError) instead of `sa_model.model_by_tablename` (returns None)
+- [x] `one_to_many.ReadManyRel.other_model` looks the model up inline (raises
+  StopIteration/AttributeError) instead of `sa_model.model_by_tablename` (returns None) — 0.7.2 (#18)
 - [ ] `InputFields.get_input_value` uses `col.description` (raises when None) rather
   than `column_label`
 
 Side findings (stage 2, not fixed — behavior-preserving refactor):
-- [ ] An enum-array column shows as `DepartmentTypeEnum.ENGINEERING` in the table
+- [x] An enum-array column shows as `DepartmentTypeEnum.ENGINEERING` in the table
   (`_execute_with_pydantic_schema` list branch applies `str()`), seen on the
-  example's No-Schema Numbers page
-- [ ] `one_to_many.ReadManyRel.get_qtty_rows` is uncached and counts the PK, unlike
+  example's No-Schema Numbers page — 0.7.2 (#15)
+- [x] `one_to_many.ReadManyRel.get_qtty_rows` is uncached and counts the PK, unlike
   `query.get_qtty_rows` (cached per `updated`); unify once the panel's refresh
-  after create/delete is covered by a test
-- [ ] `one_to_many` panels page without ORDER BY, so rows may move between pages
-- [ ] `ReadManyRel.suffix_key` uses `__table__.name` while elsewhere `tablename()`
-  uses `__tablename__`; `model` is untyped (`Any`) there because of it
+  after create/delete is covered by a test — 0.7.2 (#18)
+- [x] `one_to_many` panels page without ORDER BY, so rows may move between pages — 0.7.2 (#18)
+- [x] `ReadManyRel.suffix_key` uses `__table__.name` while elsewhere `tablename()`
+  uses `__tablename__`; `model` is untyped (`Any`) there because of it — 0.7.2 (#18)
 
 Side findings (stage 3, not fixed — behavior-preserving refactor):
-- [ ] A create/delete from a one-to-many panel keeps the edit dialog open and its
-  Read tab stays stale (empty) until the dialog is reopened; same on stage 2
-- [ ] Inside an edit dialog the panel's `CreateRow` form keeps the entered values
-  after a successful save (plain `st.form`, no `clear_on_submit`)
+- [x] A create/delete from a one-to-many panel keeps the edit dialog open and its
+  Read tab stays stale (empty) until the dialog is reopened; same on stage 2 — 0.7.2 (#18)
+- [x] Inside an edit dialog the panel's `CreateRow` form keeps the entered values
+  after a successful save (plain `st.form`, no `clear_on_submit`) — 0.7.2 (#18)
 - [ ] `handle_save_error` logs from `dialogs.persist` now, so the loguru record's
   module/function in "… failed for <table>" changed (message text unchanged)
 - [ ] `CreateRow`/`UpdateRow` success paths still repeat `ss[UPDATED_KEY] += 1`,
@@ -192,9 +192,9 @@ Side findings (stage 3, not fixed — behavior-preserving refactor):
 - [ ] Code comments in the dialogs still use `#` instead of the triple-quoted style
 
 Side findings (stage 4, not fixed — behavior-preserving refactor):
-- [ ] `PydanticCrudUi.__init__` still builds the generator twice (kept: each build
+- [x] `PydanticCrudUi.__init__` still builds the generator twice (kept: each build
   runs `get_pydantic_field_info`, which calls user `default_factory`s, so dropping
-  one is observable)
+  one is observable) — 0.7.2 (#19)
 - [ ] The M2M fallback (options not loaded) logs two warnings; the second ("not found
   in foreign_key_options") always fires there and is misleading. Loguru records of
   the moved warnings now come from `pydantic_form.*` / `schema_check`
@@ -207,9 +207,9 @@ Side findings (stage 4, not fixed — behavior-preserving refactor):
   (number inputs update); same on the stage 3 base — fixed: the browser keeps a
   keyed widget's value over `value=`, so every Pydantic widget now seeds its
   session state when it has none (`widgets.seed_widget_state`), which pushes it
-- [ ] `render_field` takes `annotation` separately though `field_info["annotation"]`
-  holds it; `foreign_key_data` / `many_to_many_data` are untyped dicts
-- [ ] `pydantic_ui.py` comments still use `#` instead of the triple-quoted style
+- [x] `render_field` takes `annotation` separately though `field_info["annotation"]`
+  holds it; `foreign_key_data` / `many_to_many_data` are untyped dicts — 0.7.2 (#19)
+- [x] `pydantic_ui.py` comments still use `#` instead of the triple-quoted style — 0.7.2 (#19)
 
 Side findings (stage 5, not fixed — behavior-preserving refactor):
 - [ ] `table/` and `forms/` are peers only because `table/params` uses
@@ -226,20 +226,20 @@ Side findings (stage 5, not fixed — behavior-preserving refactor):
   not (it masked the packaging bug), hence the clean-copy build in the guards
 
 Side findings (code review, not fixed):
-- [ ] `SqlUi.set_structure` creates instance attributes outside `__init__`
+- [x] `SqlUi.set_structure` creates instance attributes outside `__init__`
   (`header_container`, `data_container`, `pag_container`, `expander_container`,
   `filter_container`, `btns_container`; IDE: "defined outside `__init__`"). Root
   cause: `__init__` renders the whole UI; declare them in `__init__` (or have
-  `set_structure` return a containers dataclass) so the class shape is explicit
-- [ ] One-to-many panel Create tab ignores `CreateRow.show()`'s result: no success
+  `set_structure` return a containers dataclass) so the class shape is explicit — 0.7.2 (#17)
+- [x] One-to-many panel Create tab ignores `CreateRow.show()`'s result: no success
   or error message (a NOT NULL failure shows only in the server log); its Read tab
-  stays stale until the dialog is reopened (example: Departments → Projects)
+  stays stale until the dialog is reopened (example: Departments → Projects) — 0.7.2 (#18)
 - [x] No-schema forms turn a string column with ≤ `string_enum_threshold` (10)
   distinct values into a selectbox of existing values, so a new value can't be
   typed (example: project name in the one-to-many Create tab) — 0.7.0:
   `input_str_enum` accepts new options too (a String column is not an Enum)
-- [ ] `st.dataframe` logs an Arrow conversion traceback when a JSON column holds
-  mixed-type lists (`convert_arrow` leaves list JSON as Python objects)
+- [x] `st.dataframe` logs an Arrow conversion traceback when a JSON column holds
+  mixed-type lists (`convert_arrow` leaves list JSON as Python objects) — 0.7.2 (#15)
 - [ ] Unconfirmed: a ticket saved `opened_on` 2025-12-07 while the date widget showed
   12-31 after an earlier attempt in the same dialog (may be a browser-tool artefact)
 
@@ -254,3 +254,14 @@ Side findings (0.7.0, not fixed):
 - [ ] Moving the page through session state logs Streamlit's one-time "created with
   a default value but also had its value set via the Session State API" warning
   (with stack) once per server process; harmless, `st.pagination` always has a default
+
+Side findings (0.7.2, not fixed):
+- [ ] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
+  like the Pydantic ones did before #16, so they may show stale browser values
+  after a programmatic reset (only number inputs seed their state)
+- [ ] Schema and no-schema read paths show ARRAY cells differently (list chips vs
+  a comma-joined string)
+- [ ] `PydanticUi.from_json_schema` is annotated `-> "PydanticUi"` but returns
+  `cls(...)`; `Self` would type `PydanticCrudUi.from_json_schema` correctly
+- [ ] `one_to_many.rerun_panel` reads the internal
+  `ScriptRunContext.fragment_ids_this_run`; recheck on Streamlit upgrades
