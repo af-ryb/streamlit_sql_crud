@@ -16,11 +16,13 @@ from sqlalchemy.orm import (
     Session,
 )
 from streamlit.connections.sql_connection import SQLConnection
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.sa_model import pk_attr, pk_name
+from streamlit_pydantic_crud.state import clear_state_keys
 from streamlit_pydantic_crud.table import pagination, query
 
 
@@ -140,13 +142,21 @@ def show_rel(
 
         with tab_create:
             default_values = {read_many_rel.other_col.name: model_id}
+            create_key = f"stsql_create_many_{read_many_rel.suffix_key}"
+            gen_key = f"{create_key}_gen"
             create_row = CreateRow(
                 conn,
                 read_many_rel.other_model,
                 default_values,
-                key=f"stsql_create_many_{read_many_rel.suffix_key}",
+                key=f"{create_key}_{st.session_state.get(gen_key, 0)}",
             )
-            create_row.show(pretty_name)
+            ok, msg = create_row.show(pretty_name)
+            if ok:
+                """New widget keys: the browser keeps a form widget's value when
+                only its session state is dropped."""
+                create_row.reset_form_state()
+                st.session_state[gen_key] = st.session_state.get(gen_key, 0) + 1
+            handle_panel_result(create_key, ok, msg)
 
         with tab_delete:
             rows_id = df.iloc[rows_pos].index.to_list()
@@ -174,3 +184,30 @@ def show_rels(
 
     for rel in rels:
         show_rel(conn, model, model_id, rel)
+
+
+def handle_panel_result(key: str, ok: bool | None, msg: str | None) -> None:
+    """Report the outcome of a panel create/delete with widget key `key`.
+
+    A failure is shown at once, keeping the form; a success reruns the panel
+    and shows its message on that rerun.
+    """
+    notice_key = f"{key}_notice"
+    if ok:
+        st.session_state[notice_key] = msg
+        rerun_panel()
+    elif ok is False:
+        st.error(msg)
+    elif notice_key in st.session_state:
+        st.success(st.session_state[notice_key])
+        clear_state_keys([notice_key])
+
+
+def rerun_panel() -> None:
+    """Rerun only the panel fragment, so the edit dialog around it stays open.
+
+    A full-app run (first render, AppTest) cannot rerun a fragment: rerun the app.
+    """
+    ctx = get_script_run_ctx()
+    in_fragment_run = ctx is not None and bool(ctx.fragment_ids_this_run)
+    st.rerun(scope="fragment" if in_fragment_run else "app")
