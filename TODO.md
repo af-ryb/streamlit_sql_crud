@@ -154,20 +154,20 @@ Leftovers:
   gate in `scripts/release.sh`)
 
 Side findings (stage 1, not fixed — behavior-preserving refactor):
-- [ ] `update_model.py` (~line 115) applies the PK-typed `convert_numpy_to_python` to
-  every column value, not only the primary key
+- [x] `update_model.py` (~line 115) applies the PK-typed `convert_numpy_to_python` to
+  every column value, not only the primary key — 0.7.2 (#22): PK only; other columns `numpy_scalar_to_python`
 - [x] `stsql_updated` is seeded with 1 by `SqlUi` but with 0 by the dialogs and
   `show_crud_dialog` (`set_state(UPDATED_KEY, ...)`) — 0.7.1: no longer seeded;
   `record_write` increments it and `session_writes` reads it with default 0
 - [x] `PydanticCrudUi.__init__` builds `PydanticInputGenerator` and session state twice — 0.7.2 (#19)
-- [ ] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`;
+- [x] Dead code: `UpdateRow` `dt_filters`/`no_dt_filters`;
   `if col_name is None` after `column_label` (the guards in
   `_render_foreign_key_selectbox`/`_render_many_to_many_multiselect` and
-  `if operation == "read": pass` were removed in stage 4)
+  `if operation == "read": pass` were removed in stage 4) — 0.7.2 (#22)
 - [x] `one_to_many.ReadManyRel.other_model` looks the model up inline (raises
   StopIteration/AttributeError) instead of `sa_model.model_by_tablename` (returns None) — 0.7.2 (#18)
-- [ ] `InputFields.get_input_value` uses `col.description` (raises when None) rather
-  than `column_label`
+- [x] `InputFields.get_input_value` uses `col.description` (raises when None) rather
+  than `column_label` — 0.7.2 (#22)
 
 Side findings (stage 2, not fixed — behavior-preserving refactor):
 - [x] An enum-array column shows as `DepartmentTypeEnum.ENGINEERING` in the table
@@ -185,11 +185,11 @@ Side findings (stage 3, not fixed — behavior-preserving refactor):
   Read tab stays stale (empty) until the dialog is reopened; same on stage 2 — 0.7.2 (#18)
 - [x] Inside an edit dialog the panel's `CreateRow` form keeps the entered values
   after a successful save (plain `st.form`, no `clear_on_submit`) — 0.7.2 (#18)
-- [ ] `handle_save_error` logs from `dialogs.persist` now, so the loguru record's
-  module/function in "… failed for <table>" changed (message text unchanged)
-- [ ] `CreateRow`/`UpdateRow` success paths still repeat `ss[UPDATED_KEY] += 1`,
-  `log(...)` and the form-data cleanup; a `handle_save_ok` could share them
-- [ ] Code comments in the dialogs still use `#` instead of the triple-quoted style
+- [x] `handle_save_error` logs from `dialogs.persist` now, so the loguru record's
+  module/function in "… failed for <table>" changed (message text unchanged) — accepted: message text unchanged, `set_logging` is prefix-based
+- [x] `CreateRow`/`UpdateRow` success paths still repeat `ss[UPDATED_KEY] += 1`,
+  `log(...)` and the form-data cleanup; a `handle_save_ok` could share them — 0.7.2 (#22): `persist.handle_save_ok`
+- [x] Code comments in the dialogs still use `#` instead of the triple-quoted style — 0.7.2 (#22)
 
 Side findings (stage 4, not fixed — behavior-preserving refactor):
 - [x] `PydanticCrudUi.__init__` still builds the generator twice (kept: each build
@@ -212,18 +212,18 @@ Side findings (stage 4, not fixed — behavior-preserving refactor):
 - [x] `pydantic_ui.py` comments still use `#` instead of the triple-quoted style — 0.7.2 (#19)
 
 Side findings (stage 5, not fixed — behavior-preserving refactor):
-- [ ] `table/` and `forms/` are peers only because `table/params` uses
+- [x] `table/` and `forms/` are peers only because `table/params` uses
   `forms.options.FkOpt` while `forms/options` uses `table.query`; moving `FkOpt`
-  (a two-field dataclass) to `helpers/` or `config_types` would allow table < forms
-- [ ] Loguru records of moved modules now carry the new module paths
+  (a two-field dataclass) to `helpers/` or `config_types` would allow table < forms — 0.7.2 (#21): `FkOpt` in `config_types`, `table` < `forms`
+- [x] Loguru records of moved modules now carry the new module paths
   (`streamlit_pydantic_crud.helpers.logs`, …); `logger.disable` is prefix-based, so
-  `set_logging` is unaffected
-- [ ] Example project: `test_slider_interaction.py`, `test_number_input_widget.py`,
+  `set_logging` is unaffected — accepted: `logger.disable` is prefix-based
+- [x] Example project: `test_slider_interaction.py`, `test_number_input_widget.py`,
   `test_integration_null_fix.py` import removed modules (`pydantic_utils`,
-  `update_model`, `create_delete_model`) — broken since stages 3–4
-- [ ] A local `uv build` leaves `streamlit_pydantic_crud.egg-info/` in the tree; its
+  `update_model`, `create_delete_model`) — broken since stages 3–4 — done: the scripts are gone; the example imports only the public API
+- [x] A local `uv build` leaves `streamlit_pydantic_crud.egg-info/` in the tree; its
   stale `SOURCES.txt` makes a later sdist→wheel build ship files the config would
-  not (it masked the packaging bug), hence the clean-copy build in the guards
+  not (it masked the packaging bug), hence the clean-copy build in the guards — accepted: `*.egg-info/` is gitignored, `release.sh` builds from a clean export
 
 Side findings (code review, not fixed):
 - [x] `SqlUi.set_structure` creates instance attributes outside `__init__`
@@ -256,6 +256,9 @@ Side findings (0.7.0, not fixed):
   (with stack) once per server process; harmless, `st.pagination` always has a default
 
 Side findings (0.7.2, not fixed):
+- [ ] Since #16 every Pydantic widget seeds its state, so the one-time
+  "created with a default value but also had its value set via the Session State
+  API" warning (see 0.7.0 above) fires on any form page too; harmless
 - [ ] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
   like the Pydantic ones did before #16, so they may show stale browser values
   after a programmatic reset (only number inputs seed their state)
