@@ -8,7 +8,8 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 
-from streamlit_pydantic_crud.forms.options import ExistingData, FkOpt
+from streamlit_pydantic_crud.config_types import FkOpt
+from streamlit_pydantic_crud.forms.options import ExistingData
 from streamlit_pydantic_crud.forms.pydantic.widgets import nullable_number_input
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.sa_model import column_label, is_array_type

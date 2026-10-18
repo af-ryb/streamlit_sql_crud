@@ -6,7 +6,6 @@ input. Plain InputFields forms read theirs from ``ExistingData``.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import streamlit as st
@@ -18,6 +17,7 @@ from sqlalchemy.sql.schema import ForeignKey
 from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import (
+    FkOpt,
     ForeignKeyConfig,
     ForeignKeyOptions,
     ManyToManyFields,
@@ -36,14 +36,6 @@ from streamlit_pydantic_crud.table.query import apply_active_filters
 if TYPE_CHECKING:
     """Type-only: forms sit below pydantic_ui, which imports the form generator."""
     from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-
-
-@dataclass
-class FkOpt:
-    """One foreign-key option: the referenced id and its display text."""
-
-    idx: int
-    name: str
 
 
 def load_form_options(
