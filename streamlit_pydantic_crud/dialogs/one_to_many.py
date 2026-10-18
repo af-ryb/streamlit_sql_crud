@@ -21,7 +21,12 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
-from streamlit_pydantic_crud.helpers.sa_model import pk_attr, pk_column
+from streamlit_pydantic_crud.helpers.sa_model import (
+    model_by_tablename,
+    pk_attr,
+    pk_column,
+    tablename,
+)
 from streamlit_pydantic_crud.state import (
     clear_state_keys,
     data_version,
@@ -35,7 +40,7 @@ class ReadManyRel:
 
     def __init__(
         self,
-        model: Any,
+        model: type[DeclarativeBase],
         model_id: int | str,
         rel: RelationshipProperty,
     ) -> None:
@@ -53,24 +58,19 @@ class ReadManyRel:
         return col
 
     @cached_property
-    def other_model(self) -> Any:
-        other_col = self.other_col
-        other_colname: str = other_col.table.name
-        mappers = self.model.registry.mappers
-
-        other_model = next(
-            mapper.class_
-            for mapper in mappers
-            if mapper
-            if mapper.class_.__tablename__ == other_colname
-        )
+    def other_model(self) -> type[DeclarativeBase]:
+        """The model mapped to the child table, from `model`'s registry."""
+        table_name: str = self.other_col.table.name
+        other_model = model_by_tablename(self.model, table_name)
+        if other_model is None:
+            msg = f"No mapped model for table '{table_name}' of relationship {self.rel}"
+            raise ValueError(msg)
         return other_model
 
     @cached_property
     def suffix_key(self) -> str:
-        model_name: str = self.model.__table__.name
-        key = f"{model_name}_{self.other_col.name}_{self.rel.target}"
-        return key
+        """Widget-key suffix: parent table, child FK column and child table."""
+        return f"{tablename(self.model)}_{self.other_col.name}_{self.rel.target}"
 
     @property
     def base_stmt(self) -> Select[Any]:
