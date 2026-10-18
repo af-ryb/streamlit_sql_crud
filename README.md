@@ -98,11 +98,21 @@ class AlertReadSchema(BaseModel):
 - **Custom Messages**: User-friendly validation errors
 - **Flexible Requirements**: Different field requirements per operation
 
+## Installation
+
+Install from git and pin a tag (there is no PyPI release):
+
+```toml
+"streamlit-pydantic-crud @ git+https://github.com/af-ryb/streamlit_sql_crud.git@v0.9.0"
+```
+
 ## Requirements
 
 1. Python 3.12+
-2. Core dependencies: streamlit (≥1.58), sqlalchemy, pandas, loguru, pydantic (≥2.0);
-   no third-party Streamlit components
+2. Core dependencies: streamlit (≥1.58), sqlalchemy (2.0 or 2.1), loguru,
+   pydantic (≥2.0); no third-party Streamlit components. pandas is used only by
+   the deprecated `df_style_formatter` / `style_fn` / `SqlUi.df` path (removed
+   in 0.10.0)
 3. SQLAlchemy models require a `__str__` method
 4. A single-column primary key (any name); composite primary keys are not supported
 5. Foreign key relationships must be defined
