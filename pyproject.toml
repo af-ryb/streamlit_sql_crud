@@ -2,11 +2,12 @@
 include = ["streamlit_pydantic_crud", "tests"]
 
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9.26,<0.10"]
+build-backend = "uv_build"
 
-[tool.setuptools.packages.find]
-include = ["streamlit_pydantic_crud*"]
+[tool.uv.build-backend]
+module-name = "streamlit_pydantic_crud"
+module-root = ""
 
 [tool.vulture]
 exclude = []
@@ -50,7 +51,8 @@ version = "0.9.0"
 description = "Enhanced CRUD interface for SQLAlchemy using Streamlit with Pydantic validation"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT License"}
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "pandas",
     "sqlalchemy",
@@ -62,9 +64,7 @@ dependencies = [
 [dependency-groups]
 
 dev = [
-    "setuptools",
     "ipython",
-    "build",
     "rich",
     "pandas-stubs",
     "vulture",
