@@ -6,10 +6,13 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import DeclarativeBase
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    MappedModel,
+)
 from streamlit_pydantic_crud.dialogs import one_to_many
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
@@ -26,6 +29,7 @@ from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
+    declarative_model,
     pk_attr,
     pk_column,
     pk_name,
@@ -49,7 +53,7 @@ class UpdateRow:
     def __init__(
         self,
         conn: SQLConnection,
-        model: type[DeclarativeBase],
+        model: type[MappedModel],
         row_id: int | str,
         default_values: dict | None = None,
         update_show_many: bool = False,
@@ -59,7 +63,7 @@ class UpdateRow:
         key: str = "update",
     ) -> None:
         self.conn = conn
-        self.model = model
+        self.model = declarative_model(model)
         self.row_id = row_id
         self.default_values = default_values or {}
         self.update_show_many = update_show_many
@@ -80,19 +84,19 @@ class UpdateRow:
                     .one()
                 )
             else:
-                self.row = s.get_one(model, row_id)
+                self.row = s.get_one(self.model, row_id)
 
             if not self.update_schema:
                 """SQLAlchemy-mode inputs; Pydantic forms never read them."""
                 self.existing_data = ExistingData(
                     s,
-                    model,
+                    self.model,
                     default_values=self.default_values,
                     row=self.row,
                     foreign_key_options=self.foreign_key_options,
                 )
                 self.input_fields = InputFields(
-                    model,
+                    self.model,
                     key_prefix=self.key_prefix,
                     default_values=self.default_values,
                     existing_data=self.existing_data,
@@ -142,7 +146,7 @@ class UpdateRow:
             load_form_options(
                 self.pydantic_ui,
                 conn,
-                model,
+                self.model,
                 self.foreign_key_options,
                 self.many_to_many_fields,
                 row=self.row,

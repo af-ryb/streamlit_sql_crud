@@ -7,11 +7,34 @@ from `python_type`; such columns are simply not filterable.
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import func, literal_column, select
+from sqlalchemy import Column, String, func, literal_column, select
+from sqlalchemy.types import NullType, TypeDecorator
 
 from streamlit_pydantic_crud.helpers.sa_model import safe_python_type
 from streamlit_pydantic_crud.table import filter_ui, params
 from tests.conftest import Department
+
+
+class PlainString(TypeDecorator):
+    """TypeDecorator without its own `python_type`, like SQLModel's AutoString."""
+
+    impl = String
+    cache_ok = True
+
+
+class WrappedPlainString(TypeDecorator):
+    """TypeDecorator whose impl is another TypeDecorator."""
+
+    impl = PlainString
+    cache_ok = True
+
+
+class WrappedNull(TypeDecorator):
+    """TypeDecorator over NullType: still no Python type."""
+
+    impl = NullType
+    cache_ok = True
+
 
 UNTYPED_CTE = select(
     Department.id,
@@ -26,6 +49,17 @@ def test_safe_python_type_returns_none_for_nulltype() -> None:
     assert safe_python_type(UNTYPED_CTE.c.tag) is None
     assert safe_python_type(UNTYPED_CTE.c.calc) is None
     assert safe_python_type(UNTYPED_CTE.c.name) is str
+
+
+@pytest.mark.parametrize(
+    ("col_type", "expected"),
+    [(PlainString(), str), (WrappedPlainString(), str), (WrappedNull(), None)],
+)
+def test_safe_python_type_unwraps_type_decorator(
+    col_type: TypeDecorator, expected: type | None
+) -> None:
+    """A TypeDecorator without `python_type` falls back to its impl's."""
+    assert safe_python_type(Column("c", col_type)) is expected
 
 
 def test_existing_cond_skips_untyped_columns() -> None:

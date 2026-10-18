@@ -15,6 +15,7 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from streamlit.connections.sql_connection import SQLConnection
 
+from streamlit_pydantic_crud.config_types import MappedModel
 from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS
 
 SQL_HASH_FUNCS: dict[Any, Callable[[Any], Any]] = {
@@ -38,7 +39,7 @@ class ActiveFilters(Protocol):
         ...
 
 
-def to_cte(read_instance: Select | CTE | type[DeclarativeBase]) -> CTE:
+def to_cte(read_instance: Select | CTE | type[MappedModel]) -> CTE:
     """Wrap a SqlUi ``read_instance`` (statement, CTE or model) in a CTE."""
     if isinstance(read_instance, Select):
         cte = read_instance.cte()

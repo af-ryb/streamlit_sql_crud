@@ -1,14 +1,24 @@
 """Introspect SQLAlchemy models, columns and column types.
 
-Leaf module: depends only on SQLAlchemy.
+Leaf module: depends only on SQLAlchemy and `config_types`.
 """
 
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import ARRAY, JSON, Column
+from sqlalchemy import ARRAY, JSON, Column, inspect
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
 from sqlalchemy.sql.elements import ColumnElement, KeyedColumnElement
 from sqlalchemy.types import TypeDecorator, TypeEngine
+
+from streamlit_pydantic_crud.config_types import MappedModel
+
+
+def declarative_model(model: type[MappedModel]) -> type[DeclarativeBase]:
+    """Type a mapped model class as `DeclarativeBase` for the internals.
+
+    SQLModel tables are mapped at runtime but their typing lacks `__table__`.
+    """
+    return cast("type[DeclarativeBase]", model)
 
 
 def tablename(model: type[DeclarativeBase]) -> str:
@@ -52,7 +62,7 @@ def model_by_tablename(
     return next(
         (
             mapper.class_
-            for mapper in model.registry.mappers
+            for mapper in inspect(model).registry.mappers
             if getattr(mapper.class_, "__tablename__", None) == name
         ),
         None,
@@ -76,13 +86,17 @@ def column_label(col: KeyedColumnElement[Any]) -> str:
 def safe_python_type(col: ColumnElement[Any]) -> type | None:
     """Return the column's Python type, or None when the type has none.
 
-    `NullType` (e.g. `literal_column`, untyped `func.*`) and some custom types
-    raise NotImplementedError; callers treat such columns as not filterable.
+    A `TypeDecorator` without its own (e.g. SQLModel's `AutoString`) uses its
+    impl's. `NullType` (`literal_column`, untyped `func.*`) has none.
     """
-    try:
-        return col.type.python_type
-    except NotImplementedError:
-        return None
+    col_type = col.type
+    while True:
+        try:
+            return col_type.python_type
+        except NotImplementedError:
+            if not isinstance(col_type, TypeDecorator):
+                return None
+            col_type = col_type.impl_instance
 
 
 def is_json_type(col_type: TypeEngine[Any]) -> bool:

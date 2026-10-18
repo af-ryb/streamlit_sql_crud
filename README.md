@@ -242,6 +242,37 @@ SqlUi(
 )
 ```
 
+## SQLModel Models
+
+Model parameters (`model`, `read_instance`, `edit_create_model`) accept any
+mapped class: a SQLAlchemy `DeclarativeBase` subclass or a SQLModel
+`table=True` class. SQLModel schemas (`table=False`) work as Pydantic schemas.
+
+```python
+from sqlmodel import Field, Relationship, SQLModel
+
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    powers: list[Power] = Relationship(link_model=HeroPowerLink)
+
+class HeroCreate(SQLModel):
+    name: str
+    powers: list[int] = []  # named as the relationship
+
+SqlUi(
+    conn=conn,
+    read_instance=select(Hero),
+    edit_create_model=Hero,
+    create_schema=HeroCreate,
+    many_to_many_fields={"powers": {"relationship": "powers", "display_field": "name"}},
+)
+```
+
+- Define the table models in an importable module, not in the Streamlit page
+  script: every rerun would register the tables again in `SQLModel.metadata`.
+- A many-to-many schema field must be named as the relationship (`powers`).
+
 ## JOIN Fields Support
 
 Display and filter fields from joined tables efficiently:
