@@ -8,6 +8,9 @@ from sqlalchemy import MetaData
 from sqlalchemy.orm import Session
 
 OperationType = Literal["create", "update"]
+"""Main table width/height, as `st.dataframe` takes them (pixels or a keyword)."""
+TableWidth = int | Literal["stretch", "content"]
+TableHeight = int | Literal["auto", "stretch", "content"]
 
 
 class MappedModel(Protocol):

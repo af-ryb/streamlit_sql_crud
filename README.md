@@ -447,7 +447,8 @@ Defaults are merged underneath: `Numeric` columns get a number format by their
 scale (`Numeric(10, 2)` → `%.2f`), `Float` columns `%g`, `ARRAY` columns a
 `ListColumn`. A column you configure replaces its default entirely.
 
-`column_config` replaces the pandas-based `df_style_formatter`. `NumberColumn`
+`column_config` replaces the pandas-based `df_style_formatter` (deprecated,
+removed in 0.10.0). `NumberColumn`
 takes printf-style formats or presets (`"plain"`, `"localized"`, `"dollar"`,
 `"euro"`, `"yen"`, `"accounting"`, `"percent"`, `"compact"`, `"scientific"`, ...):
 
@@ -462,6 +463,38 @@ takes printf-style formats or presets (`"plain"`, `"localized"`, `"dollar"`,
 The raw records of the current page (Python values: `Decimal`, dates, JSON as
 `dict`, enum members) are available as `SqlUi(...).rows`; selection positions
 index this list.
+
+## Table Size (`width`, `height`)
+
+`width` and `height` go straight to the table's `st.dataframe`:
+
+```python
+SqlUi(conn=conn, model=Invoice, width="stretch", height=400)
+```
+
+- `width`: `"content"` (default, fits the columns), `"stretch"` (fills the
+  container) or pixels as an `int`.
+- `height`: pixels as an `int` (default `650`), or `"auto"`, `"stretch"`,
+  `"content"`.
+
+`read_use_container_width=True` becomes `width="stretch"`.
+
+## Deprecated API (removed in 0.10.0)
+
+These still work in 0.9 but emit a `DeprecationWarning` and are removed in
+0.10.0:
+
+| Deprecated | Use instead |
+|---|---|
+| `SqlUi(df_style_formatter=...)` | `column_config` (see the table above) |
+| `SqlUi(style_fn=...)` | no replacement (row styling is dropped with pandas) |
+| `SqlUi(...).df` | `SqlUi(...).rows` (raw records of the current page) |
+| `SqlUi(base_key=...)` | `key` |
+| `SqlUi(read_use_container_width=True)` | `width="stretch"` (if both are given, `width` wins) |
+
+While `df_style_formatter` or `style_fn` is set, the table still renders
+through a pandas `Styler`, exactly as before; that is the only pandas code path
+left and it goes away in 0.10.0.
 
 ## Filtering with JOIN Statements
 

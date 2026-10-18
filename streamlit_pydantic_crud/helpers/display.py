@@ -3,7 +3,7 @@
 Depends on `sa_model` and `values` only; never on Streamlit state.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from datetime import date, time, timedelta
 from decimal import Decimal
 from enum import Enum
@@ -20,8 +20,6 @@ from streamlit.elements.lib.column_types import ColumnConfig
 from streamlit_pydantic_crud.helpers.sa_model import is_array_type, is_json_type
 from streamlit_pydantic_crud.helpers.values import enum_value, json_to_text, to_list
 
-"""Per-column formatter accepted by pandas ``Styler.format``."""
-DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
 """How a column's values are displayed, decided by its SQLAlchemy type."""
 ColumnKind = Literal["enum", "json", "array"]
 """Item types a list cell shows as they are; any other item becomes str()."""

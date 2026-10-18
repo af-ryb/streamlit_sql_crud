@@ -1,7 +1,8 @@
 """Harness rendering SqlUi in the consumer's read shapes (`CRUD_TEST_MODE`).
 
 Modes: `plain` (no schema), `styled` (plain + df_style_formatter/style_fn),
-`configured` (plain + column_config), `schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
+`configured` (plain + column_config), `base_key` / `both_keys` (deprecated
+`base_key`), `schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
 + M2M + @property). AppTest cannot select
 dataframe rows, so session state `SELECT` (row positions) is reported as the
 selection; the CRUD dialogs are replaced by recorders writing `CALLS`.
@@ -39,9 +40,11 @@ real_dataframe = DeltaGenerator.dataframe
 def fake_dataframe(self: DeltaGenerator, *args: Any, **kwargs: Any) -> Any:
     """Render the table; report the `SELECT` positions as its selection.
 
-    The type of the data passed in is recorded as `DATA_TYPE`.
+    The type of the data passed in is recorded as `DATA_TYPE`, its size
+    kwargs as `SIZE`.
     """
     st.session_state["DATA_TYPE"] = type(args[0] if args else kwargs["data"])
+    st.session_state["SIZE"] = (kwargs.get("width"), kwargs.get("height"))
     result = real_dataframe(self, *args, **kwargs)
     rows = st.session_state.get("SELECT")
     if rows is None:
@@ -101,12 +104,14 @@ def bold_rows(row: Any) -> list[str]:
 def render() -> SqlUi:
     """Build the SqlUi of the current mode."""
     if MODE == "plain":
+        """Session state `TABLE_KW` adds SqlUi kwargs (width, height, ...)."""
         return SqlUi(
             conn=conn,
             read_instance=select(Item),
             edit_create_model=Item,
             available_filter=["name"],
             key="rp",
+            **st.session_state.get("TABLE_KW", {}),
         )
     if MODE == "styled":
         return SqlUi(
@@ -116,6 +121,15 @@ def render() -> SqlUi:
             df_style_formatter={"price": "${:,.2f}", "meta": "{:>4}"},
             style_fn=bold_rows,
             key="rp",
+        )
+    if MODE in ("base_key", "both_keys"):
+        """Deprecated `base_key`, alone or next to `key` (which wins)."""
+        return SqlUi(
+            conn=conn,
+            read_instance=select(Item),
+            edit_create_model=Item,
+            key="rp" if MODE == "both_keys" else None,
+            base_key="old" if MODE == "both_keys" else "rp",
         )
     if MODE == "configured":
         return SqlUi(
@@ -177,7 +191,11 @@ with (
 ):
     ui = render()
 
-"""Read before anything touches `ui.df`: was the DataFrame built to render?"""
-st.session_state["DF_BUILT"] = "df" in vars(ui)
+"""Was the deprecated `ui.df` DataFrame built (and warned) to render?"""
+st.session_state["DF_BUILT"] = vars(ui)["_df"] is not None
 st.session_state["ROWS"] = ui.rows
+if st.session_state.get("READ_DF"):
+    """The one deliberate use of the deprecated `ui.df` (tests/test_deprecations)."""
+    st.session_state["DF"] = ui.df
+    st.session_state["DF_AGAIN"] = ui.df
 st.session_state["QTTY"] = ui.qtty_rows
