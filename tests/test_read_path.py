@@ -206,9 +206,9 @@ def test_m2m_property_where_and_order(run: Callable[..., AppTest]) -> None:
     assert df["id"].tolist() == [ID_CHARLIE, ID_ALPHA, ID_DELTA]
     assert df["category_names"].tolist() == ["blue, green, red", "blue, red", "green"]
     assert df["app_name"].tolist() == ["Alpha App", "Alpha App", "Beta App"]
-    """With M2M rows are reloaded entities: `platform` is the model @property,
-    not the query's upper-cased label."""
-    assert df["platform"].tolist() == ["ios", "ios", "android"]
+    """Rows are reloaded entities for M2M, but query columns win: `platform` is
+    the upper-cased label (as in join mode), not the model @property."""
+    assert df["platform"].tolist() == ["IOS", "IOS", "ANDROID"]
     assert display_text(at)["price"] == ["7.25", "12.50", "0.10"]
 
 
@@ -309,7 +309,7 @@ def test_copy_schema_passes_display_row(run: Callable[..., AppTest]) -> None:
             {
                 "category_names": "blue, red",
                 "app_name": "Alpha App",
-                "platform": "ios",
+                "platform": "IOS",
                 "name": "alpha",
                 "price": Decimal("12.50"),
                 "id": ID_ALPHA,

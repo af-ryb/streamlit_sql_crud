@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import Row, Select, select
+from sqlalchemy import Row, RowMapping, Select, select
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from streamlit_pydantic_crud.config_types import ManyToManyFields, SessionSource
@@ -27,7 +27,7 @@ def read_records(
     Keys are the statement's column labels, or the `read_schema` fields when
     given; the primary key of `model` is always present. With
     `many_to_many_fields` each row's entity is reloaded with those
-    relationships and stands in for its row.
+    relationships; the query row's columns still win over the entity's.
     """
     with conn.session as s:
         rows = s.execute(stmt).all()
@@ -64,16 +64,41 @@ def to_record(
     pk: str,
     read_schema: type[BaseModel] | None,
 ) -> dict[str, Any]:
-    """Build the record of one query `row`, or of its reloaded `entity`."""
-    source = row if entity is None else entity
+    """Build the record of one query `row`, overlaid on its reloaded `entity`.
+
+    The row's columns (joined labels included) win over the entity's attributes.
+    """
+    mapping = row._mapping
     if read_schema is not None:
+        source = row if entity is None else RowOverEntity(mapping, entity)
         record = read_schema.model_validate(source, from_attributes=True).model_dump()
-    elif entity is None:
-        record = row._asdict()
     else:
-        record = {
-            key: value for key, value in vars(entity).items() if not key.startswith("_")
-        }
-    if pk not in record and hasattr(source, pk):
-        record[pk] = getattr(source, pk)
+        record = dict(mapping)
+        if entity is not None:
+            record.update(
+                (key, value)
+                for key, value in vars(entity).items()
+                if not key.startswith("_") and key not in record
+            )
+    if pk not in record and pk in mapping:
+        record[pk] = mapping[pk]
     return record
+
+
+class RowOverEntity:
+    """Attributes of a reloaded entity, overridden by its query row's columns.
+
+    Labels keep the query value; relationships and properties come from the entity.
+    """
+
+    __slots__ = ("_entity", "_row")
+
+    def __init__(self, row: RowMapping, entity: object) -> None:
+        self._row = row
+        self._entity = entity
+
+    def __getattr__(self, name: str) -> Any:
+        """Return the row's column `name`, else the entity's attribute."""
+        if name in self._row:
+            return self._row[name]
+        return getattr(self._entity, name)

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Engine, Select, create_engine, func, select
 from sqlalchemy.orm import Session
 
@@ -120,6 +121,56 @@ def test_m2m_reloads_only_the_filtered_rows(conn: EngineConn) -> None:
     assert [r["id"] for r in records] == [ID_ALPHA, ID_DELTA]
     assert [r["category_names"] for r in records] == ["blue, red", "green"]
     assert [r["app_name"] for r in records] == ["Alpha App", "Beta App"]
+
+
+class ItemLabelRead(BaseModel):
+    """A label the model has no attribute for, beside an M2M @property."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    app_code: str
+    platform: str
+    category_names: str | None = None
+
+
+def label_stmt() -> Select[Any]:
+    """Join with `app_code` (no model attribute) and `platform` (a @property)."""
+    return select(
+        Item,
+        func.lower(Template.app_name).label("app_code"),
+        func.upper(Template.platform).label("platform"),
+    ).join(Template, Item.template_id == Template.id)
+
+
+def test_m2m_labels_come_from_the_query_row(conn: EngineConn) -> None:
+    records = read_records(
+        conn, paged(label_stmt()), Item, ItemLabelRead, many_to_many_fields=M2M
+    )
+
+    """`app_code` has no property; `platform` shadows one: both keep the row's."""
+    assert [r["app_code"] for r in records] == [
+        "beta app",
+        "alpha app",
+        "alpha app",
+        "beta app",
+    ]
+    assert [r["platform"] for r in records] == ["ANDROID", "IOS", "IOS", "ANDROID"]
+    assert [r["category_names"] for r in records] == [
+        None,
+        "blue, green, red",
+        "blue, red",
+        "green",
+    ]
+
+
+def test_m2m_without_schema_keeps_labels(conn: EngineConn) -> None:
+    records = read_records(conn, paged(label_stmt()), Item, many_to_many_fields=M2M)
+
+    alpha = records[2]
+    assert list(alpha)[: len(ITEM_COLS) + 2] == [*ITEM_COLS, "app_code", "platform"]
+    assert alpha["app_code"] == "alpha app"
+    assert alpha["platform"] == "IOS"
+    assert sorted(c.name for c in alpha["categories"]) == ["blue", "red"]
 
 
 def test_m2m_without_schema_adds_relationships(conn: EngineConn) -> None:
