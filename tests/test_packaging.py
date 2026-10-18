@@ -43,7 +43,7 @@ def test_wheel_contains_every_package_module(tmp_path: Path) -> None:
 def build_wheel(tmp_path: Path) -> Path:
     """Build from a clean copy, as a fresh checkout would.
 
-    An in-tree egg-info keeps stale file lists that would mask a missing package.
+    Only tracked sources are copied, so local leftovers cannot mask a missing file.
     """
     src = tmp_path / "src"
     shutil.copytree(

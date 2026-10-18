@@ -290,7 +290,9 @@ Spec/plan: `tasks/` (local). PRs #25–#33.
   `read_use_container_width`, `items_per_page_default`, `table/styler_compat.py`;
   migrate the example project (uses `df_style_formatter`,
   `read_use_container_width`)
-- [ ] Switch the build backend to `uv_build` (no `build/` / `*.egg-info` in the tree)
+- [x] Switch the build backend to `uv_build` (no `build/` / `*.egg-info` in the tree)
+  — after 0.9.0: `uv_build`, PEP 639 license metadata; `setuptools` / `build` dropped
+  from the dev group
 
 Side findings (Step 6, not fixed):
 - [ ] `seed_widget_state` plus `value=` triggers Streamlit's one-time "created with
