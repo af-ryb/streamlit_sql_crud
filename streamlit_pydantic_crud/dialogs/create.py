@@ -5,10 +5,13 @@ from typing import Any
 
 import streamlit as st
 from pydantic import BaseModel
-from sqlalchemy.orm import DeclarativeBase
 from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    MappedModel,
+)
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
@@ -23,6 +26,7 @@ from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
+    declarative_model,
     pk_name,
     tablename,
 )
@@ -36,7 +40,7 @@ class CreateRow:
     def __init__(
         self,
         conn: SQLConnection,
-        model: type[DeclarativeBase],
+        model: type[MappedModel],
         default_values: dict | None = None,
         key: str = "create",
         create_schema: type[BaseModel] | None = None,
@@ -47,7 +51,7 @@ class CreateRow:
         no_dt_filters: dict | None = None,
     ) -> None:
         self.conn = conn
-        self.model = model
+        self.model = declarative_model(model)
         self.create_schema = create_schema
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
@@ -64,14 +68,14 @@ class CreateRow:
             with conn.session as s:
                 self.existing_data = ExistingData(
                     s,
-                    model,
+                    self.model,
                     self.default_values,
                     foreign_key_options=self.foreign_key_options,
                     dt_filters=self.dt_filters,
                     no_dt_filters=self.no_dt_filters,
                 )
                 self.input_fields = InputFields(
-                    model,
+                    self.model,
                     key_prefix=self.key_prefix,
                     default_values=self.default_values,
                     existing_data=self.existing_data,
@@ -99,7 +103,7 @@ class CreateRow:
         load_form_options(
             self.pydantic_ui,
             conn,
-            model,
+            self.model,
             self.foreign_key_options,
             self.many_to_many_fields,
             dt_filters=self.dt_filters,

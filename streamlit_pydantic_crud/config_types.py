@@ -2,9 +2,24 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, ClassVar, Literal, NotRequired, Protocol, TypedDict
+
+from sqlalchemy import MetaData
 
 OperationType = Literal["create", "update"]
+
+
+class MappedModel(Protocol):
+    """A mapped model class: a `DeclarativeBase` subclass or a SQLModel table.
+
+    Public parameters take `type[MappedModel]`. `metadata` is the only mapping
+    attribute both declare in their typing: SQLModel declares no `__table__`,
+    and `__tablename__` is `Any` on DeclarativeBase but a ClassVar on SQLModel.
+    It cannot tell a SQLModel table from a plain SQLModel schema; SQLAlchemy
+    rejects an unmapped class at runtime.
+    """
+
+    metadata: ClassVar[MetaData]
 
 
 class ForeignKeyConfig(TypedDict):

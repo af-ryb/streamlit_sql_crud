@@ -9,12 +9,15 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
-from sqlalchemy.orm import DeclarativeBase
 from streamlit.connections import SQLConnection
 from streamlit.delta_generator import DeltaGenerator
 from streamlit.elements.arrow import DataframeState
 
-from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyOptions,
+    ManyToManyFields,
+    MappedModel,
+)
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
@@ -29,6 +32,7 @@ from streamlit_pydantic_crud.helpers.display import (
 )
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
+    declarative_model,
     is_json_type,
     pk_attr,
     pk_name,
@@ -77,9 +81,9 @@ class SqlUi:
     def __init__(
         self,
         conn: SQLConnection,
-        read_instance: Select | CTE | type[DeclarativeBase] | None = None,
-        edit_create_model: type[DeclarativeBase] | None = None,
-        model: type[DeclarativeBase] | None = None,
+        read_instance: Select | CTE | type[MappedModel] | None = None,
+        edit_create_model: type[MappedModel] | None = None,
+        model: type[MappedModel] | None = None,
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
         df_style_formatter: DfStyleFormatter | None = None,
@@ -102,7 +106,7 @@ class SqlUi:
 
         Arguments:
             conn (SQLConnection): A sqlalchemy connection created with st.connection("sql", url="<sqlalchemy url>")
-            model (type[DeclarativeBase]): SQLAlchemy model class used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
+            model (type[MappedModel]): mapped model class (a SQLAlchemy DeclarativeBase subclass or a SQLModel table) used for both read and write operations. Recommended over separate read_instance and edit_create_model parameters.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
             df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details.
@@ -186,7 +190,7 @@ class SqlUi:
                 )
             # Use model for both read and write operations
             self.read_instance = model
-            self.edit_create_model = model
+            self.edit_create_model = declarative_model(model)
         else:
             # Legacy mode - require both parameters
             if read_instance is None or edit_create_model is None:
@@ -196,7 +200,7 @@ class SqlUi:
                 )
                 raise ValueError(msg)
             self.read_instance = read_instance
-            self.edit_create_model = edit_create_model
+            self.edit_create_model = declarative_model(edit_create_model)
 
         self.conn = conn
         self.available_filter = available_filter or []

@@ -1,14 +1,24 @@
 """Introspect SQLAlchemy models, columns and column types.
 
-Leaf module: depends only on SQLAlchemy.
+Leaf module: depends only on SQLAlchemy and `config_types`.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import ARRAY, JSON, Column, inspect
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
 from sqlalchemy.sql.elements import ColumnElement, KeyedColumnElement
 from sqlalchemy.types import TypeDecorator, TypeEngine
+
+from streamlit_pydantic_crud.config_types import MappedModel
+
+
+def declarative_model(model: type[MappedModel]) -> type[DeclarativeBase]:
+    """Type a mapped model class as `DeclarativeBase` for the internals.
+
+    SQLModel tables are mapped at runtime but their typing lacks `__table__`.
+    """
+    return cast("type[DeclarativeBase]", model)
 
 
 def tablename(model: type[DeclarativeBase]) -> str:
