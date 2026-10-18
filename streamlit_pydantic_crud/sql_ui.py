@@ -14,6 +14,8 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     MappedModel,
     SessionSource,
+    TableHeight,
+    TableWidth,
 )
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
@@ -84,7 +86,7 @@ class SqlUi:
         available_filter: list[str] | None = None,
         edit_create_default_values: dict | None = None,
         df_style_formatter: DfStyleFormatter | None = None,
-        read_use_container_width: bool = False,
+        read_use_container_width: bool | None = None,
         key: str | None = None,
         base_key: str | None = None,
         style_fn: StyleFn | None = None,
@@ -99,6 +101,8 @@ class SqlUi:
         show_create_btn: bool = True,
         items_per_page_default: int = 0,
         column_config: dict[str, Any] | None = None,
+        width: TableWidth | None = None,
+        height: TableHeight = 650,
     ) -> None:
         """The CRUD interface will be displayes just by initializing the class
 
@@ -110,7 +114,7 @@ class SqlUi:
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
             df_style_formatter (dict): Deprecated, removed in 0.10.0; use column_config. A dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. E.g. {"amount": "${:,.2f}"} becomes column_config={"amount": st.column_config.NumberColumn(format="dollar")}
-            read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
+            read_use_container_width (bool, optional): Deprecated, removed in 0.10.0; use width="stretch". When True, the table stretches to the container width. Ignored when width is given
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             base_key (str, optional): Deprecated, removed in 0.10.0; use key.
             style_fn (Callable[[pd.Series], list[str]], optional): Deprecated, removed in 0.10.0 without replacement. A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
@@ -124,6 +128,8 @@ class SqlUi:
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
             items_per_page_default (int, optional): Index (0-5) for default items per page selection. Options are: 0=50, 1=100, 2=200, 3=500, 4=1000, 5=Show All. Defaults to 0 (50 items per page)
+            width ("stretch" | "content" | int, optional): Width of the table, passed to st.dataframe: "content" fits the columns, "stretch" fills the container, an int sets pixels. Defaults to "content"
+            height ("auto" | "stretch" | "content" | int, optional): Height of the table, passed to st.dataframe (pixels or a keyword). Defaults to 650
             column_config (dict, optional): Per-column config passed to st.dataframe (a st.column_config.* object, a label string or None to hide), keyed by column name. Merged over the defaults (number format by Numeric scale, list column for ARRAY); a column given here replaces its default. Defaults to None
 
         Attributes:
@@ -158,7 +164,7 @@ class SqlUi:
                 column_config={
                     "amount": st.column_config.NumberColumn(format="%.2f"),
                 },
-                read_use_container_width=True,
+                width="stretch",
                 key="my_sql_ui",
                 update_show_many=True,
                 disable_log=False,
@@ -215,7 +221,8 @@ class SqlUi:
             )
         self.df_style_formatter: DfStyleFormatter = df_style_formatter or {}
         self.column_config: dict[str, Any] = column_config or {}
-        self.read_use_container_width = read_use_container_width
+        self.width: TableWidth = self.resolve_width(width, read_use_container_width)
+        self.height: TableHeight = height
         self.show_delete_btn = show_delete_btn
         self.show_create_btn = show_create_btn
 
@@ -323,6 +330,26 @@ class SqlUi:
             )
             self._df = records_frame(self._display_rows)
         return self._df
+
+    @staticmethod
+    def resolve_width(
+        width: TableWidth | None, use_container_width: bool | None
+    ) -> TableWidth:
+        """Return the table width; the deprecated flag applies only without it.
+
+        Called from __init__: stacklevel 3 points the warning at the caller.
+        """
+        if use_container_width is not None:
+            msg = (
+                "'read_use_container_width' is deprecated and will be removed in "
+                "0.10.0. Use width='stretch' (or 'content', or pixels)."
+            )
+            if width is not None:
+                msg += " Both given: 'width' is used."
+            warnings.warn(msg, DeprecationWarning, stacklevel=3)
+        if width is not None:
+            return width
+        return "stretch" if use_container_width else "content"
 
     def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
         """Raise ValueError if `schema` is incompatible with the edited model."""
@@ -470,8 +497,8 @@ class SqlUi:
 
         selection_state = self.containers.data.dataframe(
             data,
-            width="stretch" if self.read_use_container_width else "content",
-            height=650,
+            width=self.width,
+            height=self.height,
             hide_index=True,
             column_order=column_order,
             column_config=column_config,

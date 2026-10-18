@@ -40,9 +40,11 @@ real_dataframe = DeltaGenerator.dataframe
 def fake_dataframe(self: DeltaGenerator, *args: Any, **kwargs: Any) -> Any:
     """Render the table; report the `SELECT` positions as its selection.
 
-    The type of the data passed in is recorded as `DATA_TYPE`.
+    The type of the data passed in is recorded as `DATA_TYPE`, its size
+    kwargs as `SIZE`.
     """
     st.session_state["DATA_TYPE"] = type(args[0] if args else kwargs["data"])
+    st.session_state["SIZE"] = (kwargs.get("width"), kwargs.get("height"))
     result = real_dataframe(self, *args, **kwargs)
     rows = st.session_state.get("SELECT")
     if rows is None:
@@ -102,12 +104,14 @@ def bold_rows(row: Any) -> list[str]:
 def render() -> SqlUi:
     """Build the SqlUi of the current mode."""
     if MODE == "plain":
+        """Session state `TABLE_KW` adds SqlUi kwargs (width, height, ...)."""
         return SqlUi(
             conn=conn,
             read_instance=select(Item),
             edit_create_model=Item,
             available_filter=["name"],
             key="rp",
+            **st.session_state.get("TABLE_KW", {}),
         )
     if MODE == "styled":
         return SqlUi(
