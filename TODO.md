@@ -202,9 +202,11 @@ Side findings (stage 4, not fixed — behavior-preserving refactor):
   (SQLAlchemy `JSON` without `none_as_null=True`), seen on `metadata_json` — fixed
   in 0.7.0: `dialogs.persist.json_none_as_sql_null` writes `null()` on every save
   path (not for an attribute already None on the edited row: no needless UPDATE)
-- [ ] Example "Session State Demo": after `update_session_data` the text inputs and
+- [x] Example "Session State Demo": after `update_session_data` the text inputs and
   selectbox show stale/blank values while session data holds the loaded record
-  (number inputs update); same on the stage 3 base
+  (number inputs update); same on the stage 3 base — fixed: the browser keeps a
+  keyed widget's value over `value=`, so every Pydantic widget now seeds its
+  session state when it has none (`widgets.seed_widget_state`), which pushes it
 - [ ] `render_field` takes `annotation` separately though `field_info["annotation"]`
   holds it; `foreign_key_data` / `many_to_many_data` are untyped dicts
 - [ ] `pydantic_ui.py` comments still use `#` instead of the triple-quoted style
