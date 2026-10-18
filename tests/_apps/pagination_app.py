@@ -55,6 +55,6 @@ ui = SqlUi(
     available_filter=["grp"],
     key="p",
 )
-ids = ui.df["id"].tolist()
+ids = [r["id"] for r in ui.rows]
 st.write(f"QTTY={ui.qtty_rows}")
 st.write(f"RANGE={ids[0] if ids else 0}-{ids[-1] if ids else 0}")

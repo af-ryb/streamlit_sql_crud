@@ -1,7 +1,7 @@
 """Harness rendering SqlUi in the consumer's read shapes (`CRUD_TEST_MODE`).
 
 Modes: `plain` (no schema), `styled` (plain + df_style_formatter/style_fn),
-`schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
+`configured` (plain + column_config), `schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
 + M2M + @property). AppTest cannot select
 dataframe rows, so session state `SELECT` (row positions) is reported as the
 selection; the CRUD dialogs are replaced by recorders writing `CALLS`.
@@ -37,7 +37,11 @@ real_dataframe = DeltaGenerator.dataframe
 
 
 def fake_dataframe(self: DeltaGenerator, *args: Any, **kwargs: Any) -> Any:
-    """Render the table; report the `SELECT` positions as its selection."""
+    """Render the table; report the `SELECT` positions as its selection.
+
+    The type of the data passed in is recorded as `DATA_TYPE`.
+    """
+    st.session_state["DATA_TYPE"] = type(args[0] if args else kwargs["data"])
     result = real_dataframe(self, *args, **kwargs)
     rows = st.session_state.get("SELECT")
     if rows is None:
@@ -82,6 +86,11 @@ M2M: ManyToManyFields = {
     }
 }
 FILTER = ["name", "app_name"]
+"""User column configs: replace the price default, label a plain column."""
+COLUMN_CONFIG = {
+    "price": st.column_config.NumberColumn(format="dollar"),
+    "name": st.column_config.TextColumn("Item name"),
+}
 
 
 def bold_rows(row: Any) -> list[str]:
@@ -106,6 +115,14 @@ def render() -> SqlUi:
             edit_create_model=Item,
             df_style_formatter={"price": "${:,.2f}", "meta": "{:>4}"},
             style_fn=bold_rows,
+            key="rp",
+        )
+    if MODE == "configured":
+        return SqlUi(
+            conn=conn,
+            read_instance=select(Item),
+            edit_create_model=Item,
+            column_config=COLUMN_CONFIG,
             key="rp",
         )
     if MODE == "schema":
@@ -160,5 +177,7 @@ with (
 ):
     ui = render()
 
-st.session_state["DF"] = ui.df
+"""Read before anything touches `ui.df`: was the DataFrame built to render?"""
+st.session_state["DF_BUILT"] = "df" in vars(ui)
+st.session_state["ROWS"] = ui.rows
 st.session_state["QTTY"] = ui.qtty_rows

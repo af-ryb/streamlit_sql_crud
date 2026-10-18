@@ -81,7 +81,7 @@ def render(key: str) -> None:
                 available_filter=["label"],
                 key="b",
             )
-        st.write(f"IDS_{key}=" + ",".join(str(v) for v in ui.df["id"].tolist()))
+        st.write(f"IDS_{key}=" + ",".join(str(r["id"]) for r in ui.rows))
 
 
 for instance in ORDER:

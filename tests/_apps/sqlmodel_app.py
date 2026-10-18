@@ -103,4 +103,4 @@ elif MODE == "delete":
 
 if MODE.startswith("table"):
     st.write(f"QTTY={ui.qtty_rows}")
-    st.write("COLS=" + ",".join(map(str, ui.df.columns)))
+    st.write("COLS=" + ",".join(ui.rows[0] if ui.rows else []))

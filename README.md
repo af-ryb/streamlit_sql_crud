@@ -21,7 +21,7 @@ Key enhancements over the original streamlit_sql package:
 - Configure using SQLAlchemy select statements (JOIN, ORDER BY, WHERE, etc.)
 - **Display fields from joined tables efficiently**
 - Conditional row styling based on values
-- Custom number formatting
+- Custom column formatting via `column_config` (`st.column_config`)
 - Multiple CRUD interfaces per page using unique keys
 - View many-to-one relationships in edit forms
 - Optional database modification logging
@@ -56,7 +56,7 @@ Key enhancements over the original streamlit_sql package:
 
 The SqlUi interface includes a copy button that allows duplicating existing rows:
 - Select a single row and click the copy button (appears next to edit)
-- Creates a new record with all fields pre-populated from the selected row
+- Creates a new record with all fields pre-populated from the selected row's raw values (JSON stays an object, `Decimal` stays `Decimal`)
 - The 'id' field is automatically removed to avoid conflicts
 
 **Important: read_schema and copy behavior**
@@ -85,7 +85,7 @@ class AlertReadSchema(BaseModel):
     fact_query: str  # Now available for copying
 ```
 
-**Why this happens**: The copy function retrieves data from the displayed dataframe, which only contains fields defined in the read_schema. Missing fields won't be available for copying, even if they exist in the database.
+**Why this happens**: The copy function takes the selected page record (`SqlUi.rows`), which only contains fields defined in the read_schema. Missing fields won't be available for copying, even if they exist in the database.
 
 ### DELETE
 - Delete single or multiple rows
@@ -410,11 +410,11 @@ SqlUi(
     read_instance=read_stmt,
     edit_create_model=Project,
     available_filter=["name", "department_name", "status_description", "budget_percent"],
-    df_style_formatter={
-        "budget": "${:,.2f}",
-        "budget_percent": "{:.1f}%",
-        "days_remaining": "{} days"
-    }
+    column_config={
+        "budget": st.column_config.NumberColumn(format="dollar"),
+        "budget_percent": st.column_config.NumberColumn(format="%.1f%%"),
+        "days_remaining": st.column_config.NumberColumn(format="%d days"),
+    },
 )
 ```
 
@@ -424,6 +424,44 @@ SqlUi(
 - Date/time calculations with proper NULL handling
 - Window functions for analytics
 - All calculated fields can be included in filters and formatting
+
+## Column Formatting (`column_config`)
+
+The table is a plain `st.dataframe` fed with the page records. `column_config`
+is passed through to it per column, so any `st.column_config.*` object (or a
+label string, or `None` to hide the column) works:
+
+```python
+SqlUi(
+    conn=conn,
+    model=Invoice,
+    column_config={
+        "amount": st.column_config.NumberColumn("Amount", format="dollar"),
+        "client_id": None,  # hide
+        "url": st.column_config.LinkColumn(),
+    },
+)
+```
+
+Defaults are merged underneath: `Numeric` columns get a number format by their
+scale (`Numeric(10, 2)` → `%.2f`), `Float` columns `%g`, `ARRAY` columns a
+`ListColumn`. A column you configure replaces its default entirely.
+
+`column_config` replaces the pandas-based `df_style_formatter`. `NumberColumn`
+takes printf-style formats or presets (`"plain"`, `"localized"`, `"dollar"`,
+`"euro"`, `"yen"`, `"accounting"`, `"percent"`, `"compact"`, `"scientific"`, ...):
+
+| `df_style_formatter` | `column_config` |
+|---|---|
+| `"${:,.2f}"` | `st.column_config.NumberColumn(format="dollar")` (`$1,234.57`) |
+| `"${:.2f}"` | `st.column_config.NumberColumn(format="$%.2f")` |
+| `"{:.1f}%"` (value already in %) | `st.column_config.NumberColumn(format="%.1f%%")` |
+| `"{:.0%}"` (fraction) | `st.column_config.NumberColumn(format="percent")` |
+| `"{} days"` | `st.column_config.NumberColumn(format="%d days")` |
+
+The raw records of the current page (Python values: `Decimal`, dates, JSON as
+`dict`, enum members) are available as `SqlUi(...).rows`; selection positions
+index this list.
 
 ## Filtering with JOIN Statements
 
