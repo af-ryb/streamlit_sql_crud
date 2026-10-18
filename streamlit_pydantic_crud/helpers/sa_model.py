@@ -6,11 +6,12 @@ Leaf module: depends only on SQLAlchemy and `config_types`.
 from typing import Any, cast
 
 from sqlalchemy import ARRAY, JSON, Column, inspect
-from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
+from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, selectinload
+from sqlalchemy.orm.interfaces import LoaderOption
 from sqlalchemy.sql.elements import ColumnElement, KeyedColumnElement
 from sqlalchemy.types import TypeDecorator, TypeEngine
 
-from streamlit_pydantic_crud.config_types import MappedModel
+from streamlit_pydantic_crud.config_types import ManyToManyFields, MappedModel
 
 
 def declarative_model(model: type[MappedModel]) -> type[DeclarativeBase]:
@@ -53,6 +54,16 @@ def related_model(
 ) -> type[DeclarativeBase]:
     """Return the model on the other side of `model`'s `relationship`."""
     return getattr(model, relationship).property.mapper.class_
+
+
+def m2m_load_options(
+    model: type[DeclarativeBase], many_to_many_fields: ManyToManyFields
+) -> list[LoaderOption]:
+    """Return a ``selectinload`` option per many-to-many relationship of `model`."""
+    return [
+        selectinload(getattr(model, config["relationship"]))
+        for config in many_to_many_fields.values()
+    ]
 
 
 def model_by_tablename(

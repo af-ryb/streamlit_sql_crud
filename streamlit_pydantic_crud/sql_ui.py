@@ -21,7 +21,6 @@ from streamlit_pydantic_crud.config_types import (
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
-from streamlit_pydantic_crud.dialogs.persist import m2m_load_options
 from streamlit_pydantic_crud.forms.schema_check import validate_schema_compatibility
 from streamlit_pydantic_crud.helpers import logs
 from streamlit_pydantic_crud.helpers.display import (
@@ -34,6 +33,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     declarative_model,
     is_json_type,
+    m2m_load_options,
     pk_attr,
     pk_name,
     tablename,
