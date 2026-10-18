@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import DeclarativeBase
 
-from streamlit_pydantic_crud.helpers.sa_model import pk_column
+from streamlit_pydantic_crud.helpers.sa_model import pk_column, safe_python_type
 
 
 def enum_value(value: Any) -> Any:
@@ -135,7 +135,7 @@ def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
         return value
 
     # Get the primary key column type from the model
-    python_type = pk_column(model).type.python_type
+    python_type = safe_python_type(pk_column(model))
     if python_type is int:
         return int(value)
     if python_type is str:
