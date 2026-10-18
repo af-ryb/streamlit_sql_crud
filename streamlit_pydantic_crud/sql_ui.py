@@ -28,6 +28,7 @@ from streamlit_pydantic_crud.helpers.display import (
 )
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
+    is_json_type,
     pk_attr,
     pk_name,
     tablename,
@@ -37,6 +38,7 @@ from streamlit_pydantic_crud.helpers.values import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
     enum_value,
+    json_to_text,
     row_to_python,
 )
 from streamlit_pydantic_crud.state import (
@@ -427,6 +429,7 @@ class SqlUi:
             else:
                 result = s.execute(stmt).all()
 
+            json_cols = {c.name for c in self.cte.columns if is_json_type(c.type)}
             validated_rows = []
             for row in result:
                 if self.read_schema:
@@ -454,7 +457,12 @@ class SqlUi:
 
                 # Convert enum objects to strings for PyArrow compatibility
                 for key, value in validated_data.items():
-                    if isinstance(value, list):
+                    if key in json_cols:
+                        """JSON as text: Arrow rejects dicts/lists mixing types."""
+                        validated_data[key] = (
+                            None if value is None else json_to_text(value)
+                        )
+                    elif isinstance(value, list):
                         # Handle list of enums
                         validated_data[key] = [
                             item.value if isinstance(item, Enum) else str(item)

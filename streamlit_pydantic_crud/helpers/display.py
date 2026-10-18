@@ -15,7 +15,7 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 
 from streamlit_pydantic_crud.helpers.sa_model import is_array_type, is_json_type
-from streamlit_pydantic_crud.helpers.values import enum_value, json_to_text
+from streamlit_pydantic_crud.helpers.values import enum_value, json_to_text, to_list
 
 """Per-column formatter accepted by pandas ``Styler.format``."""
 DfStyleFormatter = dict[Any, str | Callable[[object], str] | None]
@@ -38,17 +38,19 @@ def convert_arrow(
                     lambda x: json_to_text(x) if x is not None else None
                 )
             elif is_array_type(col.type):
-                df[col_name] = df[col_name].apply(
-                    lambda x: (
-                        ", ".join(map(str, x))
-                        if x is not None and isinstance(x, (list, tuple))
-                        else str(x)
-                        if x is not None
-                        else None
-                    )
-                )
+                df[col_name] = df[col_name].map(array_to_text)
 
     return df
+
+
+def array_to_text(value: Any) -> str | None:
+    """Join an ARRAY cell into text; enum members show their values.
+
+    A PG array literal string is parsed first; None stays None.
+    """
+    if value is None:
+        return None
+    return ", ".join(str(enum_value(item)) for item in to_list(value))
 
 
 def numeric_formatters(cte: CTE, columns: Iterable[str]) -> DfStyleFormatter:
