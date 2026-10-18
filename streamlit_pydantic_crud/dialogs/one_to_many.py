@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import (
     DeclarativeBase,
     RelationshipDirection,
@@ -21,8 +21,12 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
-from streamlit_pydantic_crud.helpers.sa_model import pk_attr, pk_name
-from streamlit_pydantic_crud.state import clear_state_keys
+from streamlit_pydantic_crud.helpers.sa_model import pk_attr, pk_column
+from streamlit_pydantic_crud.state import (
+    clear_state_keys,
+    data_version,
+    session_writes,
+)
 from streamlit_pydantic_crud.table import pagination, query
 
 
@@ -78,14 +82,15 @@ class ReadManyRel:
         stmt = stmt.where(self.other_col == self.model_id)
         return stmt
 
-    def get_qtty_rows(self, session: Session) -> int:
-        subq = self.base_stmt.subquery()
-        stmt = select(func.count(subq.c[pk_name(self.other_model)]))
-        qtty = session.execute(stmt).scalar_one()
-        return qtty
+    def get_qtty_rows(self, conn: SQLConnection) -> int:
+        """Count the child rows; cached per statement and data version."""
+        return query.get_qtty_rows(conn, self.base_stmt, data_version())
 
     def get_stmt_pag(self, items_per_page: int, page: int) -> Select[Any]:
-        return query.get_stmt_pag(self.base_stmt, items_per_page, page)
+        """Return page `page` of the child rows, ordered by primary key."""
+        return query.get_stmt_pag(
+            self.base_stmt, items_per_page, page, pk_column(self.other_model)
+        )
 
     def get_data(
         self, session: Session, items_per_page: int, page: int
@@ -115,17 +120,19 @@ def show_rel(
         data_container = tab_read.container()
         pag_container = tab_read.container()
 
-    with pag_container, conn.session as s:
-        qtty_rows = read_many_rel.get_qtty_rows(s)
+    with pag_container:
+        qtty_rows = read_many_rel.get_qtty_rows(conn)
         items_per_page, page = pagination.show_pagination(
             qtty_rows,
             pagination.REL_OPTS_ITEMS_PAGE,
             key=f"stsql_read_many_pag_{read_many_rel.suffix_key}",
         )
 
+    with conn.session as s:
         data = read_many_rel.get_data(s, items_per_page, page)
 
     with data_container:
+        """A write renews the key, dropping a selection of rows that moved."""
         df = pd.DataFrame(data, columns=["id", pretty_name]).set_index("id", drop=True)
         selection_state = st.dataframe(
             df,
@@ -133,7 +140,7 @@ def show_rel(
             width="stretch",
             selection_mode="multi-row",
             on_select="rerun",
-            key=f"stsql_many_df_{read_many_rel.suffix_key}",
+            key=f"stsql_many_df_{read_many_rel.suffix_key}_{session_writes()}",
         )
 
         rows_pos = []
@@ -159,17 +166,17 @@ def show_rel(
             handle_panel_result(create_key, ok, msg)
 
         with tab_delete:
+            delete_key = f"st_sql_many_delete_{read_many_rel.suffix_key}"
             rows_id = df.iloc[rows_pos].index.to_list()
+            ok, msg = None, None
             if len(rows_id) == 0:
                 st.text("First select the rows to delete")
             else:
                 delete_rows = DeleteRows(
-                    conn,
-                    read_many_rel.other_model,
-                    rows_id,
-                    f"st_sql_many_delete_{read_many_rel.suffix_key}",
+                    conn, read_many_rel.other_model, rows_id, delete_key
                 )
-                delete_rows.show(pretty_name)
+                ok, msg = delete_rows.show(pretty_name)
+            handle_panel_result(delete_key, ok, msg)
 
 
 def show_rels(
