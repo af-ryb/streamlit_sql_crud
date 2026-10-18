@@ -10,6 +10,7 @@ from streamlit_pydantic_crud.config_types import ManyToManyFields
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
     handle_save_error,
+    handle_save_ok,
     json_none_as_sql_null,
     pop_m2m_data,
 )
@@ -73,6 +74,36 @@ class Blob(JsonBase):
     id: Mapped[int] = mapped_column(primary_key=True)
     note: Mapped[str | None] = mapped_column()
     payload: Mapped[dict[str, Any] | None] = mapped_column("data", JSON)
+
+
+def test_handle_save_ok_counts_logs_and_clears_form() -> None:
+    """A committed save counts as a write, logs it and drops the form data."""
+    state: dict[str, Any] = {UPDATED_KEY: 3, "k_form_data": {"a": 1}, "other": 1}
+    version = data_version()
+    with (
+        patch("streamlit_pydantic_crud.state.ss", state),
+        patch(f"{PERSIST}.log") as mock_log,
+    ):
+        result = handle_save_ok("CREATE", Department, "row 1", "k_form_data")
+
+    assert result == (True, "Created successfully row 1")
+    assert state == {UPDATED_KEY: 4, "other": 1}
+    assert data_version() == version + 1
+    mock_log.assert_called_once_with("CREATE", "department", "row 1")
+
+
+def test_handle_save_ok_without_session_key() -> None:
+    """Without a session key no form data is touched; UPDATE reads 'Updated'."""
+    state: dict[str, Any] = {"k_form_data": {"a": 1}}
+    with (
+        patch("streamlit_pydantic_crud.state.ss", state),
+        patch(f"{PERSIST}.log") as mock_log,
+    ):
+        result = handle_save_ok("UPDATE", Department, "row 1")
+
+    assert result == (True, "Updated successfully row 1")
+    assert state == {UPDATED_KEY: 1, "k_form_data": {"a": 1}}
+    mock_log.assert_called_once_with("UPDATE", "department", "row 1")
 
 
 def test_json_none_becomes_sql_null_only_for_json_columns() -> None:

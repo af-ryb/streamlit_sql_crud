@@ -27,7 +27,7 @@ def _app(db: str) -> None:
 
     conn = st.connection("sql", url=f"sqlite:///{db}")
     create = CreateRow(conn, Employee, key="c", no_dt_filters=FILTERS)
-    update = UpdateRow(conn, Employee, 1, key="u", no_dt_filters=FILTERS)
+    update = UpdateRow(conn, Employee, 1, key="u")
     for name, row in (("CREATE", create), ("UPDATE", update)):
         idxs = sorted(opt.idx for opt in row.existing_data.fk["department_id"])
         st.write(f"{name}={idxs}")

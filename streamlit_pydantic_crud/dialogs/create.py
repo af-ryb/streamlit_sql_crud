@@ -13,6 +13,7 @@ from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
     handle_save_error,
+    handle_save_ok,
     json_none_as_sql_null,
     load_related,
     pop_m2m_data,
@@ -20,14 +21,13 @@ from streamlit_pydantic_crud.dialogs.persist import (
 from streamlit_pydantic_crud.forms.options import ExistingData, load_form_options
 from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
-from streamlit_pydantic_crud.helpers.logs import log
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     pk_name,
     tablename,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.state import record_write, set_state
+from streamlit_pydantic_crud.state import set_state
 
 
 class CreateRow:
@@ -80,9 +80,8 @@ class CreateRow:
 
         session_key = form_data_key(self.key_prefix)
 
-        # Pre-populate form with initial_data if provided (for "copy" action)
         if self.initial_data:
-            # Remove the primary key to avoid conflicts, as it's a new record
+            """Prefill from the copied row, minus its PK: this is a new record."""
             self.initial_data.pop(pk_name(self.model), None)
             set_state(session_key, self.initial_data)
 
@@ -95,7 +94,6 @@ class CreateRow:
             pk_name=pk_name(self.model),
         )
 
-        # Set operation type to 'create' for proper empty value handling
         self.pydantic_ui.set_operation_type("create")
 
         load_form_options(
@@ -109,8 +107,7 @@ class CreateRow:
         )
 
     def get_pydantic_fields(self) -> BaseModel | None:
-        """Generate fields using PydanticUi"""
-        # Use PydanticUi to render the form with submit button
+        """Render the Pydantic form; return its data once submitted."""
         form_data, submitted = self.pydantic_ui.render_with_submit("Save")
         return form_data if submitted else None
 
@@ -120,9 +117,6 @@ class CreateRow:
         created = {}
         for col in cols:
             col_name = column_label(col)
-            if col_name is None:
-                continue
-
             initial_value = self.initial_data.get(col_name)
 
             if col_name in self.default_values:
@@ -139,12 +133,10 @@ class CreateRow:
         st.subheader(pretty_name)
 
         if self.create_schema:
-            # Use PydanticUi which handles forms internally
             created = self.get_pydantic_fields()
             if created:
                 return self.save_pydantic(created)
             return None, None
-        # Use traditional form for SQLAlchemy-only mode
         with st.form(
             f"create_model_form_{pretty_name}_{self.key_prefix}", border=False
         ):
@@ -159,17 +151,13 @@ class CreateRow:
         """Save using pre-validated Pydantic data from PydanticUi"""
         try:
             with self.conn.session as s:
-                # Separate many-to-many fields from the main data
                 main_data = validated_data.model_dump()
                 m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
                 main_data = json_none_as_sql_null(self.model, main_data)
 
-                # Create the main object without m2m fields
                 row = self.model(**main_data)
                 s.add(row)
-                s.flush()  # Flush to get the ID of the new row
-
-                # Handle many-to-many relationships
+                s.flush()
                 for field_name, selected_options in m2m_data.items():
                     relationship_name = self.many_to_many_fields[field_name][
                         "relationship"
@@ -178,20 +166,12 @@ class CreateRow:
                         s, self.model, relationship_name, selected_options
                     )
 
-                    # Append the related objects to the relationship
                     getattr(row, relationship_name).extend(related_objects)
 
                 s.commit()
-                record_write()
-                table_name = tablename(self.model)
-                log("CREATE", table_name, row)
-
-                # Clear the form data after successful save
-                session_key = form_data_key(self.key_prefix)
-                if session_key in st.session_state:
-                    del st.session_state[session_key]
-
-                return True, f"Created successfully {row}"
+                return handle_save_ok(
+                    "CREATE", self.model, row, form_data_key(self.key_prefix)
+                )
 
         except Exception as e:
             return handle_save_error(
@@ -205,10 +185,7 @@ class CreateRow:
             with self.conn.session as s:
                 s.add(row)
                 s.commit()
-                record_write()
-                table_name = tablename(self.model)
-                log("CREATE", table_name, row)
-                return True, f"Created successfully {row}"
+                return handle_save_ok("CREATE", self.model, row)
         except Exception as e:
             return handle_save_error("CREATE", self.model, created, e)
 

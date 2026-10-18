@@ -74,7 +74,6 @@ def _app(db: str, schema: bool) -> None:
         key="u",
         update_schema=EmployeeUpdate if schema else None,
         foreign_key_options=fk,
-        no_dt_filters=FILTERS,
     )
     if schema:
         for name, row in (("CREATE", create), ("UPDATE", update)):
