@@ -270,8 +270,9 @@ class SqlUi:
         stmt_no_pag = query.get_stmt_no_pag(self.cte, self.col_filter)
         qtty_rows = query.get_qtty_rows(self.conn, stmt_no_pag, data_version())
         items_per_page, page = self.pagination(qtty_rows, self.col_filter)
-        order_col = self.cte.columns.get(pk_name(self.edit_create_model))
-        stmt_pag = query.get_stmt_pag(stmt_no_pag, items_per_page, page, order_col)
+        pk_col = self.cte.columns.get(pk_name(self.edit_create_model))
+        order_by = query.paging_order(self.read_instance, self.cte, pk_col)
+        stmt_pag = query.get_stmt_pag(stmt_no_pag, items_per_page, page, order_by)
         df = self.get_df(stmt_pag)
         selection_state = self.show_df(df)
         rows_selected = self.get_rows_selected(selection_state)
@@ -355,7 +356,9 @@ class SqlUi:
         filter_cols_name = self.available_filter
         if len(filter_cols_name) == 0:
             # Include both columns with description and those without (joined columns)
-            filter_cols_name = [column_label(col) for col in self.cte.columns]
+            filter_cols_name = [
+                column_label(col) for col in query.visible_columns(self.cte)
+            ]
 
         with self.conn.session as s:
             existing = filter_ui.get_existing_values(
@@ -412,7 +415,8 @@ class SqlUi:
 
         Kept until display is unified: Decimal → float, tz-aware → UTC.
         """
-        columns = list(self.cte.columns.keys())
+        visible = query.visible_columns(self.cte)
+        columns = [c.key for c in visible]
         df = pd.DataFrame.from_records(
             [tuple(r[c] for c in columns) for r in records],
             columns=columns,
@@ -421,7 +425,7 @@ class SqlUi:
         for name, dtype in df.dtypes.items():
             if isinstance(dtype, pd.DatetimeTZDtype):
                 df[name] = df[name].dt.tz_convert("UTC")
-        return convert_arrow(self.cte.columns, df)
+        return convert_arrow(visible, df)
 
     def schema_display_row(self, record: dict) -> dict:
         """Make one ORM-path record Arrow-displayable: JSON text, enum values."""
