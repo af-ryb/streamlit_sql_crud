@@ -49,10 +49,14 @@ class PydanticUi[T: BaseModel]:
         self.pk_name = pk_name
         self.missing_required: list[str] = []
 
-        self.input_generator = PydanticInputGenerator(
-            schema=schema, key_prefix=key, pk_name=pk_name
-        )
+        self.input_generator = self._build_input_generator()
         self._init_session_state()
+
+    def _build_input_generator(self) -> PydanticInputGenerator:
+        """Build the field-widget generator; subclasses add relation config."""
+        return PydanticInputGenerator(
+            schema=self.schema, key_prefix=self.key, pk_name=self.pk_name
+        )
 
     @classmethod
     def from_json_schema(
@@ -80,12 +84,7 @@ class PydanticUi[T: BaseModel]:
 
         Example:
             ```python
-            # Instead of:
-            # schema_model = create_pydantic_model_with_options(json_schema, field_options)
-            # ui = PydanticUi(schema=schema_model, key="form")
-
-            # Use:
-            ui = PydanticUi.from_json_schema(
+            ui =PydanticUi.from_json_schema(
                 json_schema=json_schema,
                 field_options=field_options,
                 key="form"
@@ -95,12 +94,10 @@ class PydanticUi[T: BaseModel]:
         if field_options is None:
             field_options = {}
 
-        # Create the dynamic Pydantic model from JSON schema
         dynamic_schema = create_pydantic_model_from_json_schema(
             json_schema=json_schema, field_options=field_options, model_name=model_name
         )
 
-        # Create and return PydanticUi instance
         return cls(
             schema=cast(Any, dynamic_schema),
             key=key,
@@ -155,9 +152,7 @@ class PydanticUi[T: BaseModel]:
             if not session_data:
                 return None
 
-            # Validate session data
-            model_instance = self.schema(**session_data)
-            return model_instance
+            return self.schema(**session_data)
 
         except ValidationError:
             return None
@@ -190,11 +185,9 @@ class PydanticUi[T: BaseModel]:
             """Clear existing widget keys first to avoid a Streamlit error."""
             self._clear_widget_keys()
 
-            # Update the main session state key
+            """Widget keys are re-seeded on the next render: the widgets may
+            already be instantiated, so they cannot be set here."""
             st.session_state[self.session_state_key] = data_dict
-
-            # Note: Individual widget keys will be populated on next render
-            # We cannot set them here as widgets may already be instantiated
 
         except Exception:
             logger.exception("Error updating session data")
@@ -249,7 +242,6 @@ class PydanticUi[T: BaseModel]:
             Tuple of (validated Pydantic model instance or None, submit button pressed status)
         """
         with st.form(key=f"{self.key}_form"):
-            # Render form fields
             model_instance = self.render()
 
             btn_kwargs: dict[str, Any] = {}
@@ -258,7 +250,6 @@ class PydanticUi[T: BaseModel]:
                 btn_kwargs["args"] = on_submit_args
                 btn_kwargs["kwargs"] = on_submit_kwargs or {}
 
-            # Submit button
             submitted = st.form_submit_button(submit_label, **btn_kwargs)
             if submitted:
                 self._warn_missing_required()
@@ -330,7 +321,9 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
             many_to_many_fields: Configuration for many-to-many fields
             pk_name: Name of the primary-key field in the schema
         """
-        # Initialize parent without input generator
+        """Set before the parent init, which builds the generator from them."""
+        self.foreign_key_options = foreign_key_options or {}
+        self.many_to_many_fields = many_to_many_fields or {}
         super().__init__(
             schema=schema,
             key=key,
@@ -338,21 +331,17 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
             pk_name=pk_name,
         )
 
-        # Store foreign key options
-        self.foreign_key_options = foreign_key_options or {}
-        self.many_to_many_fields = many_to_many_fields or {}
-
-        # Reinitialize input generator with foreign key support
-        self.input_generator = PydanticInputGenerator(
-            schema=schema,
-            key_prefix=key,
+    def _build_input_generator(self) -> PydanticInputGenerator:
+        """Build the generator with FK/M2M support, in create mode until an
+        operation calls ``set_operation_type``."""
+        return PydanticInputGenerator(
+            schema=self.schema,
+            key_prefix=self.key,
             foreign_key_options=self.foreign_key_options,
             many_to_many_fields=self.many_to_many_fields,
-            operation_type="create",  # Default to create, will be overridden by specific operations
-            pk_name=pk_name,
+            operation_type="create",
+            pk_name=self.pk_name,
         )
-
-        self._init_session_state()
 
     def set_operation_type(self, operation_type: OperationType) -> None:
         """Update the operation type for the input generator.
