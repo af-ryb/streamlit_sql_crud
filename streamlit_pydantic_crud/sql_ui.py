@@ -1,5 +1,6 @@
 import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
 
@@ -49,6 +50,18 @@ from streamlit_pydantic_crud.state import (
     session_writes,
 )
 from streamlit_pydantic_crud.table import filter_ui, pagination, query
+
+
+@dataclass(frozen=True)
+class Containers:
+    """Streamlit containers laid out once per render by `SqlUi.set_structure`."""
+
+    header: DeltaGenerator
+    data: DeltaGenerator
+    pag: DeltaGenerator
+    expander: DeltaGenerator
+    filter: DeltaGenerator
+    btns: DeltaGenerator
 
 
 class SqlUi:
@@ -245,7 +258,7 @@ class SqlUi:
 
         # Bootstrap
         self.state: UiState = get_ui_state(self.key)
-        self.set_structure()
+        self.containers: Containers = self.set_structure()
         self.notification()
         logs.set_logging(self.disable_log)
 
@@ -279,30 +292,40 @@ class SqlUi:
             )
             raise ValueError(msg)
 
-    def set_structure(self) -> None:
-        self.header_container = st.container()
-        self.data_container = st.container()
-        self.pag_container = st.container()
+    def set_structure(self) -> Containers:
+        """Lay out the page skeleton and return its containers."""
+        header = st.container()
+        data = st.container()
+        pag = st.container()
 
         table_name = get_pretty_name(tablename(self.edit_create_model))
-        self.header_container.header(table_name, divider="orange")
+        header.header(table_name, divider="orange")
 
-        self.expander_container = self.header_container.expander(
+        expander = header.expander(
             "Filter",
             icon=":material/search:",
         )
 
-        self.filter_container = self.header_container.container()
+        filter_container = header.container()
 
-        self.btns_container = self.header_container.container()
+        btns = header.container()
+
+        return Containers(
+            header=header,
+            data=data,
+            pag=pag,
+            expander=expander,
+            filter=filter_container,
+            btns=btns,
+        )
 
     def notification(self) -> None:
         if self.state.update_ok is True:
-            self.header_container.success(
+            self.containers.header.success(
                 self.state.update_message, icon=":material/thumb_up:"
             )
         if self.state.update_ok is False:
-            self.header_container.error(
+            self.containers.header.error(
                 self.state.update_message, icon=":material/thumb_down:"
             )
         # Clear so the banner shows once, not on every following rerun.
@@ -340,14 +363,14 @@ class SqlUi:
             )
 
         col_filter = filter_ui.ColFilter(
-            self.expander_container,
+            self.containers.expander,
             cte=self.cte,
             existing_values=existing,
             available_col_filter=filter_cols_name,
             key=self.key,
         )
         if str(col_filter) != "":
-            self.filter_container.write(col_filter)
+            self.containers.filter.write(col_filter)
 
         return col_filter
 
@@ -359,7 +382,7 @@ class SqlUi:
         filters_changed = filters != self.state.filters
         self.state.filters = filters
 
-        with self.pag_container:
+        with self.containers.pag:
             return pagination.show_pagination(
                 qtty_rows,
                 pagination.OPTS_ITEMS_PAGE,
@@ -495,7 +518,7 @@ class SqlUi:
         if self.style_fn is not None:
             df_style = df_style.apply(self.style_fn, axis=1)
 
-        selection_state = self.data_container.dataframe(
+        selection_state = self.containers.data.dataframe(
             df_style,
             width="stretch" if self.read_use_container_width else "content",
             height=650,
@@ -531,7 +554,7 @@ class SqlUi:
     def crud(self, df: pd.DataFrame, rows_selected: list[int]) -> None:
         qtty_rows = len(rows_selected)
         action = action_btns(
-            self.btns_container,
+            self.containers.btns,
             qtty_selected=qtty_rows,
             opened=self.state.opened,
             show_delete_btn=self.show_delete_btn,
