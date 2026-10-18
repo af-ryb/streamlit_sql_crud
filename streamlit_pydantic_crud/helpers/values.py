@@ -1,6 +1,6 @@
-"""Coerce values between the database, DataFrames and Streamlit widgets.
+"""Coerce values between the database and Streamlit widgets.
 
-Leaf module: depends on numpy and `sa_model` only.
+Leaf module: no Streamlit, no numpy.
 """
 
 import json
@@ -8,11 +8,6 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
-
-import numpy as np
-from sqlalchemy.orm import DeclarativeBase
-
-from streamlit_pydantic_crud.helpers.sa_model import pk_column, safe_python_type
 
 
 def enum_value(value: Any) -> Any:
@@ -107,39 +102,12 @@ def keep_unchanged_datetime(new: Any, original: Any) -> Any:
     return original if new == truncated else new
 
 
-def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
-    """Convert numpy types to Python native types based on SQLAlchemy model primary key type
+def to_python_scalar(value: Any) -> Any:
+    """Return a numpy scalar as its Python equivalent, other values unchanged.
 
-    Args:
-        value: The value to convert (potentially numpy type)
-        model: SQLAlchemy model class to get the primary key type from
-
-    Returns:
-        The value converted to appropriate Python native type
+    Duck-typed (a 0-d value from the ``numpy`` module with ``item()``), so the
+    package needs no numpy import; e.g. a custom TypeDecorator may load one.
     """
-    if not isinstance(value, (np.integer, np.floating, np.str_)):
-        return value
-
-    # Get the primary key column type from the model
-    python_type = safe_python_type(pk_column(model))
-    if python_type is int:
-        return int(value)
-    if python_type is str:
-        return str(value)
-    if python_type is float:
-        return float(value)
-
-    # Fallback: convert common numpy types to Python types
-    if isinstance(value, np.integer):
-        return int(value)
-    if isinstance(value, np.floating):
-        return float(value)
-    if isinstance(value, np.str_):
-        return str(value)
-
+    if type(value).__module__ == "numpy" and getattr(value, "ndim", None) == 0:
+        return value.item()
     return value
-
-
-def numpy_scalar_to_python(value: Any) -> Any:
-    """Return a numpy scalar as its Python equivalent, other values unchanged."""
-    return value.item() if isinstance(value, np.generic) else value

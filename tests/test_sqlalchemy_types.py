@@ -11,25 +11,12 @@ from typing import Any, cast
 import numpy as np
 import pytest
 from sqlalchemy import Column, Float, Numeric, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 from sqlmodel.sql.sqltypes import AutoString
 
 from streamlit_pydantic_crud.forms.sa_fields import InputFields
 from streamlit_pydantic_crud.helpers.sa_model import safe_python_type
-from streamlit_pydantic_crud.helpers.values import convert_numpy_to_python
-
-
-class Base(DeclarativeBase):
-    """Local declarative base, kept out of the shared test metadata."""
-
-
-class Code(Base):
-    """Table whose primary key is SQLModel's AutoString TypeDecorator."""
-
-    __tablename__ = "code"
-
-    code: Mapped[str] = mapped_column(AutoString, primary_key=True)
+from streamlit_pydantic_crud.helpers.values import to_python_scalar
 
 
 class UpperString(TypeDecorator):
@@ -53,12 +40,25 @@ def test_safe_python_type_unwraps_autostring() -> None:
     assert safe_python_type(Column("c", AutoString())) is str
 
 
-def test_convert_numpy_uses_decorated_pk_type() -> None:
-    """A numpy value for an AutoString PK becomes a plain str."""
-    value = convert_numpy_to_python(np.str_("a1"), Code)
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(np.str_("a1"), "a1"), (np.int64(7), 7), (np.float64(1.5), 1.5)],
+)
+def test_to_python_scalar_unwraps_numpy_scalars(value: Any, expected: Any) -> None:
+    """A numpy scalar becomes the plain Python value of the same kind."""
+    result = to_python_scalar(value)
 
-    assert value == "a1"
-    assert type(value) is str
+    assert result == expected
+    assert type(result) is type(expected)
+
+
+def test_to_python_scalar_keeps_other_values() -> None:
+    """Python values and numpy arrays are returned as they are."""
+    arr = np.array([1, 2])
+
+    assert to_python_scalar(arr) is arr
+    assert to_python_scalar("a1") == "a1"
+    assert to_python_scalar(None) is None
 
 
 @pytest.fixture

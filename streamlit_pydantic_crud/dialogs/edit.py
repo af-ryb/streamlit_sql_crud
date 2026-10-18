@@ -36,10 +36,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     related_model,
     tablename,
 )
-from streamlit_pydantic_crud.helpers.values import (
-    convert_numpy_to_python,
-    numpy_scalar_to_python,
-)
+from streamlit_pydantic_crud.helpers.values import to_python_scalar
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 
 
@@ -108,11 +105,7 @@ class UpdateRow:
             for col in self.model.__table__.columns:
                 col_name = column_label(col)
                 if hasattr(self.row, col_name):
-                    value = getattr(self.row, col_name)
-                    if col.primary_key:
-                        value = convert_numpy_to_python(value, self.model)
-                    else:
-                        value = numpy_scalar_to_python(value)
+                    value = to_python_scalar(getattr(self.row, col_name))
                     self.current_values[col_name] = value
 
             for field_name, config in self.many_to_many_fields.items():
