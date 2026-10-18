@@ -4,8 +4,7 @@ from typing import Any, Literal
 
 from loguru import logger
 from sqlalchemy import JSON, inspect, null
-from sqlalchemy.orm import DeclarativeBase, Session, selectinload
-from sqlalchemy.orm.interfaces import LoaderOption
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from streamlit_pydantic_crud.config_types import ManyToManyFields
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
@@ -17,16 +16,6 @@ from streamlit_pydantic_crud.state import clear_state_keys, record_write
 def form_data_key(key_prefix: str) -> str:
     """Return the session-state key holding a dialog's Pydantic form values."""
     return f"{key_prefix}_form_data"
-
-
-def m2m_load_options(
-    model: type[DeclarativeBase], many_to_many_fields: ManyToManyFields
-) -> list[LoaderOption]:
-    """Return a ``selectinload`` option per many-to-many relationship of `model`."""
-    return [
-        selectinload(getattr(model, config["relationship"]))
-        for config in many_to_many_fields.values()
-    ]
 
 
 def pop_m2m_data(

@@ -21,7 +21,6 @@ from streamlit_pydantic_crud.dialogs.persist import (
     handle_save_ok,
     json_none_as_sql_null,
     load_related,
-    m2m_load_options,
     pop_m2m_data,
 )
 from streamlit_pydantic_crud.forms.options import ExistingData, load_form_options
@@ -30,6 +29,7 @@ from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     declarative_model,
+    m2m_load_options,
     pk_attr,
     pk_column,
     pk_name,

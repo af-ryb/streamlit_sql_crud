@@ -28,8 +28,10 @@ from tests._apps.read_path_models import (
 
 APP = str(Path(__file__).parent / "_apps" / "read_path_app.py")
 DF_KEY = "rp_df_sql_ui_0"
-"""Rows in PK order: the read query's ORDER BY is overridden by paging."""
+"""Rows in PK order: the read query has no ORDER BY (m2m mode has one)."""
 PK_ORDER = [ID_BRAVO, ID_CHARLIE, ID_ALPHA, ID_DELTA]
+"""m2m mode: ORDER BY category count (delta 1, alpha 2, charlie 3), then name."""
+M2M_ORDER = [ID_DELTA, ID_ALPHA, ID_CHARLIE]
 NAMES = ["bravo", "charlie", "alpha", "delta"]
 META_TEXT = [
     None,
@@ -200,16 +202,15 @@ def test_m2m_property_where_and_order(run: Callable[..., AppTest]) -> None:
         "name",
         "price",
     ]
-    """WHERE drops bravo; ORDER BY (category count: delta, alpha, charlie) is
-    overridden by the PK order of paging."""
+    """WHERE drops bravo; the ORDER BY (category count) is honored."""
     assert at.session_state["QTTY"] == 3
-    assert df["id"].tolist() == [ID_CHARLIE, ID_ALPHA, ID_DELTA]
-    assert df["category_names"].tolist() == ["blue, green, red", "blue, red", "green"]
-    assert df["app_name"].tolist() == ["Alpha App", "Alpha App", "Beta App"]
-    """With M2M rows are reloaded entities: `platform` is the model @property,
-    not the query's upper-cased label."""
-    assert df["platform"].tolist() == ["ios", "ios", "android"]
-    assert display_text(at)["price"] == ["7.25", "12.50", "0.10"]
+    assert df["id"].tolist() == M2M_ORDER
+    assert df["category_names"].tolist() == ["green", "blue, red", "blue, green, red"]
+    assert df["app_name"].tolist() == ["Beta App", "Alpha App", "Alpha App"]
+    """Rows are reloaded entities for M2M, but query columns win: `platform` is
+    the upper-cased label (as in join mode), not the model @property."""
+    assert df["platform"].tolist() == ["ANDROID", "IOS", "IOS"]
+    assert display_text(at)["price"] == ["0.10", "12.50", "7.25"]
 
 
 def test_m2m_filter_options_follow_where(run: Callable[..., AppTest]) -> None:
@@ -221,7 +222,7 @@ def test_m2m_filter_options_follow_where(run: Callable[..., AppTest]) -> None:
     ]
     at.selectbox(key="rp_create_no_dt_filter_App Name").select("Alpha App").run()
     assert not at.exception
-    assert table(at)["id"].tolist() == [ID_CHARLIE, ID_ALPHA]
+    assert table(at)["id"].tolist() == [ID_ALPHA, ID_CHARLIE]
 
 
 @pytest.mark.parametrize(
@@ -230,7 +231,7 @@ def test_m2m_filter_options_follow_where(run: Callable[..., AppTest]) -> None:
         ("plain", PK_ORDER),
         ("schema", PK_ORDER),
         ("join", PK_ORDER),
-        ("m2m", [ID_CHARLIE, ID_ALPHA, ID_DELTA]),
+        ("m2m", M2M_ORDER),
     ],
 )
 def test_edit_targets_selected_pk(
@@ -249,7 +250,7 @@ def test_edit_targets_selected_pk(
         ("plain", PK_ORDER),
         ("schema", PK_ORDER),
         ("join", PK_ORDER),
-        ("m2m", [ID_CHARLIE, ID_ALPHA, ID_DELTA]),
+        ("m2m", M2M_ORDER),
     ],
 )
 def test_delete_targets_selected_pks(
@@ -309,7 +310,7 @@ def test_copy_schema_passes_display_row(run: Callable[..., AppTest]) -> None:
             {
                 "category_names": "blue, red",
                 "app_name": "Alpha App",
-                "platform": "ios",
+                "platform": "IOS",
                 "name": "alpha",
                 "price": Decimal("12.50"),
                 "id": ID_ALPHA,

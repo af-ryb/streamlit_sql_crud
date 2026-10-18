@@ -89,7 +89,7 @@ class ReadManyRel:
     def get_stmt_pag(self, items_per_page: int, page: int) -> Select[Any]:
         """Return page `page` of the child rows, ordered by primary key."""
         return query.get_stmt_pag(
-            self.base_stmt, items_per_page, page, pk_column(self.other_model)
+            self.base_stmt, items_per_page, page, [pk_column(self.other_model)]
         )
 
     def get_data(

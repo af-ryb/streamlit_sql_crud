@@ -4,7 +4,7 @@ The read query is wrapped in a CTE, narrowed by the active filters, counted
 and paged. ``apply_active_filters`` narrows option queries of related models.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date
 from typing import Any, Protocol
 
@@ -12,7 +12,14 @@ import streamlit as st
 from loguru import logger
 from sqlalchemy import CTE, Select, func, select
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.sql.elements import KeyedColumnElement
+from sqlalchemy.sql import operators
+from sqlalchemy.sql.elements import (
+    ColumnElement,
+    KeyedColumnElement,
+    UnaryExpression,
+    _label_reference,
+    _textual_label_reference,
+)
 
 from streamlit_pydantic_crud.config_types import MappedModel, SessionSource
 from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS
@@ -22,6 +29,17 @@ SQL_HASH_FUNCS: dict[Any, Callable[[Any], Any]] = {
     Select: lambda sel: (str(sel), sel.compile().params),
 }
 """st.cache_data hashers for SQL statements: the SQL text and its params."""
+
+ORDER_LABEL_PREFIX = "_stsql_order_"
+"""Label prefix of the hidden CTE columns carrying the read query's ORDER BY."""
+
+ORDER_MODIFIERS: dict[Any, Callable[[Any], ColumnElement[Any]]] = {
+    operators.desc_op: lambda col: col.desc(),
+    operators.asc_op: lambda col: col.asc(),
+    operators.nulls_first_op: lambda col: col.nulls_first(),
+    operators.nulls_last_op: lambda col: col.nulls_last(),
+}
+"""ORDER BY modifiers re-applied to the outer query's order columns."""
 
 
 class ActiveFilters(Protocol):
@@ -39,15 +57,116 @@ class ActiveFilters(Protocol):
 
 
 def to_cte(read_instance: Select | CTE | type[MappedModel]) -> CTE:
-    """Wrap a SqlUi ``read_instance`` (statement, CTE or model) in a CTE."""
+    """Wrap a SqlUi ``read_instance`` (statement, CTE or model) in a CTE.
+
+    A statement's ORDER BY expressions that are not selected become hidden
+    columns (`ORDER_LABEL_PREFIX`), so the paged outer query can order by them.
+    """
     if isinstance(read_instance, Select):
-        cte = read_instance.cte()
+        cte = with_order_columns(read_instance).cte()
     elif isinstance(read_instance, CTE):
         cte = read_instance
     else:
         cte = select(read_instance).cte()
 
     return cte
+
+
+def paging_order(
+    read_instance: Select | CTE | type[MappedModel],
+    cte: CTE,
+    pk_col: KeyedColumnElement[Any] | None,
+) -> list[ColumnElement[Any]]:
+    """Return the outer ORDER BY of `cte`: the statement's order, then the PK.
+
+    The PK tiebreak keeps pages stable; it is skipped when already ordered by.
+    A CTE or model `read_instance` has no order of its own: PK order only.
+    """
+    order: list[ColumnElement[Any]] = []
+    ordered_cols: list[ColumnElement[Any]] = []
+    if isinstance(read_instance, Select):
+        for i, (base, modifiers) in enumerate(order_terms(read_instance)):
+            col = cte_order_column(cte, base, i)
+            if col is None:
+                continue
+            ordered_cols.append(col)
+            for modifier in reversed(modifiers):
+                col = ORDER_MODIFIERS[modifier](col)
+            order.append(col)
+    if pk_col is not None and not any(c is pk_col for c in ordered_cols):
+        order.append(pk_col)
+    return order
+
+
+def visible_columns(cte: CTE) -> list[KeyedColumnElement[Any]]:
+    """Return the columns of `cte` without the hidden ORDER BY ones."""
+    return [c for c in cte.columns if not c.key.startswith(ORDER_LABEL_PREFIX)]
+
+
+def with_order_columns(stmt: Select) -> Select:
+    """Add each unselected ORDER BY expression of `stmt` as a hidden column.
+
+    The inner ORDER BY is dropped (the outer query orders) unless a LIMIT or
+    OFFSET makes it choose the rows.
+    """
+    terms = order_terms(stmt)
+    if not terms:
+        return stmt
+    hidden = [
+        base.label(f"{ORDER_LABEL_PREFIX}{i}")
+        for i, (base, _) in enumerate(terms)
+        if isinstance(base, ColumnElement)
+        and stmt.selected_columns.corresponding_column(base) is None
+    ]
+    if not has_row_limit(stmt):
+        stmt = stmt.order_by(None)
+    return stmt.add_columns(*hidden)
+
+
+def cte_order_column(
+    cte: CTE, base: ColumnElement[Any] | str, index: int
+) -> ColumnElement[Any] | None:
+    """Return the CTE column holding ORDER BY term `index` of value `base`."""
+    if isinstance(base, str):
+        return cte.c.get(base)
+    hidden = cte.c.get(f"{ORDER_LABEL_PREFIX}{index}")
+    if hidden is not None:
+        return hidden
+    return cte.c.corresponding_column(base)
+
+
+def order_terms(stmt: Select) -> list[tuple[ColumnElement[Any] | str, list[Any]]]:
+    """Split each ORDER BY clause of `stmt` into (expression, modifiers).
+
+    Modifiers (desc, nulls_last, ...) are listed outermost first; a string is
+    a textual label reference. Raw ``text()`` clauses cannot be lifted: skipped.
+    """
+    terms: list[tuple[ColumnElement[Any] | str, list[Any]]] = []
+    """SQLAlchemy 2.0 has no public accessor for a Select's ORDER BY clauses."""
+    for clause in stmt._order_by_clauses:
+        modifiers = []
+        element: Any = clause
+        while (
+            isinstance(element, UnaryExpression) and element.modifier in ORDER_MODIFIERS
+        ):
+            modifiers.append(element.modifier)
+            element = element.element
+        if isinstance(element, _textual_label_reference | _label_reference):
+            terms.append((element.element, modifiers))
+        elif isinstance(element, ColumnElement):
+            terms.append((element, modifiers))
+        else:
+            logger.warning(f"Ignoring ORDER BY clause {element} of the read query")
+    return terms
+
+
+def has_row_limit(stmt: Select) -> bool:
+    """Return True when `stmt` has a LIMIT, OFFSET or FETCH clause."""
+    return (
+        stmt._limit_clause is not None
+        or stmt._offset_clause is not None
+        or stmt._fetch_clause is not None
+    )
 
 
 def get_stmt_no_pag(cte: CTE, col_filter: ActiveFilters) -> Select:
@@ -65,8 +184,8 @@ def get_stmt_no_pag(cte: CTE, col_filter: ActiveFilters) -> Select:
 
 
 def get_stmt_no_pag_dt(cte: CTE, no_dt_filters: dict[str, Any]) -> Select:
-    """Select from `cte` with the non-date filters applied."""
-    stmt = select(cte)
+    """Select the visible columns of `cte` with the non-date filters applied."""
+    stmt = select(*visible_columns(cte))
 
     for colname, value in no_dt_filters.items():
         if value:
@@ -101,14 +220,14 @@ def get_stmt_pag(
     stmt_no_pag: Select,
     limit: int,
     page: int,
-    order_by: KeyedColumnElement | None = None,
+    order_by: Sequence[ColumnElement[Any]] = (),
 ) -> Select[Any]:
     """Return page `page` (1-based) of `limit` rows of `stmt_no_pag`."""
     offset = (page - 1) * limit
     stmt = stmt_no_pag
     """A deterministic ORDER BY keeps rows from jumping between pages."""
-    if order_by is not None:
-        stmt = stmt.order_by(order_by)
+    if order_by:
+        stmt = stmt.order_by(*order_by)
     stmt = stmt.offset(offset).limit(limit)
     return stmt
 

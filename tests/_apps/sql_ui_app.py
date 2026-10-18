@@ -41,7 +41,7 @@ with Session(eng) as s:
         s.commit()
 
 conn = st.connection("sql", url=f"sqlite:///{DB}")
-# Read statement orders id DESC; correct pagination must override it to id ASC.
+# Read statement orders id DESC; the table honors it (PK is only a tiebreak).
 read_stmt = select(Account).order_by(Account.id.desc())
 ui = SqlUi(conn=conn, read_instance=read_stmt, edit_create_model=Account, key="acc")
 st.write(f"QTTY={ui.qtty_rows}")
