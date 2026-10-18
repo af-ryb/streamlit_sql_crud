@@ -26,7 +26,7 @@ def test_fk_fallback_uses_text_input(mock_st: MagicMock) -> None:
     )
     mock_st.text_input.return_value = "5"
 
-    result = gen.render_field("dept_id", gen.field_info["dept_id"], int, None, "k")
+    result = gen.render_field("dept_id", gen.field_info["dept_id"], None, "k")
 
     mock_st.text_input.assert_called_once()
     mock_st.selectbox.assert_not_called()
