@@ -47,6 +47,10 @@ TAGS = [[], None, ["hot", "new"], ["sale"]]
 PRICE_CONFIG = {"type_config": {"type": "number", "format": "%.2f"}}
 TAGS_CONFIG = {"type_config": {"type": "list"}}
 ITEM_COLS = ["id", "name", "template_id", "price", "meta", "tags"]
+"""`styled` mode uses the deprecated style params (tests/test_deprecations)."""
+STYLED_WARNINGS = pytest.mark.filterwarnings(
+    r"ignore:.*removed in 0\.10\.0:DeprecationWarning"
+)
 
 
 @pytest.fixture
@@ -127,10 +131,12 @@ def test_default_path_renders_records_without_dataframe(
     assert at.session_state["DF_BUILT"] is False
 
 
-def test_styled_path_builds_the_dataframe(run: Callable[..., AppTest]) -> None:
+@STYLED_WARNINGS
+def test_styled_path_renders_a_styler(run: Callable[..., AppTest]) -> None:
     at = run("styled")
     assert at.session_state["DATA_TYPE"] is Styler
-    assert at.session_state["DF_BUILT"] is True
+    """The adapter builds its own frame, not the deprecated `SqlUi.df`."""
+    assert at.session_state["DF_BUILT"] is False
 
 
 def test_rows_hold_raw_records(run: Callable[..., AppTest]) -> None:
@@ -194,6 +200,7 @@ def test_plain_and_schema_agree(run: Callable[..., AppTest]) -> None:
     assert column_config(plain_at) == column_config(schema_at)
 
 
+@STYLED_WARNINGS
 def test_style_formatter_keeps_styler_and_wins_over_column_format(
     run: Callable[..., AppTest],
 ) -> None:

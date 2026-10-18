@@ -64,5 +64,5 @@ read_stmt = select(Team)
 if WITH_OPTIONS:
     read_stmt = read_stmt.options(selectinload(Team.members))
 ui = SqlUi(conn=conn, read_instance=read_stmt, edit_create_model=Team, key="team")
-st.write("COLS=" + ",".join(str(c) for c in ui.df.columns))
-st.write("ROWS=" + ";".join(f"{r.id}:{r.name}" for r in ui.df.itertuples()))
+st.write("COLS=" + ",".join(ui.rows[0] if ui.rows else []))
+st.write("ROWS=" + ";".join(f"{r['id']}:{r['name']}" for r in ui.rows))

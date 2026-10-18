@@ -38,6 +38,8 @@ testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = [
     "ignore::DeprecationWarning",
+    # The library's own deprecations fail unless a test expects them.
+    "error:.*removed in 0\\.10\\.0:DeprecationWarning",
     "ignore:.*ScriptRunContext.*:UserWarning",
 ]
 

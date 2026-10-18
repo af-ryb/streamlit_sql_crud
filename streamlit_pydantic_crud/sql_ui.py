@@ -1,13 +1,9 @@
 import warnings
-from collections.abc import Callable
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import pandas as pd
 import streamlit as st
 from loguru import logger
-from pandas.io.formats.style import Styler
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
 from streamlit.delta_generator import DeltaGenerator
@@ -25,7 +21,6 @@ from streamlit_pydantic_crud.dialogs.edit import UpdateRow
 from streamlit_pydantic_crud.forms.schema_check import validate_schema_compatibility
 from streamlit_pydantic_crud.helpers import logs
 from streamlit_pydantic_crud.helpers.display import (
-    DfStyleFormatter,
     column_configs,
     display_records,
     get_pretty_name,
@@ -46,6 +41,16 @@ from streamlit_pydantic_crud.state import (
 )
 from streamlit_pydantic_crud.table import filter_ui, pagination, query
 from streamlit_pydantic_crud.table.read import read_records
+from streamlit_pydantic_crud.table.styler_compat import (
+    DfStyleFormatter,
+    StyleFn,
+    records_frame,
+    styled_table,
+)
+
+if TYPE_CHECKING:
+    import pandas as pd
+    from pandas.io.formats.style import Styler
 
 
 @dataclass(frozen=True)
@@ -82,7 +87,7 @@ class SqlUi:
         read_use_container_width: bool = False,
         key: str | None = None,
         base_key: str | None = None,
-        style_fn: Callable[[pd.Series], list[str]] | None = None,
+        style_fn: StyleFn | None = None,
         update_show_many: bool = False,
         disable_log: bool = False,
         create_schema: type[BaseModel] | None = None,
@@ -104,10 +109,11 @@ class SqlUi:
             edit_create_model (type[MappedModel]): the mapped model that create, edit and delete act on when read_instance is given.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
-            df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details. Prefer column_config: e.g. {"amount": "${:,.2f}"} becomes column_config={"amount": st.column_config.NumberColumn(format="dollar")}
+            df_style_formatter (dict): Deprecated, removed in 0.10.0; use column_config. A dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. E.g. {"amount": "${:,.2f}"} becomes column_config={"amount": st.column_config.NumberColumn(format="dollar")}
             read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
-            style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
+            base_key (str, optional): Deprecated, removed in 0.10.0; use key.
+            style_fn (Callable[[pd.Series], list[str]], optional): Deprecated, removed in 0.10.0 without replacement. A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
             update_show_many (bool, optional): Show a st.expander of one-to-many relations in edit or create dialog
             disable_log (bool): Every change in the database (READ, UPDATE, DELETE) is logged to stderr by default. If this is *true*, nothing is logged. To customize the logging format and where it logs to, use loguru as add a new sink to logger. See loguru docs for more information. Dafaults to False
             create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
@@ -122,23 +128,13 @@ class SqlUi:
 
         Attributes:
             rows (list[dict]): The raw records of the current page (Python values: Decimal, date, dict for JSON, enum members), in display order. Selection positions index this list. Read-only
-            df (pd.Dataframe): The current page as a DataFrame of display values, built on first access
+            df (pd.Dataframe): Deprecated, removed in 0.10.0; use rows. The current page as a DataFrame of display values, built on first access
             rows_selected (list[int]): The position of selected rows in `rows`. This is not the row id.
             qtty_rows (int): The quantity of all rows after filtering
 
 
         Examples:
             ```python
-            def style_fn(row):
-                if row.amount > 0:
-                    bg = "background-color: rgba(0, 255, 0, 0.1)"
-                else:
-                    bg = "background-color: rgba(255, 0, 0, 0.2)"
-
-                result = [bg] * len(row)
-                return result
-
-
             db_url = "sqlite:///data.db"
             conn = st.connection("sql", db_url)
 
@@ -164,7 +160,6 @@ class SqlUi:
                 },
                 read_use_container_width=True,
                 key="my_sql_ui",
-                style_fn=style_fn,
                 update_show_many=True,
                 disable_log=False,
                 foreign_key_options={
@@ -204,6 +199,20 @@ class SqlUi:
         self.conn = conn
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
+        if df_style_formatter:
+            warnings.warn(
+                "'df_style_formatter' is deprecated and will be removed in 0.10.0. "
+                "Use 'column_config' (st.column_config.NumberColumn(format=...)).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if style_fn is not None:
+            warnings.warn(
+                "'style_fn' is deprecated and will be removed in 0.10.0 "
+                "without replacement.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.df_style_formatter: DfStyleFormatter = df_style_formatter or {}
         self.column_config: dict[str, Any] = column_config or {}
         self.read_use_container_width = read_use_container_width
@@ -224,14 +233,14 @@ class SqlUi:
         if key is not None and base_key is not None:
             warnings.warn(
                 "Both 'key' and 'base_key' specified. 'base_key' is deprecated, using 'key' instead. "
-                "Remove 'base_key' parameter in future versions.",
+                "'base_key' will be removed in 0.10.0: remove it.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             self.key = key
         elif base_key is not None:
             warnings.warn(
-                "'base_key' parameter is deprecated and will be removed in v1.0.0. "
+                "'base_key' parameter is deprecated and will be removed in 0.10.0. "
                 "Use 'key' parameter instead for Streamlit compatibility.",
                 DeprecationWarning,
                 stacklevel=2,
@@ -247,6 +256,7 @@ class SqlUi:
         self.read_schema = read_schema
         self.foreign_key_options = foreign_key_options or {}
         self.many_to_many_fields = many_to_many_fields or {}
+        self._df: pd.DataFrame | None = None
 
         """Fail fast when a Pydantic schema does not fit the edited model."""
         for schema, operation in (
@@ -298,13 +308,21 @@ class SqlUi:
         """
         return self._rows
 
-    @cached_property
-    def df(self) -> pd.DataFrame:
+    @property
+    def df(self) -> "pd.DataFrame":
         """Return the current page as a DataFrame of display values.
 
-        Built on first access only; the table itself renders the records.
+        Deprecated, removed in 0.10.0: use `rows`. Built on first access only.
         """
-        return pd.DataFrame(self._display_rows)
+        if self._df is None:
+            warnings.warn(
+                "'SqlUi.df' is deprecated and will be removed in 0.10.0. "
+                "Use 'SqlUi.rows' (the raw records of the current page).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self._df = records_frame(self._display_rows)
+        return self._df
 
     def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
         """Raise ValueError if `schema` is incompatible with the edited model."""
@@ -430,7 +448,8 @@ class SqlUi:
     def show_df(self, records: list[dict[str, Any]]) -> DataframeState | None:
         """Render the display `records` with st.dataframe; return the selection.
 
-        A pandas Styler is built only for `df_style_formatter` / `style_fn`.
+        A pandas Styler is built only for the deprecated `df_style_formatter` /
+        `style_fn` (`table/styler_compat`).
         """
         if not records:
             st.header(":red[Table is Empty]")
@@ -441,14 +460,12 @@ class SqlUi:
             # Display only the columns specified in the schema
             column_order = list(model_fields(self.read_schema).keys())
 
-        styled = bool(self.df_style_formatter) or self.style_fn is not None
         defaults = column_configs(self.cte, records[0].keys())
         data: list[dict[str, Any]] | Styler = records
-        if styled:
-            """A column format would override the user's Styler format: drop it."""
-            for name in self.df_style_formatter:
-                defaults.pop(name, None)
-            data = self.styler()
+        if self.df_style_formatter or self.style_fn is not None:
+            data, defaults = styled_table(
+                records, defaults, self.df_style_formatter, self.style_fn
+            )
         column_config = {**defaults, **self.column_config}
 
         selection_state = self.containers.data.dataframe(
@@ -463,16 +480,6 @@ class SqlUi:
             key=self.df_key(),
         )
         return selection_state
-
-    def styler(self) -> Styler:
-        """Return the page DataFrame styled by `df_style_formatter` / `style_fn`.
-
-        Missing cells skip the formatter: None is no longer NaN ("{:.2f}").
-        """
-        styler = self.df.style.format(self.df_style_formatter, na_rep="None")
-        if self.style_fn is not None:
-            styler = styler.apply(self.style_fn, axis=1)
-        return styler
 
     def df_key(self) -> str:
         """Return the dataframe key, renewed by every write of this session.

@@ -447,7 +447,8 @@ Defaults are merged underneath: `Numeric` columns get a number format by their
 scale (`Numeric(10, 2)` → `%.2f`), `Float` columns `%g`, `ARRAY` columns a
 `ListColumn`. A column you configure replaces its default entirely.
 
-`column_config` replaces the pandas-based `df_style_formatter`. `NumberColumn`
+`column_config` replaces the pandas-based `df_style_formatter` (deprecated,
+removed in 0.10.0). `NumberColumn`
 takes printf-style formats or presets (`"plain"`, `"localized"`, `"dollar"`,
 `"euro"`, `"yen"`, `"accounting"`, `"percent"`, `"compact"`, `"scientific"`, ...):
 
@@ -462,6 +463,22 @@ takes printf-style formats or presets (`"plain"`, `"localized"`, `"dollar"`,
 The raw records of the current page (Python values: `Decimal`, dates, JSON as
 `dict`, enum members) are available as `SqlUi(...).rows`; selection positions
 index this list.
+
+## Deprecated API (removed in 0.10.0)
+
+These still work in 0.9 but emit a `DeprecationWarning` and are removed in
+0.10.0:
+
+| Deprecated | Use instead |
+|---|---|
+| `SqlUi(df_style_formatter=...)` | `column_config` (see the table above) |
+| `SqlUi(style_fn=...)` | no replacement (row styling is dropped with pandas) |
+| `SqlUi(...).df` | `SqlUi(...).rows` (raw records of the current page) |
+| `SqlUi(base_key=...)` | `key` |
+
+While `df_style_formatter` or `style_fn` is set, the table still renders
+through a pandas `Styler`, exactly as before; that is the only pandas code path
+left and it goes away in 0.10.0.
 
 ## Filtering with JOIN Statements
 

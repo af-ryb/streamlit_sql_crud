@@ -1,7 +1,8 @@
 """Harness rendering SqlUi in the consumer's read shapes (`CRUD_TEST_MODE`).
 
 Modes: `plain` (no schema), `styled` (plain + df_style_formatter/style_fn),
-`configured` (plain + column_config), `schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
+`configured` (plain + column_config), `base_key` / `both_keys` (deprecated
+`base_key`), `schema` (read_schema), `join` (JOIN labels), `m2m` (WHERE + ORDER BY subquery
 + M2M + @property). AppTest cannot select
 dataframe rows, so session state `SELECT` (row positions) is reported as the
 selection; the CRUD dialogs are replaced by recorders writing `CALLS`.
@@ -117,6 +118,15 @@ def render() -> SqlUi:
             style_fn=bold_rows,
             key="rp",
         )
+    if MODE in ("base_key", "both_keys"):
+        """Deprecated `base_key`, alone or next to `key` (which wins)."""
+        return SqlUi(
+            conn=conn,
+            read_instance=select(Item),
+            edit_create_model=Item,
+            key="rp" if MODE == "both_keys" else None,
+            base_key="old" if MODE == "both_keys" else "rp",
+        )
     if MODE == "configured":
         return SqlUi(
             conn=conn,
@@ -177,7 +187,11 @@ with (
 ):
     ui = render()
 
-"""Read before anything touches `ui.df`: was the DataFrame built to render?"""
-st.session_state["DF_BUILT"] = "df" in vars(ui)
+"""Was the deprecated `ui.df` DataFrame built (and warned) to render?"""
+st.session_state["DF_BUILT"] = vars(ui)["_df"] is not None
 st.session_state["ROWS"] = ui.rows
+if st.session_state.get("READ_DF"):
+    """The one deliberate use of the deprecated `ui.df` (tests/test_deprecations)."""
+    st.session_state["DF"] = ui.df
+    st.session_state["DF_AGAIN"] = ui.df
 st.session_state["QTTY"] = ui.qtty_rows
