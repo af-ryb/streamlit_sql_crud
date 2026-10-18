@@ -10,7 +10,11 @@ from typing import Any
 import streamlit as st
 from loguru import logger
 
-from streamlit_pydantic_crud.config_types import OperationType
+from streamlit_pydantic_crud.config_types import (
+    ForeignKeyData,
+    ManyToManyData,
+    OperationType,
+)
 from streamlit_pydantic_crud.forms.pydantic.option_resolve import (
     enum_list_defaults,
     is_float_number_kwargs,
@@ -52,7 +56,7 @@ def render_id_field(
 
 
 def render_foreign_key_selectbox(
-    label: str, fk_data: dict[str, Any], existing_value: Any, key: str
+    label: str, fk_data: ForeignKeyData, existing_value: Any, key: str
 ) -> Any:
     """Render a selectbox over preloaded foreign-key options.
 
@@ -96,7 +100,7 @@ def render_foreign_key_fallback(label: str, existing_value: Any, key: str) -> An
 
 
 def render_many_to_many_multiselect(
-    label: str, m2m_data: dict[str, Any], existing_value: Any, key: str
+    label: str, m2m_data: ManyToManyData, existing_value: Any, key: str
 ) -> Any:
     """Render a multiselect of related-row primary keys from preloaded options.
 
@@ -104,7 +108,7 @@ def render_many_to_many_multiselect(
     """
     options = m2m_data["options"]
     display_field = m2m_data["display_field"]
-    pk = m2m_data.get("pk_name", "id")
+    pk = m2m_data["pk_name"]
 
     id_to_display = {
         getattr(option, pk): getattr(option, display_field) for option in options

@@ -14,7 +14,9 @@ from pydantic import BaseModel
 from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud.config_types import (
+    ForeignKeyData,
     ForeignKeyOptions,
+    ManyToManyData,
     ManyToManyFields,
     OperationType,
 )
@@ -57,8 +59,8 @@ class PydanticInputGenerator:
         self.field_info = get_pydantic_field_info(schema)
 
         """Preloaded relation options (no database connection needed)."""
-        self.foreign_key_data = {}
-        self.many_to_many_data = {}
+        self.foreign_key_data: dict[str, ForeignKeyData] = {}
+        self.many_to_many_data: dict[str, ManyToManyData] = {}
 
     def set_foreign_key_options(
         self,
@@ -138,7 +140,6 @@ class PydanticInputGenerator:
                 field_value = self.render_field(
                     field_name,
                     field_info=field_info,
-                    annotation=field_info.get("annotation"),
                     existing_value=existing_value,
                     key=key,
                 )
@@ -191,11 +192,11 @@ class PydanticInputGenerator:
         self,
         field_name: str,
         field_info: dict[str, Any],
-        annotation: Any,
         existing_value: Any,
         key: str,
     ) -> Any:
         """Render the appropriate Streamlit input for a field based on its type"""
+        annotation = field_info.get("annotation")
         field_default = field_info.get("default")
         label = field_label(field_name, field_info.get("description"))
 

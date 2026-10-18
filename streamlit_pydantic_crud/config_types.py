@@ -24,3 +24,18 @@ class ManyToManyConfig(TypedDict):
 
 ForeignKeyOptions = Mapping[str, ForeignKeyConfig]
 ManyToManyFields = Mapping[str, ManyToManyConfig]
+
+
+class ForeignKeyData(TypedDict):
+    """Preloaded options of one FK field; ``display_map`` maps value → label."""
+
+    options: list[Any]
+    display_map: dict[Any, Any] | None
+
+
+class ManyToManyData(TypedDict):
+    """Preloaded related rows of one M2M field and the attributes to show."""
+
+    options: list[Any]
+    display_field: str
+    pk_name: str

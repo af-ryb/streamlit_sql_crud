@@ -48,7 +48,7 @@ class WithId(BaseModel):
 def test_id_field_shown_in_update_mode_without_value(mock_st: MagicMock) -> None:
     """Update forms always show the read-only id, even before a value is known."""
     gen = PydanticInputGenerator(WithId, key_prefix="f_update", operation_type="update")
-    gen.render_field("id", gen.field_info["id"], int | None, None, key="f_update_id")
+    gen.render_field("id", gen.field_info["id"], None, key="f_update_id")
     mock_st.text_input.assert_called_once()
     kwargs = mock_st.text_input.call_args.kwargs
     assert kwargs["disabled"] is True
@@ -59,7 +59,7 @@ def test_id_field_shown_in_update_mode_without_value(mock_st: MagicMock) -> None
 def test_id_field_hidden_in_create_mode(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(WithId, key_prefix="update", operation_type="create")
     info = gen.field_info["id"]
-    assert gen.render_field("id", info, int | None, None, key="update_id") is None
+    assert gen.render_field("id", info, None, key="update_id") is None
     mock_st.text_input.assert_not_called()
 
 
@@ -87,9 +87,7 @@ def test_field_info_default_resolution() -> None:
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
-    gen.render_field(
-        "tags", gen.field_info["tags"], list[str], existing_value=None, key="f_tags"
-    )
+    gen.render_field("tags", gen.field_info["tags"], existing_value=None, key="f_tags")
     assert mock_st.multiselect.call_args.kwargs["default"] == ["a", "b"]
 
 
@@ -97,6 +95,6 @@ def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
 def test_default_factory_selects_custom_widget_option(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
     gen.render_field(
-        "level", gen.field_info["level"], str, existing_value=None, key="f_level"
+        "level", gen.field_info["level"], existing_value=None, key="f_level"
     )
     assert mock_st.selectbox.call_args.kwargs["index"] == 1
