@@ -39,6 +39,7 @@ def render_id_field(
     )
 
     if is_update:
+        seed_widget_state(key, "" if existing_value is None else str(existing_value))
         return st.text_input(
             label,
             value="" if existing_value is None else str(existing_value),
@@ -63,6 +64,7 @@ def render_foreign_key_selectbox(
     current_index = None
     if existing_value in options:
         current_index = options.index(existing_value)
+    seed_widget_state(key, None if current_index is None else options[current_index])
 
     if display_map:
         return st.selectbox(
@@ -84,6 +86,7 @@ def render_foreign_key_selectbox(
 
 def render_foreign_key_fallback(label: str, existing_value: Any, key: str) -> Any:
     """Render a text input for a relation field whose options were not loaded."""
+    seed_widget_state(key, str(existing_value) if existing_value is not None else "")
     return st.text_input(
         label,
         value=str(existing_value) if existing_value is not None else "",
@@ -133,10 +136,12 @@ def render_many_to_many_multiselect(
             ]
 
     option_ids = list(id_to_display.keys())
+    default = known_defaults(current_selection_ids, option_ids, label)
+    seed_widget_state(key, default)
     return st.multiselect(
         label,
         options=option_ids,
-        default=known_defaults(current_selection_ids, option_ids, label),
+        default=default,
         format_func=lambda x: id_to_display.get(x, str(x)),
         key=key,
         help=f"Select from {len(options)} available options",
@@ -154,6 +159,9 @@ def render_enum_select(
     member = enum_member(existing_value, enum_type)
     if member is not None:
         current_index = enum_values.index(member.value)
+    seed_widget_state(
+        key, None if current_index is None else enum_values[current_index]
+    )
 
     return st.selectbox(label, enum_values, index=current_index, key=key)
 
@@ -170,6 +178,7 @@ def render_enum_multiselect(
     enum_values = [member.value for member in enum_type.__members__.values()]
 
     current_values = enum_list_defaults(existing_value, enum_type)
+    seed_widget_state(key, current_values)
 
     return st.multiselect(
         label,
@@ -190,6 +199,7 @@ def render_list_multiselect(label: str, existing_value: Any, key: str) -> Any:
         if isinstance(existing_value, (list, tuple, str))
         else []
     )
+    seed_widget_state(key, current_values)
 
     return st.multiselect(
         label,
@@ -206,6 +216,7 @@ def render_text_input(
 ) -> Any:
     """Render text input widget"""
     default_value = str(existing_value) if existing_value is not None else ""
+    seed_widget_state(key, default_value)
     return st.text_input(label, value=default_value, key=key, **widget_kwargs)
 
 
@@ -214,6 +225,7 @@ def render_text_area(
 ) -> Any:
     """Render text area widget"""
     default_value = str(existing_value) if existing_value is not None else ""
+    seed_widget_state(key, default_value)
     return st.text_area(label, value=default_value, key=key, **widget_kwargs)
 
 
@@ -228,6 +240,7 @@ def render_json_text_area(
         except Exception as e:
             logger.warning(f"Got exception while render JSON, {e}")
             json_value = str(existing_value)
+    seed_widget_state(key, json_value)
     return st.text_area(label, value=json_value, key=key, **widget_kwargs)
 
 
@@ -236,6 +249,7 @@ def render_checkbox(
 ) -> Any:
     """Render checkbox widget"""
     default_val = bool(existing_value) if existing_value is not None else False
+    seed_widget_state(key, default_val)
     return st.checkbox(label, value=default_val, key=key, **widget_kwargs)
 
 
@@ -243,6 +257,7 @@ def render_date_input(
     label: str, widget_kwargs: dict[str, Any], existing_value: Any, key: str
 ) -> Any:
     """Render date input widget"""
+    seed_widget_state(key, existing_value)
     return st.date_input(label, value=existing_value, key=key, **widget_kwargs)
 
 
@@ -253,6 +268,7 @@ def render_datetime_input(
 
     An untouched widget returns `existing_value` with its full precision.
     """
+    seed_widget_state(key, existing_value)
     value = st.datetime_input(
         label,
         value=existing_value,
@@ -274,6 +290,7 @@ def render_selectbox(
     options = kwargs.pop("options", [])
     explicit_index = kwargs.pop("index", None)
     index = resolve_select_index(existing_value, explicit_index, field_default, options)
+    seed_widget_state(key, None if index is None else options[index])
     return st.selectbox(label, options=options, index=index, key=key, **kwargs)
 
 
@@ -291,6 +308,7 @@ def render_radio(
     index = resolve_select_index(existing_value, explicit_index, field_default, options)
     if index is None:
         index = 0
+    seed_widget_state(key, options[index] if options else None)
     return st.radio(label, options=options, index=index, key=key, **kwargs)
 
 
@@ -310,6 +328,7 @@ def render_multiselect(
     )
     if not kwargs.get("accept_new_options"):
         default_vals = known_defaults(default_vals, options, label)
+    seed_widget_state(key, default_vals)
     return st.multiselect(
         label, options=options, default=default_vals, key=key, **kwargs
     )
@@ -351,6 +370,7 @@ def render_slider(
         default_val = min_val
 
     default_val = max(min_val, min(max_val, default_val))
+    seed_widget_state(key, default_val)
 
     return st.slider(
         label,
@@ -441,10 +461,19 @@ def nullable_number_input(
     """Render `st.number_input`; a nullable one can be emptied to None.
 
     A widget created with a value refills a cleared field on blur, so a
-    nullable one seeds its state and starts with `value=None` instead.
+    nullable one starts with `value=None`; its seeded state holds the value.
     """
+    seed_widget_state(key, value)
     if nullable:
-        if key not in st.session_state:
-            st.session_state[key] = value
         value = None
     return st.number_input(label, value=value, key=key, **kwargs)
+
+
+def seed_widget_state(key: str, value: Any) -> None:
+    """Set the state of widget `key` to `value` unless it already has one.
+
+    The browser keeps a keyed widget's last value over a new `value=` argument;
+    a value set through session state is pushed to it (`set_value`) instead.
+    """
+    if key not in st.session_state:
+        st.session_state[key] = value
