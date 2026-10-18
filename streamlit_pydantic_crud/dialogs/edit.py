@@ -15,6 +15,7 @@ from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
     handle_save_error,
+    handle_save_ok,
     json_none_as_sql_null,
     load_related,
     m2m_load_options,
@@ -23,7 +24,6 @@ from streamlit_pydantic_crud.dialogs.persist import (
 from streamlit_pydantic_crud.forms.options import ExistingData, load_form_options
 from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
-from streamlit_pydantic_crud.helpers.logs import log
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     pk_attr,
@@ -37,7 +37,6 @@ from streamlit_pydantic_crud.helpers.values import (
     numpy_scalar_to_python,
 )
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
-from streamlit_pydantic_crud.state import record_write, set_state
 
 
 class UpdateRow:
@@ -71,11 +70,9 @@ class UpdateRow:
         self.key_prefix = f"{key}_update"
 
         with conn.session as s:
-            # Load row with many-to-many relationships if needed
             if self.many_to_many_fields:
+                """Load the row with its many-to-many relationships."""
                 options = m2m_load_options(self.model, self.many_to_many_fields)
-
-                # Use query with selectinload to get the row with relationships
                 self.row = (
                     s.query(self.model)
                     .options(*options)
@@ -101,9 +98,8 @@ class UpdateRow:
                     existing_data=self.existing_data,
                 )
 
-        # Initialize PydanticUi if schema provided
         if self.update_schema:
-            # Get current row values for pre-populating form
+            """Prefill the Pydantic form from the row's current values."""
             self.current_values = {}
             for col in self.model.__table__.columns:
                 col_name = column_label(col)
@@ -115,15 +111,13 @@ class UpdateRow:
                         value = numpy_scalar_to_python(value)
                     self.current_values[col_name] = value
 
-            # Add many-to-many field values
             for field_name, config in self.many_to_many_fields.items():
                 relationship_name = config["relationship"]
                 if hasattr(self.row, relationship_name):
-                    # Get currently selected objects
                     current_objects = getattr(self.row, relationship_name)
                     related = related_model(self.model, relationship_name)
                     related_pk = pk_name(related)
-                    # Convert to list of PKs for multiselect
+                    """The multiselect holds the PKs of the selected rows."""
                     self.current_values[field_name] = [
                         getattr(obj, related_pk) for obj in current_objects
                     ]
@@ -132,11 +126,7 @@ class UpdateRow:
                         f"Row does not have relationship {relationship_name}"
                     )
 
-            # populate session state with current values
-            # Clear existing data before setting new values to avoid stale data
-            if self.get_session_key in st.session_state:
-                del st.session_state[self.get_session_key]
-            set_state(self.get_session_key, self.current_values)
+            st.session_state[self.get_session_key] = self.current_values
 
             self.pydantic_ui = PydanticCrudUi(
                 schema=self.update_schema,
@@ -147,7 +137,6 @@ class UpdateRow:
                 pk_name=pk_name(self.model),
             )
 
-            # Set operation type to 'update' for proper null value handling
             self.pydantic_ui.set_operation_type("update")
 
             load_form_options(
@@ -164,8 +153,7 @@ class UpdateRow:
         return form_data_key(self.key_prefix)
 
     def get_pydantic_updates(self) -> BaseModel | None:
-        """Generate updates using PydanticUi"""
-        # Use PydanticUi to render the form with submit button
+        """Render the Pydantic form; return its data once submitted."""
         form_data, submitted = self.pydantic_ui.render_with_submit("Save")
         return form_data if submitted else None
 
@@ -198,17 +186,15 @@ class UpdateRow:
                 )
                 row = s.execute(stmt).scalar_one()
 
-                # Separate many-to-many fields from the main data
                 main_data = validated_data.model_dump(exclude_unset=True)
                 m2m_data = pop_m2m_data(main_data, self.many_to_many_fields)
                 main_data = json_none_as_sql_null(self.model, main_data, row)
 
-                # Update only the fields present in the validated data
+                """Set only the fields present in the validated data."""
                 for field_name, field_value in main_data.items():
                     if hasattr(row, field_name):
                         setattr(row, field_name, field_value)
 
-                # Handle many-to-many relationships
                 for field_name, selected_options in m2m_data.items():
                     relationship_name = self.many_to_many_fields[field_name][
                         "relationship"
@@ -217,20 +203,11 @@ class UpdateRow:
                         s, self.model, relationship_name, selected_options
                     )
 
-                    # Update the relationship
                     getattr(row, relationship_name)[:] = related_objects
 
                 s.add(row)
                 s.commit()
-                record_write()
-                table_name = tablename(self.model)
-                log("UPDATE", table_name, row)
-
-                # Clear the form data after successful save
-                if self.get_session_key in st.session_state:
-                    del st.session_state[self.get_session_key]
-
-                return True, f"Updated successfully {row}"
+                return handle_save_ok("UPDATE", self.model, row, self.get_session_key)
 
         except Exception as e:
             return handle_save_error(
@@ -249,10 +226,7 @@ class UpdateRow:
 
                 s.add(row)
                 s.commit()
-                record_write()
-                table_name = tablename(self.model)
-                log("UPDATE", table_name, row)
-                return True, f"Updated successfully {row}"
+                return handle_save_ok("UPDATE", self.model, row)
             except Exception as e:
                 updated_list = [f"{k}: {v}" for k, v in updated.items()]
                 updated_str = ", ".join(updated_list)
@@ -263,12 +237,10 @@ class UpdateRow:
         st.subheader(pretty_name)
 
         if self.update_schema:
-            # Use PydanticUi which handles forms internally
             updated = self.get_pydantic_updates()
             if updated:
                 return self.save_pydantic(updated)
         else:
-            # Use traditional form for SQLAlchemy-only mode
             form_key = f"update_model_form_{pretty_name}_{self.key_prefix}"
             with st.form(form_key, border=False):
                 updated = self.get_sqlalchemy_updates()

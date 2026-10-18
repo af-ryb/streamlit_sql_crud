@@ -11,7 +11,7 @@ from streamlit_pydantic_crud.config_types import ManyToManyFields
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
 from streamlit_pydantic_crud.helpers.logs import log
 from streamlit_pydantic_crud.helpers.sa_model import pk_attr, related_model, tablename
-from streamlit_pydantic_crud.state import record_write
+from streamlit_pydantic_crud.state import clear_state_keys, record_write
 
 
 def form_data_key(key_prefix: str) -> str:
@@ -71,6 +71,24 @@ def load_related(
     """Load the rows with primary key in `ids` across `relationship_name`."""
     related = related_model(model, relationship_name)
     return s.query(related).filter(pk_attr(related).in_(ids)).all()
+
+
+def handle_save_ok(
+    action: Literal["CREATE", "UPDATE"],
+    model: type[DeclarativeBase],
+    row: object,
+    session_key: str | None = None,
+) -> tuple[bool, str]:
+    """Count the committed write, log `action`, drop the form data, report it.
+
+    Call it after ``commit`` while the session is open, so `row` renders.
+    """
+    record_write()
+    log(action, tablename(model), row)
+    if session_key is not None:
+        clear_state_keys([session_key])
+    past = "Created" if action == "CREATE" else "Updated"
+    return True, f"{past} successfully {row}"
 
 
 def handle_save_error(
