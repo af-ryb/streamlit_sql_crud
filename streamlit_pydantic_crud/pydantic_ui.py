@@ -84,7 +84,7 @@ class PydanticUi[T: BaseModel]:
 
         Example:
             ```python
-            ui =PydanticUi.from_json_schema(
+            ui = PydanticUi.from_json_schema(
                 json_schema=json_schema,
                 field_options=field_options,
                 key="form"
