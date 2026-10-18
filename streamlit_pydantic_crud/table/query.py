@@ -13,9 +13,8 @@ from loguru import logger
 from sqlalchemy import CTE, Select, func, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
-from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud.config_types import MappedModel
+from streamlit_pydantic_crud.config_types import MappedModel, SessionSource
 from streamlit_pydantic_crud.state import CACHE_TTL_SECONDS
 
 SQL_HASH_FUNCS: dict[Any, Callable[[Any], Any]] = {
@@ -89,7 +88,7 @@ def find_cte_col(cte: CTE, colname: str) -> KeyedColumnElement:
 
 
 @st.cache_data(hash_funcs=SQL_HASH_FUNCS, ttl=CACHE_TTL_SECONDS)
-def get_qtty_rows(_conn: SQLConnection, stmt_no_pag: Select, version: int) -> int:
+def get_qtty_rows(_conn: SessionSource, stmt_no_pag: Select, version: int) -> int:
     """Count the rows of `stmt_no_pag`; cached per statement and data `version`."""
     stmt = select(func.count()).select_from(stmt_no_pag.subquery())
     with _conn.session as s:

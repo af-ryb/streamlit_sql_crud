@@ -5,12 +5,12 @@ from typing import Any
 
 import streamlit as st
 from pydantic import BaseModel
-from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
     MappedModel,
+    SessionSource,
 )
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
@@ -39,7 +39,7 @@ class CreateRow:
 
     def __init__(
         self,
-        conn: SQLConnection,
+        conn: SessionSource,
         model: type[MappedModel],
         default_values: dict | None = None,
         key: str = "create",

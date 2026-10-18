@@ -4,9 +4,8 @@ from functools import partial
 
 import streamlit as st
 from sqlalchemy import select
-from streamlit.connections.sql_connection import SQLConnection
 
-from streamlit_pydantic_crud.config_types import MappedModel
+from streamlit_pydantic_crud.config_types import MappedModel, SessionSource
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import handle_save_error
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
@@ -28,7 +27,7 @@ class DeleteRows:
 
     def __init__(
         self,
-        conn: SQLConnection,
+        conn: SessionSource,
         model: type[MappedModel],
         rows_id: list[int],
         key: str,

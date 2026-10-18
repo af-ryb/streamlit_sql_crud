@@ -14,13 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.schema import ForeignKey
-from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import (
     FkOpt,
     ForeignKeyConfig,
     ForeignKeyOptions,
     ManyToManyFields,
+    SessionSource,
 )
 from streamlit_pydantic_crud.helpers.sa_model import (
     foreign_key_column_names,
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 def load_form_options(
     form: "PydanticCrudUi",
-    conn: SQLConnection,
+    conn: SessionSource,
     model: type[DeclarativeBase],
     foreign_key_options: ForeignKeyOptions,
     many_to_many_fields: ManyToManyFields,
@@ -61,7 +61,7 @@ def load_form_options(
 
 def load_foreign_key_options(
     form: "PydanticCrudUi",
-    conn: SQLConnection,
+    conn: SessionSource,
     model: type[DeclarativeBase],
     foreign_key_options: ForeignKeyOptions,
     row: DeclarativeBase | None = None,
@@ -108,7 +108,7 @@ def load_foreign_key_options(
 
 def load_many_to_many_options(
     form: "PydanticCrudUi",
-    conn: SQLConnection,
+    conn: SessionSource,
     model: type[DeclarativeBase],
     many_to_many_fields: ManyToManyFields,
 ) -> None:

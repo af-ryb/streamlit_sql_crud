@@ -6,12 +6,12 @@ import streamlit as st
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
-from streamlit.connections.sql_connection import SQLConnection
 
 from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
     MappedModel,
+    SessionSource,
 )
 from streamlit_pydantic_crud.dialogs import one_to_many
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
@@ -52,7 +52,7 @@ class UpdateRow:
 
     def __init__(
         self,
-        conn: SQLConnection,
+        conn: SessionSource,
         model: type[MappedModel],
         row_id: int | str,
         default_values: dict | None = None,
