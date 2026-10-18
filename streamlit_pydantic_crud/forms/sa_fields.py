@@ -12,7 +12,11 @@ from streamlit_pydantic_crud.config_types import FkOpt
 from streamlit_pydantic_crud.forms.options import ExistingData
 from streamlit_pydantic_crud.forms.pydantic.widgets import nullable_number_input
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
-from streamlit_pydantic_crud.helpers.sa_model import column_label, is_array_type
+from streamlit_pydantic_crud.helpers.sa_model import (
+    column_label,
+    is_array_type,
+    safe_python_type,
+)
 from streamlit_pydantic_crud.helpers.values import (
     coerce_decimal,
     keep_unchanged_datetime,
@@ -254,6 +258,7 @@ class InputFields:
         col_name = column_label(col)
         pretty_name = get_pretty_name(col_name)
         key = f"{self.key_prefix}_{col_name}"
+        py_type = safe_python_type(col)
 
         if col.primary_key:
             input_value = col_value
@@ -263,26 +268,25 @@ class InputFields:
             input_value = self.input_array(col_name, col.type, col_value)
         elif isinstance(col.type, SQLEnum):
             input_value = self.input_enum(col_name, col.type, col_value)
-        elif col.type.python_type is str:
-            # Check if string column should be treated as enum
+        elif py_type is str:
             if self.is_string_enum_candidate(col_name):
                 input_value = self.input_str_enum(col_name, col_value, col.nullable)
             else:
                 input_value = self.input_str(col_name, col_value, col.nullable)
-        elif col.type.python_type is int:
+        elif py_type is int:
             input_value = self.input_number(col_name, col_value, 1, col.nullable)
-        elif col.type.python_type is float:
+        elif py_type is float:
             input_value = self.input_number(col_name, col_value, 0.1, col.nullable)
         elif isinstance(col.type, Numeric):
             scale = col.type.scale
             input_value = self.input_numeric(col_name, scale, col_value, col.nullable)
-        elif col.type.python_type is datetime:
+        elif py_type is datetime:
             input_value = keep_unchanged_datetime(
                 st.datetime_input(pretty_name, value=col_value, key=key), col_value
             )
-        elif col.type.python_type is date:
+        elif py_type is date:
             input_value = st.date_input(pretty_name, value=col_value, key=key)
-        elif col.type.python_type is bool:
+        elif py_type is bool:
             input_value = st.checkbox(pretty_name, value=col_value, key=key)
         else:
             input_value = NO_INPUT
