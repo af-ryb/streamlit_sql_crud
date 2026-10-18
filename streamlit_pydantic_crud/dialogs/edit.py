@@ -32,7 +32,10 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     related_model,
     tablename,
 )
-from streamlit_pydantic_crud.helpers.values import convert_numpy_to_python
+from streamlit_pydantic_crud.helpers.values import (
+    convert_numpy_to_python,
+    numpy_scalar_to_python,
+)
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 from streamlit_pydantic_crud.state import record_write, set_state
 
@@ -104,11 +107,12 @@ class UpdateRow:
             self.current_values = {}
             for col in self.model.__table__.columns:
                 col_name = column_label(col)
-                if col_name and hasattr(self.row, col_name):
+                if hasattr(self.row, col_name):
                     value = getattr(self.row, col_name)
-                    # Convert certain types for proper display
-                    if value is not None:
+                    if col.primary_key:
                         value = convert_numpy_to_python(value, self.model)
+                    else:
+                        value = numpy_scalar_to_python(value)
                     self.current_values[col_name] = value
 
             # Add many-to-many field values

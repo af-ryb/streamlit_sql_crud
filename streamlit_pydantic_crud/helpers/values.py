@@ -154,6 +154,11 @@ def convert_numpy_to_python(value: Any, model: type[DeclarativeBase]) -> Any:
     return value
 
 
+def numpy_scalar_to_python(value: Any) -> Any:
+    """Return a numpy scalar as its Python equivalent, other values unchanged."""
+    return value.item() if isinstance(value, np.generic) else value
+
+
 def row_to_python(row: pd.Series) -> dict[str, Any]:
     """Return a DataFrame row as a dict of plain Python values.
 
