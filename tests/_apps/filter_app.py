@@ -67,4 +67,4 @@ ui = SqlUi(
     available_filter=["name", "kind", "born"],
     key=KEY,
 )
-st.write("IDS=" + ",".join(str(v) for v in ui.df["id"].tolist()))
+st.write("IDS=" + ",".join(str(r["id"]) for r in ui.rows))

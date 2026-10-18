@@ -1,7 +1,8 @@
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from functools import cached_property
+from typing import Any, Literal
 
 import pandas as pd
 import streamlit as st
@@ -36,11 +37,6 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     tablename,
 )
 from streamlit_pydantic_crud.helpers.typing import model_fields
-from streamlit_pydantic_crud.helpers.values import (
-    convert_numpy_list_to_python,
-    convert_numpy_to_python,
-    row_to_python,
-)
 from streamlit_pydantic_crud.state import (
     OPTIONS_NOTICE_KEYS,
     UiState,
@@ -97,6 +93,7 @@ class SqlUi:
         show_delete_btn: bool = True,
         show_create_btn: bool = True,
         items_per_page_default: int = 0,
+        column_config: dict[str, Any] | None = None,
     ) -> None:
         """The CRUD interface will be displayes just by initializing the class
 
@@ -107,7 +104,7 @@ class SqlUi:
             edit_create_model (type[MappedModel]): the mapped model that create, edit and delete act on when read_instance is given.
             edit_create_default_values (dict, optional): A dict with column name as keys and values to be default. When the user clicks to create a row, those columns will not show on the form and its value will be added to the model object
             available_filter (list[str], optional): Define which columns the user will be able to filter in the top expander. Defaults to all. Active filters also narrow foreign-key options in the create/copy dialog (applied to related models having a column of the same name); the edit dialog always lists all options
-            df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details.
+            df_style_formatter (dict): a dictionary where each key is a column name and the associated value (format string or callable) is the formatter arg of df.style.format method. See pandas docs for details. Prefer column_config: e.g. {"amount": "${:,.2f}"} becomes column_config={"amount": st.column_config.NumberColumn(format="dollar")}
             read_use_container_width (bool, optional): when True, sets width='stretch' in st.dataframe. Default to False
             key (str, optional): A unique key prefix for all widgets in this SqlUi instance. This follows Streamlit's standard convention and is needed when creating multiple instances on the same page. Defaults to None
             style_fn (Callable[[pd.Series], list[str]], optional): A function that goes into the *func* argument of *df.style.apply*. The apply method also receives *axis=1*, so it works on rows. It can be used to apply conditional css formatting on each column of the row. See Styler.apply info on pandas docs. Defaults to None
@@ -121,10 +118,12 @@ class SqlUi:
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
             items_per_page_default (int, optional): Index (0-5) for default items per page selection. Options are: 0=50, 1=100, 2=200, 3=500, 4=1000, 5=Show All. Defaults to 0 (50 items per page)
+            column_config (dict, optional): Per-column config passed to st.dataframe (a st.column_config.* object, a label string or None to hide), keyed by column name. Merged over the defaults (number format by Numeric scale, list column for ARRAY); a column given here replaces its default. Defaults to None
 
         Attributes:
-            df (pd.Dataframe): The Dataframe displayed in the screen
-            selected_rows (list[int]): The position of selected rows. This is not the row id.
+            rows (list[dict]): The raw records of the current page (Python values: Decimal, date, dict for JSON, enum members), in display order. Selection positions index this list. Read-only
+            df (pd.Dataframe): The current page as a DataFrame of display values, built on first access
+            rows_selected (list[int]): The position of selected rows in `rows`. This is not the row id.
             qtty_rows (int): The quantity of all rows after filtering
 
 
@@ -160,7 +159,9 @@ class SqlUi:
                 conn=conn,
                 model=db.Invoice,  # Simplified: uses same model for read and write
                 available_filter=["name"],
-                df_style_formatter={"amount": "{:,.2f}"},
+                column_config={
+                    "amount": st.column_config.NumberColumn(format="%.2f"),
+                },
                 read_use_container_width=True,
                 key="my_sql_ui",
                 style_fn=style_fn,
@@ -204,6 +205,7 @@ class SqlUi:
         self.available_filter = available_filter or []
         self.edit_create_default_values = edit_create_default_values or {}
         self.df_style_formatter: DfStyleFormatter = df_style_formatter or {}
+        self.column_config: dict[str, Any] = column_config or {}
         self.read_use_container_width = read_use_container_width
         self.show_delete_btn = show_delete_btn
         self.show_create_btn = show_create_btn
@@ -272,18 +274,37 @@ class SqlUi:
         pk_col = self.cte.columns.get(pk_name(self.edit_create_model))
         order_by = query.paging_order(self.read_instance, self.cte, pk_col)
         stmt_pag = query.get_stmt_pag(stmt_no_pag, items_per_page, page, order_by)
-        df = self.get_df(stmt_pag)
-        selection_state = self.show_df(df)
+        self._rows = self.read_rows(stmt_pag)
+        self._display_rows = display_records(
+            query.visible_columns(self.cte), self._rows
+        )
+        selection_state = self.show_df(self._display_rows)
         rows_selected = self.get_rows_selected(selection_state)
 
         # CRUD
-        self.crud(df, rows_selected)
+        self.crud(rows_selected)
         self.state.opened = False
 
         # Returns
-        self.df = df
         self.rows_selected = rows_selected
         self.qtty_rows = qtty_rows
+
+    @property
+    def rows(self) -> list[dict[str, Any]]:
+        """Return the raw records of the current page, in display order.
+
+        Values are plain Python (Decimal, date, dict for JSON, enum members);
+        selection positions index this list. Treat it as read-only.
+        """
+        return self._rows
+
+    @cached_property
+    def df(self) -> pd.DataFrame:
+        """Return the current page as a DataFrame of display values.
+
+        Built on first access only; the table itself renders the records.
+        """
+        return pd.DataFrame(self._display_rows)
 
     def _validate_schema(self, schema: type[BaseModel], operation: str) -> None:
         """Raise ValueError if `schema` is incompatible with the edited model."""
@@ -396,19 +417,22 @@ class SqlUi:
                 reset=filters_changed,
             )
 
-    def get_df(self, stmt_pag: Select) -> pd.DataFrame:
-        """Read the page records and build the displayed DataFrame from them."""
-        records = read_records(
+    def read_rows(self, stmt_pag: Select) -> list[dict[str, Any]]:
+        """Read the raw records of the current page."""
+        return read_records(
             self.conn,
             stmt_pag,
             self.edit_create_model,
             self.read_schema,
             self.many_to_many_fields,
         )
-        return pd.DataFrame(display_records(query.visible_columns(self.cte), records))
 
-    def show_df(self, df: pd.DataFrame) -> DataframeState | None:
-        if df.empty:
+    def show_df(self, records: list[dict[str, Any]]) -> DataframeState | None:
+        """Render the display `records` with st.dataframe; return the selection.
+
+        A pandas Styler is built only for `df_style_formatter` / `style_fn`.
+        """
+        if not records:
             st.header(":red[Table is Empty]")
             return None
 
@@ -417,16 +441,15 @@ class SqlUi:
             # Display only the columns specified in the schema
             column_order = list(model_fields(self.read_schema).keys())
 
-        column_config = column_configs(self.cte, df.columns)
-        data: pd.DataFrame | Styler = df
-        if self.df_style_formatter or self.style_fn is not None:
+        styled = bool(self.df_style_formatter) or self.style_fn is not None
+        defaults = column_configs(self.cte, records[0].keys())
+        data: list[dict[str, Any]] | Styler = records
+        if styled:
             """A column format would override the user's Styler format: drop it."""
             for name in self.df_style_formatter:
-                column_config.pop(name, None)
-            """Missing cells skip the formatter: None is no longer NaN ("{:.2f}")."""
-            data = df.style.format(self.df_style_formatter, na_rep="None")
-            if self.style_fn is not None:
-                data = data.apply(self.style_fn, axis=1)
+                defaults.pop(name, None)
+            data = self.styler()
+        column_config = {**defaults, **self.column_config}
 
         selection_state = self.containers.data.dataframe(
             data,
@@ -440,6 +463,16 @@ class SqlUi:
             key=self.df_key(),
         )
         return selection_state
+
+    def styler(self) -> Styler:
+        """Return the page DataFrame styled by `df_style_formatter` / `style_fn`.
+
+        Missing cells skip the formatter: None is no longer NaN ("{:.2f}").
+        """
+        styler = self.df.style.format(self.df_style_formatter, na_rep="None")
+        if self.style_fn is not None:
+            styler = styler.apply(self.style_fn, axis=1)
+        return styler
 
     def df_key(self) -> str:
         """Return the dataframe key, renewed by every write of this session.
@@ -462,7 +495,11 @@ class SqlUi:
 
         return rows_pos
 
-    def crud(self, df: pd.DataFrame, rows_selected: list[int]) -> None:
+    def crud(self, rows_selected: list[int]) -> None:
+        """Render the action buttons and open the dialog of the clicked one.
+
+        Selection positions index `rows`: PKs and the copied record are raw.
+        """
         qtty_rows = len(rows_selected)
         action = action_btns(
             self.containers.btns,
@@ -476,7 +513,8 @@ class SqlUi:
         if action in ("add", "copy"):
             initial_data = None
             if action == "copy":
-                initial_data = row_to_python(df.iloc[rows_selected[0]])
+                """A copy: CreateRow drops the PK from the dict it receives."""
+                initial_data = dict(self.rows[rows_selected[0]])
             create_row = CreateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -491,11 +529,8 @@ class SqlUi:
             )
             create_row.show_dialog()
         elif action == "edit":
-            selected_pos = rows_selected[0]
             pk = pk_name(self.edit_create_model)
-            row_id = convert_numpy_to_python(
-                df.iloc[selected_pos][pk], self.edit_create_model
-            )
+            row_id = self.rows[rows_selected[0]][pk]
             update_row = UpdateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -510,9 +545,7 @@ class SqlUi:
             update_row.show_dialog()
         elif action == "delete":
             pk = pk_name(self.edit_create_model)
-            rows_id = convert_numpy_list_to_python(
-                df.iloc[rows_selected][pk].to_list(), self.edit_create_model
-            )
+            rows_id = [self.rows[pos][pk] for pos in rows_selected]
             delete_rows = DeleteRows(
                 conn=self.conn,
                 model=self.edit_create_model,

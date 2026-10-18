@@ -16,6 +16,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 import streamlit as st
+from pandas.io.formats.style import Styler
 from streamlit.testing.v1 import AppTest
 
 from tests._apps.read_path_models import (
@@ -24,6 +25,7 @@ from tests._apps.read_path_models import (
     ID_CHARLIE,
     ID_DELTA,
     META_ALPHA,
+    Tag,
 )
 
 APP = str(Path(__file__).parent / "_apps" / "read_path_app.py")
@@ -113,6 +115,55 @@ def test_plain_mode_renders_every_column(run: Callable[..., AppTest]) -> None:
     assert config["tags"] == TAGS_CONFIG
     """No Styler without df_style_formatter / style_fn."""
     assert not at.dataframe(key=DF_KEY).proto.arrow_data.styler.uuid
+
+
+@pytest.mark.parametrize("mode", ["plain", "schema", "join", "m2m"])
+def test_default_path_renders_records_without_dataframe(
+    run: Callable[..., AppTest], mode: str
+) -> None:
+    at = run(mode)
+    """st.dataframe gets the list of records; `SqlUi.df` is never built."""
+    assert at.session_state["DATA_TYPE"] is list
+    assert at.session_state["DF_BUILT"] is False
+
+
+def test_styled_path_builds_the_dataframe(run: Callable[..., AppTest]) -> None:
+    at = run("styled")
+    assert at.session_state["DATA_TYPE"] is Styler
+    assert at.session_state["DF_BUILT"] is True
+
+
+def test_rows_hold_raw_records(run: Callable[..., AppTest]) -> None:
+    at = run("plain")
+    rows = at.session_state["ROWS"]
+
+    assert [r["id"] for r in rows] == PK_ORDER
+    alpha = rows[2]
+    assert list(alpha) == ITEM_COLS
+    """Raw values: JSON stays a dict, tags enum members, Decimal kept."""
+    assert alpha["meta"] == META_ALPHA
+    assert alpha["tags"] == [Tag.HOT, Tag.NEW]
+    assert all(type(t) is Tag for t in alpha["tags"])
+    assert type(alpha["price"]) is Decimal
+    assert rows[0]["meta"] is None
+
+
+def test_rows_hold_raw_schema_records(run: Callable[..., AppTest]) -> None:
+    at = run("m2m")
+    rows = at.session_state["ROWS"]
+    assert [r["id"] for r in rows] == M2M_ORDER
+    assert rows[1]["category_names"] == "blue, red"
+
+
+def test_column_config_user_wins(run: Callable[..., AppTest]) -> None:
+    at = run("configured")
+    config = column_config(at)
+
+    """The user's price config replaces the scale default; tags keep theirs."""
+    assert config["price"] == {"type_config": {"type": "number", "format": "dollar"}}
+    assert config["tags"] == TAGS_CONFIG
+    assert config["name"] == {"label": "Item name", "type_config": {"type": "text"}}
+    assert table(at)["price"].tolist() == PRICES
 
 
 def test_schema_mode_renders_schema_columns(run: Callable[..., AppTest]) -> None:
@@ -271,32 +322,22 @@ def test_delete_targets_selected_pks(
     assert kwargs["rows_id"] == [ids[0], ids[2]]
 
 
-def test_copy_plain_passes_display_row(run: Callable[..., AppTest]) -> None:
-    at = run("plain", select=[2])
+@pytest.mark.parametrize("mode", ["plain", "schema"])
+def test_copy_passes_raw_record(run: Callable[..., AppTest], mode: str) -> None:
+    at = run(mode, select=[2])
     [(name, kwargs)] = click(at, "add")
     assert name == "CreateRow"
     data = kwargs["initial_data"]
     assert data["id"] == ID_ALPHA
     assert data["name"] == "alpha"
     assert data["template_id"] == 1
-    """flipped in Task 5: copy gets the display row (JSON text), not the raw
-    record; Decimal and the tags list already match the raw values."""
+    """The raw record: JSON stays a dict, Decimal and enum members are kept."""
     assert data["price"] == Decimal("12.50")
-    assert data["meta"] == json.dumps(META_ALPHA, indent=2)
-    assert data["tags"] == ["hot", "new"]
-
-
-def test_copy_schema_passes_display_row(run: Callable[..., AppTest]) -> None:
-    at = run("schema", select=[2])
-    [(name, kwargs)] = click(at, "add")
-    assert name == "CreateRow"
-    data = kwargs["initial_data"]
-    assert data["id"] == ID_ALPHA
-    assert data["name"] == "alpha"
-    """flipped in Task 5: Decimal kept; JSON is text, tags enum values."""
-    assert data["price"] == Decimal("12.50")
-    assert data["meta"] == json.dumps(META_ALPHA, indent=2)
-    assert data["tags"] == ["hot", "new"]
+    assert type(data["price"]) is Decimal
+    assert data["meta"] == META_ALPHA
+    assert data["tags"] == [Tag.HOT, Tag.NEW]
+    """A copy: the dialog may pop the PK without touching `rows`."""
+    assert data is not at.session_state["ROWS"][2]
 
 
 @pytest.mark.parametrize(
