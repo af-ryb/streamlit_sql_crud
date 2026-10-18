@@ -1,6 +1,7 @@
-"""Shared typing aliases for the CRUD configuration dicts."""
+"""Shared typing aliases for the CRUD configuration dicts and the FkOpt option."""
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any, Literal, NotRequired, TypedDict
 
 OperationType = Literal["create", "update"]
@@ -39,3 +40,11 @@ class ManyToManyData(TypedDict):
     options: list[Any]
     display_field: str
     pk_name: str
+
+
+@dataclass
+class FkOpt:
+    """One foreign-key option: the referenced id and its display text."""
+
+    idx: int
+    name: str

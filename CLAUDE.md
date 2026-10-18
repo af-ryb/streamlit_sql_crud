@@ -81,7 +81,8 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    ├── __init__.py        # public API: SqlUi, PydanticUi, PydanticCrudUi
    ├── sql_ui.py          # SqlUi; action buttons
    ├── pydantic_ui.py     # PydanticUi / PydanticCrudUi
-   ├── config_types.py    # ForeignKeyOptions, ManyToManyFields, OperationType
+   ├── config_types.py    # ForeignKeyOptions, ManyToManyFields, OperationType,
+   │                      #   FkOpt (one FK option: id + display text)
    ├── state.py           # per-instance UI state, data version, cache TTL,
    │                      #   set_state, clear_state_keys
    ├── helpers/           # leaf modules, no Streamlit state
@@ -101,7 +102,7 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
    ├── forms/             # form fields in both modes
    │   ├── sa_fields.py   # InputFields: plain (no-schema) widgets, one per column
    │   ├── options.py     # FK / M2M options: load_form_options (Pydantic forms),
-   │   │                  #   ExistingData, FkOpt, custom_foreign_opts (plain forms)
+   │   │                  #   ExistingData, custom_foreign_opts (plain forms)
    │   ├── schema_builder.py  # dynamic Pydantic models from JSON schemas
    │   ├── schema_check.py    # validate_schema_compatibility (schema vs model)
    │   └── pydantic/      # Pydantic form generation
@@ -130,7 +131,7 @@ This is a **Streamlit-based CRUD library** that creates database interfaces with
 4. **Layering rule** (enforced by `tests/test_import_layers.py`): a module may
    import its own layer or a lower one, never a higher one, and the module graph
    has no cycles. Lowest first:
-   `state`, `config_types` < `helpers/` < `table/`, `forms/` (peers) <
+   `state`, `config_types` < `helpers/` < `table/` < `forms/` <
    `pydantic_ui` < `dialogs/` < `sql_ui` < `__init__`.
    `pydantic_ui` sits below `dialogs/` because the dialogs build `PydanticCrudUi`
    forms. Type-only imports go under `if TYPE_CHECKING:` (not runtime edges),

@@ -1,6 +1,6 @@
 """Intra-package imports follow the layer order and form no cycles.
 
-Layers, lowest first: state/config_types < helpers < table, forms < pydantic_ui
+Layers, lowest first: state/config_types < helpers < table < forms < pydantic_ui
 < dialogs < sql_ui < the package __init__. A module may import its own layer or
 any lower one; imports under ``if TYPE_CHECKING:`` are not runtime edges.
 """
@@ -15,7 +15,8 @@ ROOT_INIT = "__init__"
 LAYERS: tuple[tuple[str, ...], ...] = (
     ("state", "config_types"),
     ("helpers",),
-    ("table", "forms"),
+    ("table",),
+    ("forms",),
     ("pydantic_ui",),
     ("dialogs",),
     ("sql_ui",),
@@ -49,6 +50,12 @@ def test_subpackage_inits_import_nothing() -> None:
 def test_checker_flags_back_edge() -> None:
     graph: Graph = {"helpers.values": {"table.query"}, "table.query": set()}
     assert layer_violations(graph) == ["helpers.values -> table.query"]
+
+
+def test_checker_flags_table_importing_forms() -> None:
+    """table/ sits strictly below forms/, so it may not import from it."""
+    graph: Graph = {"table.params": {"forms.options"}, "forms.options": set()}
+    assert layer_violations(graph) == ["table.params -> forms.options"]
 
 
 def test_checker_flags_cycle() -> None:

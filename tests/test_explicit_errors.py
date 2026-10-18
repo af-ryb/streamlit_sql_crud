@@ -6,9 +6,9 @@ from typing import Any, cast
 import pytest
 import sqlalchemy as sa
 
+from streamlit_pydantic_crud.config_types import FkOpt
 from streamlit_pydantic_crud.dialogs.one_to_many import ReadManyRel
 from streamlit_pydantic_crud.forms import sa_fields
-from streamlit_pydantic_crud.forms.options import FkOpt
 from streamlit_pydantic_crud.forms.sa_fields import InputFields
 
 
