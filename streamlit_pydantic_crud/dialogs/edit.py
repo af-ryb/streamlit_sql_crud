@@ -40,8 +40,8 @@ from streamlit_pydantic_crud.state import record_write, set_state
 class UpdateRow:
     """Edit dialog for one row.
 
-    ``dt_filters`` / ``no_dt_filters`` are accepted for compatibility but not
-    applied: editing lists all foreign-key options, unlike creating.
+    Page filters do not apply: editing lists all foreign-key options, unlike
+    creating.
     """
 
     def __init__(
@@ -55,8 +55,6 @@ class UpdateRow:
         foreign_key_options: ForeignKeyOptions | None = None,
         many_to_many_fields: ManyToManyFields | None = None,
         key: str = "update",
-        dt_filters: dict | None = None,
-        no_dt_filters: dict | None = None,
     ) -> None:
         self.conn = conn
         self.model = model
@@ -68,8 +66,6 @@ class UpdateRow:
         self.many_to_many_fields = many_to_many_fields or {}
         self.key = key
         self.key_prefix = f"{key}_update"
-        self.dt_filters = dt_filters or {}
-        self.no_dt_filters = no_dt_filters or {}
 
         with conn.session as s:
             # Load row with many-to-many relationships if needed
@@ -176,9 +172,6 @@ class UpdateRow:
 
         for col in cols:
             col_name = column_label(col)
-            if col_name is None:
-                continue
-
             col_value = getattr(self.row, col_name)
 
             if col_name in self.default_values:

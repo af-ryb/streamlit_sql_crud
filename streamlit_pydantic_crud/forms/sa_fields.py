@@ -250,10 +250,7 @@ class InputFields:
 
         Returns `NO_INPUT` for a type without a widget (e.g. JSON).
         """
-        col_name = col.description
-        if col_name is None:
-            msg = "Column has no name; cannot build an input for it"
-            raise ValueError(msg)
+        col_name = column_label(col)
         pretty_name = get_pretty_name(col_name)
         key = f"{self.key_prefix}_{col_name}"
 

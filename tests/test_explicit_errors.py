@@ -12,12 +12,13 @@ from streamlit_pydantic_crud.forms.options import FkOpt
 from streamlit_pydantic_crud.forms.sa_fields import InputFields
 
 
-def test_get_input_value_unnamed_column_raises() -> None:
+def test_get_input_value_unlabeled_column_uses_name() -> None:
+    """A column without a description falls back to its name (column_label)."""
     fields = InputFields.__new__(InputFields)
-    col = cast(Any, sa.literal_column("1"))
+    fields.key_prefix = "t"
+    col = cast(Any, sa.Column("id", sa.Integer, primary_key=True))
     col.description = None
-    with pytest.raises(ValueError, match="no name"):
-        fields.get_input_value(col, None)
+    assert fields.get_input_value(col, 7) == 7
 
 
 def test_other_col_without_pairs_raises() -> None:

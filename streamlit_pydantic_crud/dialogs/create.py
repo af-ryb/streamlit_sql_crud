@@ -120,9 +120,6 @@ class CreateRow:
         created = {}
         for col in cols:
             col_name = column_label(col)
-            if col_name is None:
-                continue
-
             initial_value = self.initial_data.get(col_name)
 
             if col_name in self.default_values:
