@@ -1,7 +1,8 @@
 """Columns without a Python type must not crash the filters (#13).
 
-`NullType` (e.g. `literal_column`, untyped `func.*`) raises NotImplementedError
-from `python_type`; such columns are simply not filterable.
+`NullType` (e.g. `literal_column`, untyped `func.*`) has no `python_type`
+(NotImplementedError on SQLAlchemy 2.0, `object` on 2.1); such columns are
+simply not filterable.
 """
 
 from unittest.mock import MagicMock

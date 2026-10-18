@@ -103,11 +103,16 @@ def safe_python_type(col: ColumnElement[Any]) -> type | None:
     col_type = col.type
     while True:
         try:
-            return col_type.python_type
+            py_type = col_type.python_type
         except NotImplementedError:
-            if not isinstance(col_type, TypeDecorator):
-                return None
-            col_type = col_type.impl_instance
+            py_type = object
+        """SQLAlchemy 2.0 raises NotImplementedError for an unknown type, 2.1
+        returns `object`; both mean the type has none of its own."""
+        if py_type is not object:
+            return py_type
+        if not isinstance(col_type, TypeDecorator):
+            return None
+        col_type = col_type.impl_instance
 
 
 def is_json_type(col_type: TypeEngine[Any]) -> bool:

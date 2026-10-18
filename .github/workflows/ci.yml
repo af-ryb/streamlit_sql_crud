@@ -20,3 +20,5 @@ jobs:
         run: uv run -- ty check
       - name: Tests
         run: uv run -- pytest
+      - name: Tests on SQLAlchemy 2.1
+        run: uv run --with 'sqlalchemy>=2.1,<2.2' -- pytest -p no:cacheprovider

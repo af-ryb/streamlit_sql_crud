@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any, Final
 
 import streamlit as st
-from sqlalchemy import Numeric
+from sqlalchemy import Float, Numeric
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
@@ -277,7 +277,8 @@ class InputFields:
             input_value = self.input_number(col_name, col_value, 1, col.nullable)
         elif py_type is float:
             input_value = self.input_number(col_name, col_value, 0.1, col.nullable)
-        elif isinstance(col.type, Numeric):
+        elif isinstance(col.type, Numeric | Float):
+            """SQLAlchemy 2.1 no longer derives Float from Numeric."""
             scale = col.type.scale
             input_value = self.input_numeric(col_name, scale, col_value, col.nullable)
         elif py_type is datetime:
