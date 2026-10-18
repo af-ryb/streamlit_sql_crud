@@ -158,6 +158,8 @@ def test_style_formatter_keeps_styler_and_wins_over_column_format(
     raw = styler.display_values
     text = pa.ipc.open_stream(io.BytesIO(raw)).read_all().to_pydict()
     assert text["price"] == ["$3.00", "$7.25", "$12.50", "$0.10"]
+    """A None cell skips its column formatter instead of raising."""
+    assert text["meta"][0] == "None"
     assert "font-weight: bold" in styler.styles
 
 

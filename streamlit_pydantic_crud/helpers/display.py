@@ -11,7 +11,7 @@ from functools import cache
 from typing import Any, Literal
 
 import streamlit as st
-from sqlalchemy import CTE, Numeric
+from sqlalchemy import CTE, Float, Numeric
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
 from sqlalchemy.types import TypeEngine
@@ -95,9 +95,10 @@ def column_configs(cte: CTE, columns: Iterable[str]) -> dict[str, ColumnConfig]:
     for col in cte.columns:
         if col.name not in names:
             continue
-        if isinstance(col.type, Numeric):
+        if isinstance(col.type, Numeric | Float):
+            """SQLAlchemy 2.1 no longer derives Float from Numeric."""
             configs[col.name] = st.column_config.NumberColumn(
-                format=number_format(col.type.scale)
+                format=number_format(getattr(col.type, "scale", None))
             )
         elif is_array_type(col.type):
             configs[col.name] = st.column_config.ListColumn()
@@ -105,11 +106,13 @@ def column_configs(cte: CTE, columns: Iterable[str]) -> dict[str, ColumnConfig]:
 
 
 def number_format(scale: int | None) -> str:
-    """Return a ``NumberColumn`` format: `scale` decimals, else full precision.
+    """Return a ``NumberColumn`` format: `scale` decimals, else the shortest repr.
 
-    Matches the former Styler formatter (``f"{v:.2f}"`` / ``str(v)``).
+    Matches the former Styler formatter (``f"{v:.2f}"`` / ``str(v)``): the
+    browser's ``%g`` has no precision limit, while ``plain`` shows float noise
+    (3.1415900000000003) and the default rounds to 4 decimals.
     """
-    return "plain" if scale is None else f"%.{scale}f"
+    return "%g" if scale is None else f"%.{scale}f"
 
 
 def display_value(value: Any) -> str:

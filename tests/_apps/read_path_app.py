@@ -104,7 +104,7 @@ def render() -> SqlUi:
             conn=conn,
             read_instance=select(Item),
             edit_create_model=Item,
-            df_style_formatter={"price": "${:,.2f}"},
+            df_style_formatter={"price": "${:,.2f}", "meta": "{:>4}"},
             style_fn=bold_rows,
             key="rp",
         )

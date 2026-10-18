@@ -423,7 +423,8 @@ class SqlUi:
             """A column format would override the user's Styler format: drop it."""
             for name in self.df_style_formatter:
                 column_config.pop(name, None)
-            data = df.style.format(self.df_style_formatter)
+            """Missing cells skip the formatter: None is no longer NaN ("{:.2f}")."""
+            data = df.style.format(self.df_style_formatter, na_rep="None")
             if self.style_fn is not None:
                 data = data.apply(self.style_fn, axis=1)
 

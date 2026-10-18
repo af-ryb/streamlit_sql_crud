@@ -6,7 +6,17 @@ Styler default showed 50000.000000 for Numeric(10, 2).
 
 from typing import Any
 
-from sqlalchemy import ARRAY, Float, Integer, Numeric, String, column, select, table
+from sqlalchemy import (
+    ARRAY,
+    Double,
+    Float,
+    Integer,
+    Numeric,
+    String,
+    column,
+    select,
+    table,
+)
 from streamlit.elements.lib.column_types import ColumnConfig
 
 from streamlit_pydantic_crud.helpers.display import column_configs, number_format
@@ -17,12 +27,13 @@ CTE = select(
         column("salary", Numeric(10, 2)),
         column("rate", Numeric()),
         column("ratio", Float()),
+        column("weight", Double()),
         column("qty", Integer()),
         column("tags", ARRAY(String())),
         column("name", String()),
     )
 ).cte()
-ALL = ["salary", "rate", "ratio", "qty", "tags", "name"]
+ALL = ["salary", "rate", "ratio", "weight", "qty", "tags", "name"]
 
 
 def type_config(config: ColumnConfig) -> dict[str, Any]:
@@ -32,7 +43,13 @@ def type_config(config: ColumnConfig) -> dict[str, Any]:
 
 
 def test_configs_cover_numeric_and_array_columns_only() -> None:
-    assert set(column_configs(CTE, ALL)) == {"salary", "rate", "ratio", "tags"}
+    assert set(column_configs(CTE, ALL)) == {
+        "salary",
+        "rate",
+        "ratio",
+        "weight",
+        "tags",
+    }
 
 
 def test_configs_only_for_requested_columns() -> None:
@@ -43,8 +60,9 @@ def test_configs_only_for_requested_columns() -> None:
 def test_numeric_format_follows_scale() -> None:
     configs = column_configs(CTE, ALL)
     assert type_config(configs["salary"]) == {"type": "number", "format": "%.2f"}
-    assert type_config(configs["rate"]) == {"type": "number", "format": "plain"}
-    assert type_config(configs["ratio"]) == {"type": "number", "format": "plain"}
+    assert type_config(configs["rate"]) == {"type": "number", "format": "%g"}
+    assert type_config(configs["ratio"]) == {"type": "number", "format": "%g"}
+    assert type_config(configs["weight"]) == {"type": "number", "format": "%g"}
 
 
 def test_array_is_list_column() -> None:
@@ -54,4 +72,4 @@ def test_array_is_list_column() -> None:
 def test_number_format() -> None:
     assert number_format(0) == "%.0f"
     assert number_format(4) == "%.4f"
-    assert number_format(None) == "plain"
+    assert number_format(None) == "%g"
