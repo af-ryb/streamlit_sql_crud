@@ -1,7 +1,7 @@
 """Pin today's SqlUi table output for the consumer's read shapes.
 
-Task 3 rewrites the read path and must keep these green unchanged; asserts
-noted "flipped in Task 4" record a plain-vs-schema difference Task 4 removes.
+Both read modes now display the same values: Numeric as Decimal formatted by
+scale (column config), ARRAY as lists of enum values (list column).
 """
 
 import io
@@ -39,7 +39,11 @@ META_TEXT = [
     json.dumps(META_ALPHA, indent=2),
     json.dumps([1, 2], indent=2),
 ]
-PRICE_TEXT = ["3.00", "7.25", "12.50", "0.10"]
+PRICES = [Decimal("3.00"), Decimal("7.25"), Decimal("12.50"), Decimal("0.10")]
+TAGS = [[], None, ["hot", "new"], ["sale"]]
+"""Default column configs sent for the Numeric(10, 2) price and the tags ARRAY."""
+PRICE_CONFIG = {"type_config": {"type": "number", "format": "%.2f"}}
+TAGS_CONFIG = {"type_config": {"type": "list"}}
 ITEM_COLS = ["id", "name", "template_id", "price", "meta", "tags"]
 
 
@@ -67,13 +71,9 @@ def table(at: AppTest) -> pd.DataFrame:
     return at.dataframe(key=DF_KEY).value
 
 
-def display_text(at: AppTest) -> dict[str, list[str]]:
-    """Cell texts the Styler sends to the browser, per column.
-
-    Exists only while rendering goes through a Styler: flipped in Task 4.
-    """
-    raw = at.dataframe(key=DF_KEY).proto.arrow_data.styler.display_values
-    return pa.ipc.open_stream(io.BytesIO(raw)).read_all().to_pydict()
+def column_config(at: AppTest) -> dict[str, Any]:
+    """Column configs sent to the browser, per column (JSON in the proto)."""
+    return json.loads(at.dataframe(key=DF_KEY).proto.columns)
 
 
 def column_order(at: AppTest) -> list[str]:
@@ -105,16 +105,14 @@ def test_plain_mode_renders_every_column(run: Callable[..., AppTest]) -> None:
     assert df["name"].tolist() == NAMES
     assert df["template_id"].tolist() == [2, 1, 1, 2]
     assert df["meta"].tolist() == META_TEXT
-    """flipped in Task 4: plain Numeric is float64, schema mode keeps Decimal."""
-    assert df["price"].dtype == "float64"
-    assert df["price"].tolist() == [3.0, 7.25, 12.5, 0.1]
-    """flipped in Task 4: plain ARRAY is a comma string ([] → ""), not a list."""
-    assert df["tags"].tolist() == ["", None, "hot, new", "sale"]
+    assert df["price"].tolist() == PRICES
+    assert cells(df, "tags") == TAGS
 
-    text = display_text(at)
-    assert text["price"] == PRICE_TEXT
-    assert text["tags"] == ["", "None", "hot, new", "sale"]
-    assert text["meta"][0] == "None"
+    config = column_config(at)
+    assert config["price"] == PRICE_CONFIG
+    assert config["tags"] == TAGS_CONFIG
+    """No Styler without df_style_formatter / style_fn."""
+    assert not at.dataframe(key=DF_KEY).proto.arrow_data.styler.uuid
 
 
 def test_schema_mode_renders_schema_columns(run: Callable[..., AppTest]) -> None:
@@ -127,33 +125,40 @@ def test_schema_mode_renders_schema_columns(run: Callable[..., AppTest]) -> None
     assert df["name"].tolist() == NAMES
     assert df["template_id"].tolist() == [2, 1, 1, 2]
     assert df["meta"].tolist() == META_TEXT
-    """flipped in Task 4: schema Numeric stays Decimal (plain mode: float)."""
-    assert df["price"].tolist() == [
-        Decimal("3.00"),
-        Decimal("7.25"),
-        Decimal("12.50"),
-        Decimal("0.10"),
-    ]
-    """flipped in Task 4 (same in plain mode): ARRAY is a list of enum values."""
-    assert cells(df, "tags") == [[], None, ["hot", "new"], ["sale"]]
+    assert df["price"].tolist() == PRICES
+    assert cells(df, "tags") == TAGS
 
-    text = display_text(at)
-    assert text["price"] == PRICE_TEXT
-    """flipped in Task 4: the Styler shows the Python repr of list cells."""
-    assert text["tags"] == ["[]", "None", "['hot', 'new']", "['sale']"]
+    config = column_config(at)
+    assert config["price"] == PRICE_CONFIG
+    assert config["tags"] == TAGS_CONFIG
 
 
-def test_plain_and_schema_agree_except_known_columns(
+def test_plain_and_schema_agree(run: Callable[..., AppTest]) -> None:
+    plain_at = run("plain")
+    schema_at = run("schema")
+    plain, schema = table(plain_at), table(schema_at)
+
+    for col in ITEM_COLS:
+        assert cells(plain, col) == cells(schema, col), col
+    assert column_config(plain_at) == column_config(schema_at)
+
+
+def test_style_formatter_keeps_styler_and_wins_over_column_format(
     run: Callable[..., AppTest],
 ) -> None:
-    plain = table(run("plain"))
-    schema = table(run("schema"))
+    at = run("styled")
+    df = table(at)
 
-    for col in ("id", "name", "template_id", "meta"):
-        assert plain[col].tolist() == schema[col].tolist(), col
-    """flipped in Task 4: these two columns differ between the modes today."""
-    assert plain["price"].tolist() != schema["price"].tolist()
-    assert plain["tags"].tolist() != cells(schema, "tags")
+    assert df["price"].tolist() == PRICES
+    config = column_config(at)
+    """A NumberColumn format would hide the Styler text: only tags keep theirs."""
+    assert "price" not in config
+    assert config["tags"] == TAGS_CONFIG
+    styler = at.dataframe(key=DF_KEY).proto.arrow_data.styler
+    raw = styler.display_values
+    text = pa.ipc.open_stream(io.BytesIO(raw)).read_all().to_pydict()
+    assert text["price"] == ["$3.00", "$7.25", "$12.50", "$0.10"]
+    assert "font-weight: bold" in styler.styles
 
 
 def test_join_labels_render_in_schema_order(run: Callable[..., AppTest]) -> None:
@@ -168,7 +173,8 @@ def test_join_labels_render_in_schema_order(run: Callable[..., AppTest]) -> None
     assert df["app_name"].tolist() == ["Beta App", "Alpha App", "Alpha App", "Beta App"]
     """Without M2M the labels come from the query row (upper-cased there)."""
     assert df["platform"].tolist() == ["ANDROID", "IOS", "IOS", "ANDROID"]
-    assert display_text(at)["price"] == PRICE_TEXT
+    assert df["price"].tolist() == PRICES
+    assert column_config(at)["price"] == PRICE_CONFIG
 
 
 def test_join_label_filter_lists_and_narrows(run: Callable[..., AppTest]) -> None:
@@ -210,7 +216,8 @@ def test_m2m_property_where_and_order(run: Callable[..., AppTest]) -> None:
     """Rows are reloaded entities for M2M, but query columns win: `platform` is
     the upper-cased label (as in join mode), not the model @property."""
     assert df["platform"].tolist() == ["ANDROID", "IOS", "IOS"]
-    assert display_text(at)["price"] == ["0.10", "12.50", "7.25"]
+    assert df["price"].tolist() == [Decimal("0.10"), Decimal("12.50"), Decimal("7.25")]
+    assert column_config(at)["price"] == PRICE_CONFIG
 
 
 def test_m2m_filter_options_follow_where(run: Callable[..., AppTest]) -> None:
@@ -270,11 +277,11 @@ def test_copy_plain_passes_display_row(run: Callable[..., AppTest]) -> None:
     assert data["id"] == ID_ALPHA
     assert data["name"] == "alpha"
     assert data["template_id"] == 1
-    """flipped in Task 4/5: copy gets the display row, not the raw record."""
-    assert data["price"] == 12.5
-    assert type(data["price"]) is float
+    """flipped in Task 5: copy gets the display row (JSON text), not the raw
+    record; Decimal and the tags list already match the raw values."""
+    assert data["price"] == Decimal("12.50")
     assert data["meta"] == json.dumps(META_ALPHA, indent=2)
-    assert data["tags"] == "hot, new"
+    assert data["tags"] == ["hot", "new"]
 
 
 def test_copy_schema_passes_display_row(run: Callable[..., AppTest]) -> None:
@@ -284,7 +291,7 @@ def test_copy_schema_passes_display_row(run: Callable[..., AppTest]) -> None:
     data = kwargs["initial_data"]
     assert data["id"] == ID_ALPHA
     assert data["name"] == "alpha"
-    """flipped in Task 4/5: Decimal kept; JSON is text, tags enum values."""
+    """flipped in Task 5: Decimal kept; JSON is text, tags enum values."""
     assert data["price"] == Decimal("12.50")
     assert data["meta"] == json.dumps(META_ALPHA, indent=2)
     assert data["tags"] == ["hot", "new"]

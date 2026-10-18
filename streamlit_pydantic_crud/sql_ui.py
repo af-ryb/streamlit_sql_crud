@@ -1,12 +1,12 @@
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
 from typing import Literal
 
 import pandas as pd
 import streamlit as st
 from loguru import logger
+from pandas.io.formats.style import Styler
 from pydantic import BaseModel
 from sqlalchemy import CTE, Select
 from streamlit.delta_generator import DeltaGenerator
@@ -25,14 +25,13 @@ from streamlit_pydantic_crud.forms.schema_check import validate_schema_compatibi
 from streamlit_pydantic_crud.helpers import logs
 from streamlit_pydantic_crud.helpers.display import (
     DfStyleFormatter,
-    convert_arrow,
+    column_configs,
+    display_records,
     get_pretty_name,
-    numeric_formatters,
 )
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
     declarative_model,
-    is_json_type,
     pk_name,
     tablename,
 )
@@ -40,8 +39,6 @@ from streamlit_pydantic_crud.helpers.typing import model_fields
 from streamlit_pydantic_crud.helpers.values import (
     convert_numpy_list_to_python,
     convert_numpy_to_python,
-    enum_value,
-    json_to_text,
     row_to_python,
 )
 from streamlit_pydantic_crud.state import (
@@ -408,43 +405,7 @@ class SqlUi:
             self.read_schema,
             self.many_to_many_fields,
         )
-        if self.read_schema or self.many_to_many_fields:
-            return pd.DataFrame([self.schema_display_row(r) for r in records])
-        return self.plain_df(records)
-
-    def plain_df(self, records: list[dict]) -> pd.DataFrame:
-        """DataFrame of plain-mode records, as ``pd.read_sql`` + Arrow fixes made it.
-
-        Kept until display is unified: Decimal → float, tz-aware → UTC.
-        """
-        visible = query.visible_columns(self.cte)
-        columns = [c.key for c in visible]
-        df = pd.DataFrame.from_records(
-            [tuple(r[c] for c in columns) for r in records],
-            columns=columns,
-            coerce_float=True,
-        )
-        for name, dtype in df.dtypes.items():
-            if isinstance(dtype, pd.DatetimeTZDtype):
-                df[name] = df[name].dt.tz_convert("UTC")
-        return convert_arrow(visible, df)
-
-    def schema_display_row(self, record: dict) -> dict:
-        """Make one ORM-path record Arrow-displayable: JSON text, enum values."""
-        json_cols = {c.name for c in self.cte.columns if is_json_type(c.type)}
-        row = dict(record)
-        for key, value in row.items():
-            if key in json_cols:
-                """JSON as text: Arrow rejects dicts/lists mixing types."""
-                row[key] = None if value is None else json_to_text(value)
-            elif isinstance(value, list):
-                row[key] = [
-                    item.value if isinstance(item, Enum) else str(item)
-                    for item in value
-                ]
-            else:
-                row[key] = enum_value(value)
-        return row
+        return pd.DataFrame(display_records(query.visible_columns(self.cte), records))
 
     def show_df(self, df: pd.DataFrame) -> DataframeState | None:
         if df.empty:
@@ -456,20 +417,23 @@ class SqlUi:
             # Display only the columns specified in the schema
             column_order = list(model_fields(self.read_schema).keys())
 
-        formatter = {
-            **numeric_formatters(self.cte, df.columns),
-            **self.df_style_formatter,
-        }
-        df_style = df.style.format(formatter)
-        if self.style_fn is not None:
-            df_style = df_style.apply(self.style_fn, axis=1)
+        column_config = column_configs(self.cte, df.columns)
+        data: pd.DataFrame | Styler = df
+        if self.df_style_formatter or self.style_fn is not None:
+            """A column format would override the user's Styler format: drop it."""
+            for name in self.df_style_formatter:
+                column_config.pop(name, None)
+            data = df.style.format(self.df_style_formatter)
+            if self.style_fn is not None:
+                data = data.apply(self.style_fn, axis=1)
 
         selection_state = self.containers.data.dataframe(
-            df_style,
+            data,
             width="stretch" if self.read_use_container_width else "content",
             height=650,
             hide_index=True,
             column_order=column_order,
+            column_config=column_config,
             on_select="rerun",
             selection_mode="multi-row" if self.show_delete_btn else "single-row",
             key=self.df_key(),

@@ -1,44 +1,57 @@
-"""Numeric table cells use the column scale, not Styler's 6 decimals.
+"""Default column configs: Numeric by scale, Float in full, ARRAY as a list.
 
-pd.read_sql turns Numeric(10, 2) into float64 and the Styler default then
-showed 50000.000000.
+Numbers are formatted by ``st.column_config.NumberColumn`` (no Styler): the
+Styler default showed 50000.000000 for Numeric(10, 2).
 """
 
-from decimal import Decimal
+from typing import Any
 
-import numpy as np
-from sqlalchemy import Float, Integer, Numeric, column, select, table
+from sqlalchemy import ARRAY, Float, Integer, Numeric, String, column, select, table
+from streamlit.elements.lib.column_types import ColumnConfig
 
-from streamlit_pydantic_crud.helpers.display import format_number, numeric_formatters
+from streamlit_pydantic_crud.helpers.display import column_configs, number_format
 
 CTE = select(
     table(
         "t",
         column("salary", Numeric(10, 2)),
+        column("rate", Numeric()),
         column("ratio", Float()),
         column("qty", Integer()),
+        column("tags", ARRAY(String())),
+        column("name", String()),
     )
 ).cte()
+ALL = ["salary", "rate", "ratio", "qty", "tags", "name"]
 
 
-def test_formatters_cover_only_numeric_columns_in_df() -> None:
-    result = numeric_formatters(CTE, ["salary", "ratio", "qty"])
-    assert set(result) == {"salary", "ratio"}
-    assert numeric_formatters(CTE, ["qty"]) == {}
+def type_config(config: ColumnConfig) -> dict[str, Any]:
+    """The set options of a column's type config (unset ones are None)."""
+    options: dict[str, Any] = dict(config.get("type_config") or {})
+    return {k: v for k, v in options.items() if v is not None}
 
 
-def test_scale_is_applied() -> None:
-    fmt = numeric_formatters(CTE, ["salary"])["salary"]
-    assert callable(fmt)
-    assert fmt(np.float64(50000.0)) == "50000.00"
-    assert fmt(Decimal("1234.5")) == "1234.50"
+def test_configs_cover_numeric_and_array_columns_only() -> None:
+    assert set(column_configs(CTE, ALL)) == {"salary", "rate", "ratio", "tags"}
 
 
-def test_float_without_scale_is_shortest_repr() -> None:
-    assert format_number(np.float64(3.14159)) == "3.14159"
-    assert format_number(2.0) == "2.0"
+def test_configs_only_for_requested_columns() -> None:
+    assert set(column_configs(CTE, ["salary", "absent"])) == {"salary"}
+    assert column_configs(CTE, ["qty", "name"]) == {}
 
 
-def test_missing_values_keep_default_text() -> None:
-    assert format_number(np.nan, 2) == "nan"
-    assert format_number(None, 2) == "None"
+def test_numeric_format_follows_scale() -> None:
+    configs = column_configs(CTE, ALL)
+    assert type_config(configs["salary"]) == {"type": "number", "format": "%.2f"}
+    assert type_config(configs["rate"]) == {"type": "number", "format": "plain"}
+    assert type_config(configs["ratio"]) == {"type": "number", "format": "plain"}
+
+
+def test_array_is_list_column() -> None:
+    assert type_config(column_configs(CTE, ["tags"])["tags"]) == {"type": "list"}
+
+
+def test_number_format() -> None:
+    assert number_format(0) == "%.0f"
+    assert number_format(4) == "%.4f"
+    assert number_format(None) == "plain"
