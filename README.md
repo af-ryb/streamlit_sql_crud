@@ -103,7 +103,7 @@ class AlertReadSchema(BaseModel):
 Install from git and pin a tag (there is no PyPI release):
 
 ```toml
-"streamlit-pydantic-crud @ git+https://github.com/af-ryb/streamlit_sql_crud.git@v0.9.0"
+"streamlit-pydantic-crud @ git+https://github.com/af-ryb/streamlit_sql_crud.git@v0.9.1"
 ```
 
 ## Requirements

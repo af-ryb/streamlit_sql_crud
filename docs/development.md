@@ -62,8 +62,8 @@ Consumers install from git and pin by tag (no PyPI). Bump `version` in
 `pyproject.toml`, run `uv lock`, commit and push to `master`, then:
 
 ```bash
-scripts/release.sh 0.9.0 --dry-run   # run every gate, no tag
-scripts/release.sh 0.9.0 --push      # tag v0.9.0 and push it (OR task release -- 0.9.0 --push)
+scripts/release.sh 0.9.1 --dry-run   # run every gate, no tag
+scripts/release.sh 0.9.1 --push      # tag v0.9.1 and push it (OR task release -- 0.9.1 --push)
 ```
 
 The script checks the tag is free, `master` is in sync, `pyproject.toml` /
