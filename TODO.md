@@ -201,9 +201,10 @@ Side findings (stage 4, not fixed — behavior-preserving refactor):
 - [x] `PydanticCrudUi.__init__` still builds the generator twice (kept: each build
   runs `get_pydantic_field_info`, which calls user `default_factory`s, so dropping
   one is observable) — 0.7.2 (#19)
-- [ ] The M2M fallback (options not loaded) logs two warnings; the second ("not found
+- [x] The M2M fallback (options not loaded) logs two warnings; the second ("not found
   in foreign_key_options") always fires there and is misleading. Loguru records of
-  the moved warnings now come from `pydantic_form.*` / `schema_check`
+  the moved warnings now come from `pydantic_form.*` / `schema_check` — 0.9.1: one
+  warning ("has no loaded options, falling back to a text input")
 - [x] Clearing an optional JSON field on edit stores JSON `null`, not SQL NULL
   (SQLAlchemy `JSON` without `none_as_null=True`), seen on `metadata_json` — fixed
   in 0.7.0: `dialogs.persist.json_none_as_sql_null` writes `null()` on every save
@@ -260,18 +261,25 @@ Side findings (0.7.0, not fixed):
 - [ ] Moving the page through session state logs Streamlit's one-time "created with
   a default value but also had its value set via the Session State API" warning
   (with stack) once per server process; harmless, `st.pagination` always has a default
+  — 0.9.1: not fixable from the library: `st.pagination` reports its `default`
+  (always an int) to the policy check, so any page moved through session state
+  (size change, filter reset, clamp) warns; pinned by
+  `tests/test_seeded_widget_defaults.py`
 
 Side findings (0.7.2, not fixed):
 - [ ] Since #16 every Pydantic widget seeds its state, so the one-time
   "created with a default value but also had its value set via the Session State
   API" warning (see 0.7.0 above) fires on any form page too; harmless
+  — 0.9.1: seeded widgets pass no default any more (see Step 6); still open for
+  `st.datetime_input` with a value: its default bounds (value ± 10 years) and
+  the clear button derive from `value`, and "now" is validated against bounds
 - [ ] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
   like the Pydantic ones did before #16, so they may show stale browser values
   after a programmatic reset (only number inputs seed their state)
 - [x] Schema and no-schema read paths show ARRAY cells differently (list chips vs
   a comma-joined string) — 0.9.0 (#28): one display path, lists in both modes
-- [ ] `PydanticUi.from_json_schema` is annotated `-> "PydanticUi"` but returns
-  `cls(...)`; `Self` would type `PydanticCrudUi.from_json_schema` correctly
+- [x] `PydanticUi.from_json_schema` is annotated `-> "PydanticUi"` but returns
+  `cls(...)`; `Self` would type `PydanticCrudUi.from_json_schema` correctly — 0.9.1: `Self`
 - [ ] `one_to_many.rerun_panel` reads the internal
   `ScriptRunContext.fragment_ids_this_run`; recheck on Streamlit upgrades
 
@@ -295,16 +303,19 @@ Spec/plan: `tasks/` (local). PRs #25–#33.
   from the dev group
 
 Side findings (Step 6, not fixed):
-- [ ] `seed_widget_state` plus `value=` triggers Streamlit's one-time "created with
+- [x] `seed_widget_state` plus `value=` triggers Streamlit's one-time "created with
   a default value but also had its value set via the Session State API" warning
   (edit dialog ID field, ProphetConfigUi in the consumer); drop `value=` when the
-  widget is seeded
+  widget is seeded — 0.9.1: seeded widgets get no `value` / `index` / `default`
+  (`"min"` for a non-nullable number, `"today"` for a set date, index 0 for a
+  selectbox); the `st.datetime_input` remainder is tracked under 0.7.2 above
 - [ ] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
   `InputFields.input_array` mixes raw members with `.enums` names (edit and copy)
 - [ ] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
   JSON columns
-- [ ] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it
-  is skipped with a warning on every render
+- [x] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it
+  is skipped with a warning on every render — 0.9.1: warned once per process and
+  clause (`query.IGNORED_ORDER_CLAUSES`); still skipped
 - [ ] The ORDER BY lifting relies on SQLAlchemy private attributes
   (`_order_by_clauses`, `_limit_clause`, ...); covered by
   `tests/test_pagination_order.py`
