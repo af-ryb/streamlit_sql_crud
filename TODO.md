@@ -273,9 +273,12 @@ Side findings (0.7.2, not fixed):
   — 0.9.1: seeded widgets pass no default any more (see Step 6); still open for
   `st.datetime_input` with a value: its default bounds (value ± 10 years) and
   the clear button derive from `value`, and "now" is validated against bounds
-- [ ] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
+- [x] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
   like the Pydantic ones did before #16, so they may show stale browser values
-  after a programmatic reset (only number inputs seed their state)
+  after a programmatic reset (only number inputs seed their state) — 0.9.2: every
+  plain widget seeds its state and passes no default (shared `seed_widget_state`
+  / `seeded_index` / `render_date_input` / `render_checkbox`); a set datetime
+  passes `"now"` with bounds spanning the stored value and now
 - [x] Schema and no-schema read paths show ARRAY cells differently (list chips vs
   a comma-joined string) — 0.9.0 (#28): one display path, lists in both modes
 - [x] `PydanticUi.from_json_schema` is annotated `-> "PydanticUi"` but returns

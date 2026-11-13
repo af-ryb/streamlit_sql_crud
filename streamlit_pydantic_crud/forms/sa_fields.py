@@ -1,3 +1,9 @@
+"""Plain (no-schema) form widgets, one per SQLAlchemy column.
+
+Every widget seeds its session state (`seed_widget_state`) and gets no
+`value` / `index` / `default`, like the Pydantic renderers in `forms.pydantic`.
+"""
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Final
@@ -10,7 +16,13 @@ from sqlalchemy.types import Enum as SQLEnum
 
 from streamlit_pydantic_crud.config_types import FkOpt
 from streamlit_pydantic_crud.forms.options import ExistingData
-from streamlit_pydantic_crud.forms.pydantic.widgets import nullable_number_input
+from streamlit_pydantic_crud.forms.pydantic.widgets import (
+    nullable_number_input,
+    render_checkbox,
+    render_date_input,
+    seed_widget_state,
+    seeded_index,
+)
 from streamlit_pydantic_crud.helpers.display import get_pretty_name
 from streamlit_pydantic_crud.helpers.sa_model import (
     column_label,
@@ -23,6 +35,9 @@ from streamlit_pydantic_crud.helpers.values import (
     to_list,
 )
 from streamlit_pydantic_crud.state import clear_state_keys
+
+DATETIME_YEARS: Final = 10
+"""Years the datetime picker reaches before and after the value, as Streamlit."""
 
 NO_INPUT: Final = object()
 """Returned for a column without a widget; callers must leave it unchanged."""
@@ -67,11 +82,12 @@ class InputFields:
         opts = self.existing_data.fk[col_name]
 
         index = next((i for i, opt in enumerate(opts) if opt.idx == value), None)
+        seed_widget_state(key, None if index is None else opts[index])
         input_value = st.selectbox(
             get_pretty_name(col_name),
             options=opts,
             format_func=lambda opt: opt.name,
-            index=index,
+            index=seeded_index(index),
             key=key,
         )
         if not input_value:
@@ -110,13 +126,15 @@ class InputFields:
         if enum_class and isinstance(col_value, str):
             col_value = enum_class.__members__.get(col_value, col_value)
         index = opts.index(col_value) if col_value in opts else None
+        key = f"{self.key_prefix}_{col_name}"
+        seed_widget_state(key, None if index is None else opts[index])
 
         return st.selectbox(
             get_pretty_name(col_name),
             opts,
-            index=index,
+            index=seeded_index(index),
             format_func=lambda opt: opt.name if enum_class else str(opt),
-            key=f"{self.key_prefix}_{col_name}",
+            key=key,
         )
 
     def input_str_enum(
@@ -154,18 +172,15 @@ class InputFields:
         """Render a selectbox of stored values that accepts a typed new one.
 
         Returns None when nothing is selected or the text is empty. A nullable
-        column seeds its state and passes no index, which keeps it clearable.
+        column passes no index (not even 0), which keeps it clearable.
         """
         key = f"{self.key_prefix}_{col_name}"
         val_index, opts = self.get_col_str_opts(col_name, value)
-        if nullable:
-            if key not in st.session_state:
-                st.session_state[key] = value
-            val_index = None
+        seed_widget_state(key, value)
         input_value = st.selectbox(
             get_pretty_name(col_name),
             options=opts,
-            index=val_index,
+            index=None if nullable else seeded_index(val_index),
             key=key,
             help=help_text,
             accept_new_options=True,
@@ -236,19 +251,42 @@ class InputFields:
             enum_options = list(col_type.item_type.enums)
             options.extend([opt for opt in enum_options if opt not in options])
 
-        # Multiselect input with accept_new_options for flexibility
+        """Typed new options are accepted; the seeded state is the selection."""
+        key = f"{self.key_prefix}_{col_name}"
+        seed_widget_state(key, current_values)
         selected_values = st.multiselect(
             pretty_name,
             options=options,
-            default=current_values,
             accept_new_options=True,
-            key=f"{self.key_prefix}_{col_name}",
+            key=key,
             help="Select existing options or type new ones"
             if not enum_options
             else f"Select from: {', '.join(enum_options)}",
         )
 
         return selected_values
+
+    def input_datetime(self, col_name: str, value: datetime | None) -> Any:
+        """Render a datetime input; an untouched one returns `value` unchanged.
+
+        "now" stands for "no default"; the bounds span the stored value and now.
+        """
+        key = f"{self.key_prefix}_{col_name}"
+        label = get_pretty_name(col_name)
+        if not isinstance(value, datetime):
+            seed_widget_state(key, None)
+            return st.datetime_input(label, value=None, key=key)
+        shown = value.replace(second=0, microsecond=0, tzinfo=None)
+        seed_widget_state(key, shown)
+        years = sorted((shown.year, datetime.now().year))
+        input_value = st.datetime_input(
+            label,
+            value="now",
+            min_value=date(max(years[0] - DATETIME_YEARS, date.min.year), 1, 1),
+            max_value=date(min(years[1] + DATETIME_YEARS, date.max.year), 12, 31),
+            key=key,
+        )
+        return keep_unchanged_datetime(input_value, value)
 
     def get_input_value(self, col: KeyedColumnElement, col_value) -> Any:
         """Render the widget for `col` and return its value.
@@ -282,13 +320,11 @@ class InputFields:
             scale = col.type.scale
             input_value = self.input_numeric(col_name, scale, col_value, col.nullable)
         elif py_type is datetime:
-            input_value = keep_unchanged_datetime(
-                st.datetime_input(pretty_name, value=col_value, key=key), col_value
-            )
+            input_value = self.input_datetime(col_name, col_value)
         elif py_type is date:
-            input_value = st.date_input(pretty_name, value=col_value, key=key)
+            input_value = render_date_input(pretty_name, {}, col_value, key)
         elif py_type is bool:
-            input_value = st.checkbox(pretty_name, value=col_value, key=key)
+            input_value = render_checkbox(pretty_name, {}, col_value, key)
         else:
             input_value = NO_INPUT
 
@@ -297,7 +333,7 @@ class InputFields:
     def reset_state(self) -> None:
         """Drop the widget values of every model column from session state.
 
-        The next render then re-seeds each widget from its `value` argument.
+        The next render then re-seeds each widget from the value it is given.
         """
         clear_state_keys(
             f"{self.key_prefix}_{column_label(col)}"
