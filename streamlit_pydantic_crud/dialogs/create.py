@@ -57,7 +57,9 @@ class CreateRow:
         self.create_schema = create_schema
         self.foreign_key_options = resolve_foreign_key_options(foreign_key_options)
         self.many_to_many_fields = resolve_many_to_many_fields(many_to_many_fields)
-        self.initial_data = initial_data or {}
+        """A copy is a new record: the copied PK is neither shown nor inserted."""
+        self.initial_data = dict(initial_data or {})
+        self.initial_data.pop(pk_name(self.model), None)
         self.dt_filters = dt_filters or {}
         self.no_dt_filters = no_dt_filters or {}
 
@@ -87,8 +89,7 @@ class CreateRow:
         session_key = form_data_key(self.key_prefix)
 
         if self.initial_data:
-            """Prefill from the copied row, minus its PK: this is a new record."""
-            self.initial_data.pop(pk_name(self.model), None)
+            """Prefill the form from the copied row."""
             set_state(session_key, self.initial_data)
 
         self.pydantic_ui = PydanticCrudUi(
