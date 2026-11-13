@@ -10,16 +10,16 @@ from typing import TYPE_CHECKING, Any
 
 import streamlit as st
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
-from sqlalchemy.sql.schema import ForeignKey
+from sqlalchemy.sql.schema import ForeignKey as SaForeignKey
 
 from streamlit_pydantic_crud.config_types import (
     FkOpt,
-    ForeignKeyConfig,
-    ForeignKeyOptions,
-    ManyToManyFields,
+    ForeignKey,
+    ResolvedForeignKeyOptions,
+    ResolvedManyToManyFields,
     SessionSource,
 )
 from streamlit_pydantic_crud.helpers.sa_model import (
@@ -42,8 +42,8 @@ def load_form_options(
     form: "PydanticCrudUi",
     conn: SessionSource,
     model: type[DeclarativeBase],
-    foreign_key_options: ForeignKeyOptions,
-    many_to_many_fields: ManyToManyFields,
+    foreign_key_options: ResolvedForeignKeyOptions,
+    many_to_many_fields: ResolvedManyToManyFields,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,
@@ -63,7 +63,7 @@ def load_foreign_key_options(
     form: "PydanticCrudUi",
     conn: SessionSource,
     model: type[DeclarativeBase],
-    foreign_key_options: ForeignKeyOptions,
+    foreign_key_options: ResolvedForeignKeyOptions,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,
@@ -72,8 +72,8 @@ def load_foreign_key_options(
     fk_columns = foreign_key_column_names(model)
     for field_name, fk_config in foreign_key_options.items():
         try:
-            display_field = fk_config["display_field"]
-            value_field = fk_config["value_field"]
+            display_field = fk_config.display_field
+            value_field = fk_config.value_field
             with conn.session as session:
                 if field_name in fk_columns:
                     fk_opts = custom_foreign_opts(
@@ -89,7 +89,7 @@ def load_foreign_key_options(
                         for opt in fk_opts
                     ]
                 else:
-                    rows = session.execute(fk_config["query"]).scalars().all()
+                    rows = session.execute(fk_config.query).scalars().all()
                     options = [
                         {
                             value_field: getattr(opt_row, value_field),
@@ -110,22 +110,22 @@ def load_many_to_many_options(
     form: "PydanticCrudUi",
     conn: SessionSource,
     model: type[DeclarativeBase],
-    many_to_many_fields: ManyToManyFields,
+    many_to_many_fields: ResolvedManyToManyFields,
 ) -> None:
     """Set the multiselect options of every ``many_to_many_fields`` field."""
     for field_name, m2m_config in many_to_many_fields.items():
         try:
-            related = related_model(model, m2m_config["relationship"])
+            related = related_model(model, m2m_config.relationship)
             query = select(related)
-            if "filter" in m2m_config:
-                query = m2m_config["filter"](query)
+            if m2m_config.filter is not None:
+                query = m2m_config.filter(query)
 
             with conn.session as session:
                 rows = session.execute(query).scalars().all()
                 form.input_generator.set_many_to_many_options(
                     field_name,
                     list(rows),
-                    m2m_config["display_field"],
+                    m2m_config.display_field,
                     pk_name(related),
                 )
         except Exception:
@@ -154,7 +154,7 @@ class ExistingData:
         Model: type[DeclarativeBase],
         default_values: dict,
         row: DeclarativeBase | None = None,
-        foreign_key_options: ForeignKeyOptions | None = None,
+        foreign_key_options: ResolvedForeignKeyOptions | None = None,
         dt_filters: dict | None = None,
         no_dt_filters: dict | None = None,
     ) -> None:
@@ -233,7 +233,7 @@ class ExistingData:
         fk_opt = FkOpt(idx, str(row))
         return fk_opt
 
-    def get_foreign_opts(self, col, foreign_key: ForeignKey) -> list[FkOpt]:
+    def get_foreign_opts(self, col, foreign_key: SaForeignKey) -> list[FkOpt]:
         """Return FK options; only the current value if the target is unmapped."""
         foreign_table_name = foreign_key.column.table.name
         model = model_by_tablename(self.Model, foreign_table_name)
@@ -296,7 +296,7 @@ class ExistingData:
 def custom_foreign_opts(
     session: Session,
     col_name: str,
-    fk_config: ForeignKeyConfig,
+    fk_config: ForeignKey,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,
@@ -305,18 +305,11 @@ def custom_foreign_opts(
 
     The current value of ``row`` is appended when the filters hide it.
     """
-    query = fk_config["query"]
-    display_field = fk_config["display_field"]
-    value_field = fk_config["value_field"]
+    query = fk_config.query
+    display_field = fk_config.display_field
+    value_field = fk_config.value_field
 
-    model_class = None
-    if hasattr(query, "column_descriptions") and query.column_descriptions:
-        model_class = query.column_descriptions[0]["type"]
-    elif hasattr(query, "froms") and query.froms:
-        model_class = query.froms[0].entity_namespace
-    else:
-        logger.debug("Could not determine model class from query")
-
+    model_class = options_model(query)
     if model_class:
         query = apply_active_filters(
             query, model_class, dt_filters or {}, no_dt_filters or {}
@@ -348,3 +341,16 @@ def custom_foreign_opts(
             opts.append(FkOpt(current_value, str(current_value)))
 
     return opts
+
+
+def options_model(query: Select[Any]) -> Any:
+    """Return the class `query` selects from, or None when it cannot be told.
+
+    Introspected at runtime, hence `Any`: a mapped class for `select(Model)`.
+    """
+    if hasattr(query, "column_descriptions") and query.column_descriptions:
+        return query.column_descriptions[0]["type"]
+    if hasattr(query, "froms") and query.froms:
+        return query.froms[0].entity_namespace
+    logger.debug("Could not determine model class from query")
+    return None

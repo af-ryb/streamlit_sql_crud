@@ -11,7 +11,7 @@ from sqlalchemy.orm.interfaces import LoaderOption
 from sqlalchemy.sql.elements import ColumnElement, KeyedColumnElement
 from sqlalchemy.types import TypeDecorator, TypeEngine
 
-from streamlit_pydantic_crud.config_types import ManyToManyFields, MappedModel
+from streamlit_pydantic_crud.config_types import MappedModel, ResolvedManyToManyFields
 
 
 def declarative_model(model: type[MappedModel]) -> type[DeclarativeBase]:
@@ -57,11 +57,11 @@ def related_model(
 
 
 def m2m_load_options(
-    model: type[DeclarativeBase], many_to_many_fields: ManyToManyFields
+    model: type[DeclarativeBase], many_to_many_fields: ResolvedManyToManyFields
 ) -> list[LoaderOption]:
     """Return a ``selectinload`` option per many-to-many relationship of `model`."""
     return [
-        selectinload(getattr(model, config["relationship"]))
+        selectinload(getattr(model, config.relationship))
         for config in many_to_many_fields.values()
     ]
 

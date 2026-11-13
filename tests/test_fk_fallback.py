@@ -10,8 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy import select
 
+from streamlit_pydantic_crud import ForeignKey
 from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
+from tests.conftest import Department
 
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
@@ -24,7 +27,7 @@ def test_fk_fallback_uses_text_input(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(
         schema=Schema,
         foreign_key_options={
-            "dept_id": {"query": None, "display_field": "name", "value_field": "id"}
+            "dept_id": ForeignKey(query=select(Department), display_field="name")
         },
     )
     mock_st.text_input.return_value = "5"

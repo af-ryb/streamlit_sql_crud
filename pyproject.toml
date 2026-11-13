@@ -41,6 +41,7 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     # The library's own deprecations fail unless a test expects them.
     "error:.*removed in 0\\.10\\.0:DeprecationWarning",
+    "error:Dict entries in '.*' are deprecated:DeprecationWarning",
     "ignore:.*ScriptRunContext.*:UserWarning",
 ]
 

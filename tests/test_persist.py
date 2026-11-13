@@ -6,7 +6,7 @@ from unittest.mock import patch
 from sqlalchemy import JSON, Null
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from streamlit_pydantic_crud.config_types import ManyToManyFields
+from streamlit_pydantic_crud.config_types import ResolvedManyToMany
 from streamlit_pydantic_crud.dialogs.persist import (
     form_data_key,
     handle_save_error,
@@ -28,9 +28,9 @@ def test_form_data_key() -> None:
 
 def test_pop_m2m_data_moves_only_configured_fields() -> None:
     """Configured many-to-many fields move out; the rest stay in place."""
-    fields: ManyToManyFields = {
-        "tag_ids": {"relationship": "tags", "display_field": "name"},
-        "absent": {"relationship": "other", "display_field": "name"},
+    fields = {
+        "tag_ids": ResolvedManyToMany(display_field="name", relationship="tags"),
+        "absent": ResolvedManyToMany(display_field="name", relationship="other"),
     }
     data = {"name": "x", "tag_ids": [1, 2]}
 

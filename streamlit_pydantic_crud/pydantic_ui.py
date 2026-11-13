@@ -13,6 +13,8 @@ from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
     OperationType,
+    resolve_foreign_key_options,
+    resolve_many_to_many_fields,
 )
 from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
 from streamlit_pydantic_crud.forms.schema_builder import (
@@ -318,13 +320,14 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
             schema: Pydantic model class to generate form from
             key: Unique key for the form (used for widget keys)
             session_state_key: Key for session state persistence (defaults to key)
-            foreign_key_options: Configuration for foreign key fields
-            many_to_many_fields: Configuration for many-to-many fields
+            foreign_key_options: `ForeignKey` config per foreign key field
+            many_to_many_fields: `ManyToMany` config per many-to-many field
+                (dict entries are deprecated in both, see the README)
             pk_name: Name of the primary-key field in the schema
         """
         """Set before the parent init, which builds the generator from them."""
-        self.foreign_key_options = foreign_key_options or {}
-        self.many_to_many_fields = many_to_many_fields or {}
+        self.foreign_key_options = resolve_foreign_key_options(foreign_key_options)
+        self.many_to_many_fields = resolve_many_to_many_fields(many_to_many_fields)
         super().__init__(
             schema=schema,
             key=key,

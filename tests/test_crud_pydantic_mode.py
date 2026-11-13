@@ -13,7 +13,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud.config_types import ForeignKeyOptions
 from streamlit_pydantic_crud.forms.options import ExistingData
 from streamlit_pydantic_crud.forms.sa_fields import InputFields
 from tests.conftest import Base, Department, Employee
@@ -40,6 +39,7 @@ def _app(db: str, schema: bool) -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
     from sqlalchemy import select  # noqa: PLC0415
 
+    from streamlit_pydantic_crud import ForeignKey  # noqa: PLC0415
     from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
@@ -52,13 +52,7 @@ def _app(db: str, schema: bool) -> None:
     )
 
     conn = st.connection("sql", url=f"sqlite:///{db}")
-    fk: ForeignKeyOptions = {
-        "department_id": {
-            "query": select(Department),
-            "display_field": "name",
-            "value_field": "id",
-        }
-    }
+    fk = {"department_id": ForeignKey(query=select(Department), display_field="name")}
     create = CreateRow(
         conn,
         Employee,

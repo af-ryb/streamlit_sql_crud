@@ -1,6 +1,7 @@
 """Harness app rendering SqlUi and the CRUD dialogs over SQLModel models.
 
-The DB path comes from CRUD_TEST_DB and the scenario from CRUD_TEST_MODE.
+The DB path comes from CRUD_TEST_DB and the scenario from CRUD_TEST_MODE;
+CRUD_TEST_RELATIONS=dict passes the deprecated dict form of FK / M2M configs.
 Twelve distinct names make `name` a free-text column, not a short-string one.
 """
 
@@ -12,7 +13,7 @@ import streamlit as st
 from sqlalchemy import select
 from sqlmodel import Session, SQLModel, create_engine
 
-from streamlit_pydantic_crud import SqlUi
+from streamlit_pydantic_crud import ForeignKey, ManyToMany, SqlUi
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
@@ -29,10 +30,13 @@ from tests._apps.sqlmodel_models import (
 
 DB = os.environ["CRUD_TEST_DB"]
 MODE = os.environ.get("CRUD_TEST_MODE", "table_plain")
-FK: ForeignKeyOptions = {
-    "team_id": {"query": select(Team), "display_field": "name", "value_field": "id"}
-}
-M2M: ManyToManyFields = {"powers": {"relationship": "powers", "display_field": "name"}}
+FK: ForeignKeyOptions = {"team_id": ForeignKey(select(Team), display_field="name")}
+M2M: ManyToManyFields = {"powers": ManyToMany(display_field="name")}
+if os.environ.get("CRUD_TEST_RELATIONS") == "dict":
+    FK = {
+        "team_id": {"query": select(Team), "display_field": "name", "value_field": "id"}
+    }
+    M2M = {"powers": {"relationship": "powers", "display_field": "name"}}
 
 eng = create_engine(f"sqlite:///{DB}")
 SQLModel.metadata.create_all(eng)
@@ -70,6 +74,19 @@ elif MODE == "table_schema":
         many_to_many_fields=M2M,
         key="s",
     )
+elif MODE == "table_m2m":
+    ui = SqlUi(
+        conn=conn,
+        read_instance=select(Hero),
+        edit_create_model=Hero,
+        create_schema=HeroCreate,
+        update_schema=HeroUpdate,
+        foreign_key_options=FK,
+        many_to_many_fields=M2M,
+        key="m",
+    )
+    powers = {row["id"]: sorted(p.name for p in row["powers"]) for row in ui.rows}
+    st.write(f"POWERS={powers}")
 elif MODE == "create_plain":
     ok, msg = CreateRow(conn, Hero, key="cp").show("Hero")
     st.write(f"RESULT={ok}|{msg}")
