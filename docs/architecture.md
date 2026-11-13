@@ -8,8 +8,8 @@ The repository name is `streamlit_sql_crud`; the import name is
 
 ## Public API
 
-`streamlit_pydantic_crud.__init__` exports three classes; everything else is
-internal and may change between minor versions.
+`streamlit_pydantic_crud.__init__` exports three classes and two config
+objects; everything else is internal and may change between minor versions.
 
 - **`SqlUi`** (`sql_ui.py`) — the whole CRUD page: table, filters, pagination,
   action buttons and dialogs. Takes either `model=` (a mapped class) or
@@ -23,6 +23,16 @@ internal and may change between minor versions.
 - **`PydanticCrudUi`** (`pydantic_ui.py`) — `PydanticUi` with FK / M2M options;
   used by the dialogs.
 
+- **`ForeignKey`** / **`ManyToMany`** (`config_types.py`) — frozen dataclasses,
+  the entries of `foreign_key_options` / `many_to_many_fields`. The dict
+  (TypedDict) entry form is deprecated since 0.9.2, not removed before 0.11.0.
+
+The public classes (and `CreateRow` / `UpdateRow`) normalize both mappings once
+with `resolve_foreign_key_options` / `resolve_many_to_many_fields`; everything
+below reads attributes of `ForeignKey` / `ResolvedManyToMany` (`relationship`
+resolved to the mapping key when omitted). The resolvers are idempotent, so
+passing the normalized mappings on does not warn again.
+
 Accepted inputs are typed by protocols in `config_types.py`: `MappedModel`
 (a `DeclarativeBase` subclass or a SQLModel table) and `SessionSource`
 (anything with a `session` property returning a `Session` — `st.connection("sql")`
@@ -34,11 +44,13 @@ The root holds only the public classes and shared state:
 
 ```
 streamlit_pydantic_crud/
-├── __init__.py        # public API: SqlUi, PydanticUi, PydanticCrudUi
+├── __init__.py        # public API: SqlUi, PydanticUi, PydanticCrudUi,
+│                      #   ForeignKey, ManyToMany
 ├── sql_ui.py          # SqlUi; action buttons
 ├── pydantic_ui.py     # PydanticUi / PydanticCrudUi
-├── config_types.py    # config TypedDicts (ForeignKeyOptions, ManyToManyFields),
-│                      #   protocols (MappedModel, SessionSource), FkOpt,
+├── config_types.py    # relation configs (ForeignKey, ManyToMany, deprecated
+│                      #   TypedDicts) and their resolvers, protocols
+│                      #   (MappedModel, SessionSource), FkOpt,
 │                      #   OperationType, TableWidth / TableHeight
 ├── state.py           # per-instance UI state, data version, cache TTL,
 │                      #   set_state, clear_state_keys
