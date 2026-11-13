@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import (
     Any,
+    Self,
     cast,
 )
 
@@ -66,7 +67,7 @@ class PydanticUi[T: BaseModel]:
         key: str = "form",
         model_name: str = "DynamicModel",
         session_state_key: str | None = None,
-    ) -> "PydanticUi":
+    ) -> Self:
         """Create PydanticUi from JSON schema with field options.
 
         This method allows creating a PydanticUi instance directly from a JSON schema
