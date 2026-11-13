@@ -3,6 +3,9 @@
 Each renderer takes a label, its configuration, the current value and the
 widget key, and returns the widget's value. Generator state (foreign-key and
 many-to-many options, operation type) is passed in explicitly.
+
+A seeded widget (`seed_widget_state`) gets no `value` / `index` / `default`:
+Streamlit warns about a widget given both a default and a state value.
 """
 
 from typing import Any
@@ -46,7 +49,6 @@ def render_id_field(
         seed_widget_state(key, "" if existing_value is None else str(existing_value))
         return st.text_input(
             label,
-            value="" if existing_value is None else str(existing_value),
             disabled=True,
             key=key,
             help="ID field (read-only)",
@@ -74,7 +76,7 @@ def render_foreign_key_selectbox(
         return st.selectbox(
             label,
             options=options,
-            index=current_index,
+            index=seeded_index(current_index),
             format_func=lambda x: display_map.get(x, str(x)),
             key=key,
             help=f"Select from {len(options)} available options",
@@ -82,7 +84,7 @@ def render_foreign_key_selectbox(
     return st.selectbox(
         label,
         options=options,
-        index=current_index,
+        index=seeded_index(current_index),
         key=key,
         help=f"Select from {len(options)} available options",
     )
@@ -93,7 +95,6 @@ def render_foreign_key_fallback(label: str, existing_value: Any, key: str) -> An
     seed_widget_state(key, str(existing_value) if existing_value is not None else "")
     return st.text_input(
         label,
-        value=str(existing_value) if existing_value is not None else "",
         key=key,
         help="Foreign key options not loaded",
     )
@@ -145,7 +146,6 @@ def render_many_to_many_multiselect(
     return st.multiselect(
         label,
         options=option_ids,
-        default=default,
         format_func=lambda x: id_to_display.get(x, str(x)),
         key=key,
         help=f"Select from {len(options)} available options",
@@ -167,7 +167,7 @@ def render_enum_select(
         key, None if current_index is None else enum_values[current_index]
     )
 
-    return st.selectbox(label, enum_values, index=current_index, key=key)
+    return st.selectbox(label, enum_values, index=seeded_index(current_index), key=key)
 
 
 def render_enum_multiselect(
@@ -187,7 +187,6 @@ def render_enum_multiselect(
     return st.multiselect(
         label,
         enum_values,
-        default=current_values,
         key=key,
         help=f"Available options: {', '.join(enum_values)}",
     )
@@ -208,7 +207,6 @@ def render_list_multiselect(label: str, existing_value: Any, key: str) -> Any:
     return st.multiselect(
         label,
         current_values,
-        default=current_values,
         accept_new_options=True,
         key=key,
         help="Select existing options or type new ones",
@@ -221,7 +219,7 @@ def render_text_input(
     """Render text input widget"""
     default_value = str(existing_value) if existing_value is not None else ""
     seed_widget_state(key, default_value)
-    return st.text_input(label, value=default_value, key=key, **widget_kwargs)
+    return st.text_input(label, key=key, **widget_kwargs)
 
 
 def render_text_area(
@@ -230,7 +228,7 @@ def render_text_area(
     """Render text area widget"""
     default_value = str(existing_value) if existing_value is not None else ""
     seed_widget_state(key, default_value)
-    return st.text_area(label, value=default_value, key=key, **widget_kwargs)
+    return st.text_area(label, key=key, **widget_kwargs)
 
 
 def render_json_text_area(
@@ -245,7 +243,7 @@ def render_json_text_area(
             logger.warning(f"Got exception while render JSON, {e}")
             json_value = str(existing_value)
     seed_widget_state(key, json_value)
-    return st.text_area(label, value=json_value, key=key, **widget_kwargs)
+    return st.text_area(label, key=key, **widget_kwargs)
 
 
 def render_checkbox(
@@ -254,15 +252,19 @@ def render_checkbox(
     """Render checkbox widget"""
     default_val = bool(existing_value) if existing_value is not None else False
     seed_widget_state(key, default_val)
-    return st.checkbox(label, value=default_val, key=key, **widget_kwargs)
+    return st.checkbox(label, key=key, **widget_kwargs)
 
 
 def render_date_input(
     label: str, widget_kwargs: dict[str, Any], existing_value: Any, key: str
 ) -> Any:
-    """Render date input widget"""
+    """Render date input widget.
+
+    "today" stands for "no default": the bounds then follow the seeded state.
+    """
     seed_widget_state(key, existing_value)
-    return st.date_input(label, value=existing_value, key=key, **widget_kwargs)
+    value = None if existing_value is None else "today"
+    return st.date_input(label, value=value, key=key, **widget_kwargs)
 
 
 def render_datetime_input(
@@ -271,6 +273,7 @@ def render_datetime_input(
     """Render datetime input widget.
 
     An untouched widget returns `existing_value` with its full precision.
+    `value` stays: the default bounds and the clear button derive from it.
     """
     seed_widget_state(key, existing_value)
     value = st.datetime_input(
@@ -295,7 +298,9 @@ def render_selectbox(
     explicit_index = kwargs.pop("index", None)
     index = resolve_select_index(existing_value, explicit_index, field_default, options)
     seed_widget_state(key, None if index is None else options[index])
-    return st.selectbox(label, options=options, index=index, key=key, **kwargs)
+    return st.selectbox(
+        label, options=options, index=seeded_index(index), key=key, **kwargs
+    )
 
 
 def render_radio(
@@ -313,7 +318,7 @@ def render_radio(
     if index is None:
         index = 0
     seed_widget_state(key, options[index] if options else None)
-    return st.radio(label, options=options, index=index, key=key, **kwargs)
+    return st.radio(label, options=options, index=0, key=key, **kwargs)
 
 
 def render_multiselect(
@@ -333,9 +338,7 @@ def render_multiselect(
     if not kwargs.get("accept_new_options"):
         default_vals = known_defaults(default_vals, options, label)
     seed_widget_state(key, default_vals)
-    return st.multiselect(
-        label, options=options, default=default_vals, key=key, **kwargs
-    )
+    return st.multiselect(label, options=options, key=key, **kwargs)
 
 
 def render_slider(
@@ -380,7 +383,6 @@ def render_slider(
         label,
         min_value=min_val,
         max_value=max_val,
-        value=default_val,
         step=step,
         key=key,
         **{
@@ -468,9 +470,35 @@ def nullable_number_input(
     nullable one starts with `value=None`; its seeded state holds the value.
     """
     seed_widget_state(key, value)
-    if nullable:
-        value = None
-    return st.number_input(label, value=value, key=key, **kwargs)
+    return st.number_input(
+        label, value=seeded_number_value(value, nullable, kwargs), key=key, **kwargs
+    )
+
+
+def seeded_number_value(value: Any, nullable: bool, kwargs: dict[str, Any]) -> Any:
+    """Return the `value` argument of a seeded number input.
+
+    "min" (no default) when Streamlit derives the same type and a valid number.
+    """
+    if nullable or value is None:
+        return None
+    min_value = kwargs.get("min_value")
+    max_value = kwargs.get("max_value")
+    """Without typed arguments "min" is the float 0.0."""
+    typed = isinstance(value, float) or any(
+        arg is not None for arg in (min_value, max_value, kwargs.get("step"))
+    )
+    """Without a minimum "min" is 0, which must not exceed the maximum."""
+    in_bounds = min_value is not None or max_value is None or max_value >= 0
+    return "min" if typed and in_bounds else value
+
+
+def seeded_index(index: int | None) -> int | None:
+    """Return the `index` argument of a seeded selectbox.
+
+    Only None or 0 count as "no default"; None keeps the clear button.
+    """
+    return None if index is None else 0
 
 
 def seed_widget_state(key: str, value: Any) -> None:

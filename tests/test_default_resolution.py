@@ -106,17 +106,22 @@ def test_multiselect_session_empty_respected() -> None:
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_selectbox_uses_field_default(mock_st: MagicMock) -> None:
+    """The default is seeded as widget state; index 0 only means "not empty"."""
+    mock_st.session_state = {}
     render_selectbox("L", {"options": ["red", "blue"]}, None, "k", field_default="blue")
+    assert mock_st.session_state == {"k": "blue"}
     mock_st.selectbox.assert_called_once_with(
-        "L", options=["red", "blue"], index=1, key="k"
+        "L", options=["red", "blue"], index=0, key="k"
     )
 
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) -> None:
+    mock_st.session_state = {}
     render_selectbox(
         "L", {"options": ["red", "blue"], "index": 0}, None, "k", field_default="blue"
     )
+    assert mock_st.session_state == {"k": "red"}
     mock_st.selectbox.assert_called_once_with(
         "L", options=["red", "blue"], index=0, key="k"
     )
@@ -124,12 +129,13 @@ def test_selectbox_explicit_index_in_kw_wins_over_default(mock_st: MagicMock) ->
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_multiselect_uses_field_default(mock_st: MagicMock) -> None:
+    """The default is seeded as widget state, not passed as `default`."""
+    mock_st.session_state = {}
     render_multiselect(
         "L", {"options": ["a", "b", "c"]}, None, "k", field_default=["b"]
     )
-    mock_st.multiselect.assert_called_once_with(
-        "L", options=["a", "b", "c"], default=["b"], key="k"
-    )
+    assert mock_st.session_state == {"k": ["b"]}
+    mock_st.multiselect.assert_called_once_with("L", options=["a", "b", "c"], key="k")
 
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
@@ -146,6 +152,8 @@ def test_field_input_routes_pydantic_default_to_selectbox(mock_st: MagicMock) ->
         )
 
     gen = PydanticInputGenerator(schema=Schema, key_prefix="t")
+    mock_st.session_state = {}
     mock_st.selectbox.return_value = "blue"
     gen.render_field("color", gen.field_info["color"], None, "t_color")
-    assert mock_st.selectbox.call_args.kwargs["index"] == 1
+    assert mock_st.session_state == {"t_color": "blue"}
+    assert mock_st.selectbox.call_args.kwargs["index"] == 0

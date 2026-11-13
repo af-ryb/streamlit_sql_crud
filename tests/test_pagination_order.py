@@ -5,11 +5,13 @@ order, so the same row can appear on two pages or none. The read query's own
 ORDER BY is honored, with the primary key appended as a tiebreaker.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlalchemy import CTE, Engine, Select, create_engine, func, select
+from loguru import logger
+from sqlalchemy import CTE, Engine, Select, create_engine, func, select, text
 from sqlalchemy.orm import Session
 
 from streamlit_pydantic_crud.table import query
@@ -141,6 +143,38 @@ def test_textual_label_order(departments: Engine) -> None:
     stmt = select(Department.id, Department.name.label("dname")).order_by("dname")
     with Session(departments) as s:
         assert paged_ids(s, stmt, 50, 1) == [1, 3, 2, 4, 5]
+
+
+def test_raw_text_order_is_skipped_with_one_warning(
+    departments: Engine, order_warnings: list[str]
+) -> None:
+    """Every render rebuilds the statement; the warning must not repeat."""
+    for _ in range(3):
+        stmt = select(Department).order_by(text("name DESC"))
+        with Session(departments) as s:
+            assert paged_ids(s, stmt, 50, 1) == [1, 2, 3, 4, 5]
+    assert len(order_warnings) == 1
+    assert "name DESC" in order_warnings[0]
+
+
+def test_each_raw_text_order_clause_is_warned_about(
+    departments: Engine, order_warnings: list[str]
+) -> None:
+    for clause in ("name DESC", "id DESC", "name DESC"):
+        paged_stmt(select(Department).order_by(text(clause)), 50, 1)
+    assert [w.count("DESC") for w in order_warnings] == [1, 1]
+    assert "id DESC" in order_warnings[1]
+
+
+@pytest.fixture
+def order_warnings() -> Iterator[list[str]]:
+    """Collect loguru warnings; reset the warned ORDER BY clause registry."""
+    query.IGNORED_ORDER_CLAUSES.clear()
+    messages: list[str] = []
+    sink_id = logger.add(messages.append, format="{message}", level="WARNING")
+    yield messages
+    logger.remove(sink_id)
+    query.IGNORED_ORDER_CLAUSES.clear()
 
 
 def test_limited_statement_keeps_its_inner_order(departments: Engine) -> None:
