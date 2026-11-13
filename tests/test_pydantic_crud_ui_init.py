@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from streamlit_pydantic_crud import ForeignKey, PydanticCrudUi
+from streamlit_pydantic_crud import ForeignKeyField, PydanticCrudUi
 from tests.conftest import Department
 
 CALLS: list[int] = []
@@ -33,7 +33,7 @@ def test_default_factory_runs_once_per_construction(mock_st: MagicMock) -> None:
 @patch("streamlit_pydantic_crud.pydantic_ui.st")
 def test_crud_ui_generator_gets_relation_config(mock_st: MagicMock) -> None:
     mock_st.session_state = {}
-    fk = {"tags": ForeignKey(query=select(Department), display_field="n")}
+    fk = {"tags": ForeignKeyField(query=select(Department), display_field="n")}
     ui = PydanticCrudUi(schema=Tagged, key="f", foreign_key_options=fk, pk_name="pk")
     assert ui.input_generator.foreign_key_options == fk
     assert ui.foreign_key_options == fk

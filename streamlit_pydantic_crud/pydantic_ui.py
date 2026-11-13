@@ -320,8 +320,8 @@ class PydanticCrudUi[T: BaseModel](PydanticUi[T]):
             schema: Pydantic model class to generate form from
             key: Unique key for the form (used for widget keys)
             session_state_key: Key for session state persistence (defaults to key)
-            foreign_key_options: `ForeignKey` config per foreign key field
-            many_to_many_fields: `ManyToMany` config per many-to-many field
+            foreign_key_options: `ForeignKeyField` config per foreign key field
+            many_to_many_fields: `ManyToManyField` config per many-to-many field
                 (dict entries are deprecated in both, see the README)
             pk_name: Name of the primary-key field in the schema
         """

@@ -128,8 +128,8 @@ class SqlUi:
             create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
             read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, each row (or its reloaded entity) is validated with model_validate(from_attributes=True) and only the schema fields are shown. Defaults to None
-            foreign_key_options (Mapping[str, ForeignKey], optional): Custom foreign key selectbox configuration, keyed by field name. Each value is a ForeignKey(query, display_field, value_field="id"): the select statement listing the options, the attribute to display and the attribute to save. Dict entries with the same keys are deprecated since 0.9.1 (not removed before 0.11.0). Defaults to None
-            many_to_many_fields (Mapping[str, ManyToMany], optional): Custom many-to-many multiselect configuration, keyed by schema field name. Each value is a ManyToMany(display_field, relationship=None, filter=None): the attribute to display, the SQLAlchemy relationship name (defaults to the key) and an optional callable narrowing the select statement of the options. Dict entries with the same keys are deprecated since 0.9.1 (not removed before 0.11.0). Defaults to None
+            foreign_key_options (Mapping[str, ForeignKeyField], optional): Custom foreign key selectbox configuration, keyed by field name. Each value is a ForeignKeyField(query, display_field, value_field="id"): the select statement listing the options, the attribute to display and the attribute to save. Dict entries with the same keys are deprecated since 0.9.1 (not removed before 0.11.0). Defaults to None
+            many_to_many_fields (Mapping[str, ManyToManyField], optional): Custom many-to-many multiselect configuration, keyed by schema field name. Each value is a ManyToManyField(display_field, relationship=None, filter=None): the attribute to display, the SQLAlchemy relationship name (defaults to the key) and an optional callable narrowing the select statement of the options. Dict entries with the same keys are deprecated since 0.9.1 (not removed before 0.11.0). Defaults to None
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
             items_per_page_default (int, optional): Deprecated, removed in 0.10.0; use page_size. Index (0-5) into (50, 100, 200, 500, 1000, Show All), e.g. 5 becomes page_size=None. Ignored (with a warning) when page_size is changed from its default
@@ -176,7 +176,7 @@ class SqlUi:
                 update_show_many=True,
                 disable_log=False,
                 foreign_key_options={
-                    "client_id": ForeignKey(
+                    "client_id": ForeignKeyField(
                         query=select(db.Client), display_field="name"
                     ),
                 },

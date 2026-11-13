@@ -1,4 +1,4 @@
-"""`ForeignKey` / `ManyToMany` config objects and the deprecated dict form.
+"""`ForeignKeyField` / `ManyToManyField` config objects and the deprecated dict form.
 
 Both forms must behave the same; only the dict form warns, once per relation
 parameter of a public construction. The `_typing_*` functions are never
@@ -18,11 +18,16 @@ from sqlalchemy import select
 from streamlit.connections import SQLConnection
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import ForeignKey, ManyToMany, PydanticCrudUi, SqlUi
+from streamlit_pydantic_crud import (
+    ForeignKeyField,
+    ManyToManyField,
+    PydanticCrudUi,
+    SqlUi,
+)
 from streamlit_pydantic_crud.config_types import (
     ForeignKeyOptions,
     ManyToManyFields,
-    ResolvedManyToMany,
+    ResolvedManyToManyField,
     resolve_foreign_key_options,
     resolve_many_to_many_fields,
 )
@@ -48,20 +53,20 @@ def _typing_consumer_call(conn: SQLConnection) -> None:
         conn=conn,
         model=Hero,
         many_to_many_fields={
-            "powers": ManyToMany(
+            "powers": ManyToManyField(
                 relationship="powers",
                 display_field="name",
                 filter=_version_picker_filter,
             ),
         },
-        foreign_key_options={"team_id": ForeignKey(TEAMS, display_field="name")},
+        foreign_key_options={"team_id": ForeignKeyField(TEAMS, display_field="name")},
     )
     """A lambda body is checked against Select: use mapped columns (or col())."""
     SqlUi(
         conn=conn,
         model=Post,
         many_to_many_fields={
-            "tag_ids": ManyToMany(
+            "tag_ids": ManyToManyField(
                 display_field="label",
                 relationship="tags",
                 filter=lambda q: q.filter(Tag.id > 1),
@@ -71,8 +76,10 @@ def _typing_consumer_call(conn: SQLConnection) -> None:
     PydanticCrudUi(
         schema=HeroCreate,
         key="f",
-        many_to_many_fields={"powers": ManyToMany(display_field="name")},
-        foreign_key_options={"team_id": ForeignKey(query=TEAMS, display_field="name")},
+        many_to_many_fields={"powers": ManyToManyField(display_field="name")},
+        foreign_key_options={
+            "team_id": ForeignKeyField(query=TEAMS, display_field="name")
+        },
     )
 
 
@@ -94,30 +101,32 @@ def _typing_dict_form_still_accepted(conn: SQLConnection) -> None:
 
 
 def _typing_rejects_wrong_types() -> None:
-    ManyToMany(display_field=1)  # ty: ignore[invalid-argument-type]
-    ForeignKey(query="teams", display_field="name")  # ty: ignore[invalid-argument-type]
+    ManyToManyField(display_field=1)  # ty: ignore[invalid-argument-type]
+    ForeignKeyField(query="teams", display_field="name")  # ty: ignore[invalid-argument-type]
 
 
 def test_foreign_key_value_field_defaults_to_id() -> None:
-    assert ForeignKey(query=TEAMS, display_field="name").value_field == "id"
-    assert ForeignKey(TEAMS, "name", "code").value_field == "code"
+    assert ForeignKeyField(query=TEAMS, display_field="name").value_field == "id"
+    assert ForeignKeyField(TEAMS, "name", "code").value_field == "code"
 
 
 def test_configs_are_frozen() -> None:
-    config = ManyToMany(display_field="name")
+    config = ManyToManyField(display_field="name")
     with pytest.raises(dataclasses.FrozenInstanceError):
         config.display_field = "other"  # ty: ignore[invalid-assignment]
 
 
 def test_relationship_defaults_to_the_key() -> None:
-    resolved = resolve_many_to_many_fields({"powers": ManyToMany(display_field="name")})
+    resolved = resolve_many_to_many_fields(
+        {"powers": ManyToManyField(display_field="name")}
+    )
     assert resolved == {
-        "powers": ResolvedManyToMany(display_field="name", relationship="powers")
+        "powers": ResolvedManyToManyField(display_field="name", relationship="powers")
     }
 
 
 def test_explicit_relationship_is_honoured() -> None:
-    config = ManyToMany(
+    config = ManyToManyField(
         display_field="name", relationship="powers", filter=_version_picker_filter
     )
     resolved = resolve_many_to_many_fields({"power_ids": config})["power_ids"]
@@ -126,8 +135,8 @@ def test_explicit_relationship_is_honoured() -> None:
 
 
 def test_objects_resolve_without_warning_and_are_idempotent() -> None:
-    fk = {"team_id": ForeignKey(query=TEAMS, display_field="name")}
-    m2m = {"powers": ManyToMany(display_field="name")}
+    fk = {"team_id": ForeignKeyField(query=TEAMS, display_field="name")}
+    m2m = {"powers": ManyToManyField(display_field="name")}
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         fk_once = resolve_foreign_key_options(fk)
@@ -156,11 +165,11 @@ def test_dict_entries_resolve_to_the_same_objects() -> None:
         resolved_m2m = resolve_many_to_many_fields(m2m)
 
     assert len(caught) == 1
-    assert resolved_fk == {"team_id": ForeignKey(TEAMS, "name", "id")}
+    assert resolved_fk == {"team_id": ForeignKeyField(TEAMS, "name", "id")}
     assert resolved_m2m == resolve_many_to_many_fields(
         {
-            "powers": ManyToMany(display_field="name"),
-            "power_ids": ManyToMany(
+            "powers": ManyToManyField(display_field="name"),
+            "power_ids": ManyToManyField(
                 "name", relationship="powers", filter=_version_picker_filter
             ),
         }

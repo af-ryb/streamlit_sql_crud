@@ -46,7 +46,7 @@ OptionsFilter = Callable[[Select[Any]], Select[Any]]
 
 
 @dataclass(frozen=True)
-class ForeignKey:
+class ForeignKeyField:
     """One ``foreign_key_options`` entry: the selectbox options of a field.
 
     Attributes:
@@ -61,7 +61,7 @@ class ForeignKey:
 
 
 @dataclass(frozen=True)
-class ManyToMany:
+class ManyToManyField:
     """One ``many_to_many_fields`` entry: the multiselect of a relationship.
 
     Attributes:
@@ -76,14 +76,14 @@ class ManyToMany:
 
 
 @dataclass(frozen=True)
-class ResolvedManyToMany(ManyToMany):
-    """Internal form of `ManyToMany`: `relationship` is always a name."""
+class ResolvedManyToManyField(ManyToManyField):
+    """Internal form of `ManyToManyField`: `relationship` is always a name."""
 
     relationship: str
 
 
 class ForeignKeyConfig(TypedDict):
-    """Deprecated dict form of a `ForeignKey` entry (not removed before 0.11.0)."""
+    """Deprecated dict form of a `ForeignKeyField` entry (not removed before 0.11.0)."""
 
     query: Any
     display_field: str
@@ -91,7 +91,7 @@ class ForeignKeyConfig(TypedDict):
 
 
 class ManyToManyConfig(TypedDict):
-    """Deprecated dict form of a `ManyToMany` entry (not removed before 0.11.0)."""
+    """Deprecated dict form of a `ManyToManyField` entry (not removed before 0.11.0)."""
 
     relationship: NotRequired[str]
     display_field: str
@@ -99,41 +99,41 @@ class ManyToManyConfig(TypedDict):
 
 
 """Public parameter types: entries are config objects or the deprecated dicts."""
-ForeignKeyOptions = Mapping[str, ForeignKey | ForeignKeyConfig]
-ManyToManyFields = Mapping[str, ManyToMany | ManyToManyConfig]
+ForeignKeyOptions = Mapping[str, ForeignKeyField | ForeignKeyConfig]
+ManyToManyFields = Mapping[str, ManyToManyField | ManyToManyConfig]
 """Normalized form every internal module reads (attributes only)."""
-ResolvedForeignKeyOptions = Mapping[str, ForeignKey]
-ResolvedManyToManyFields = Mapping[str, ResolvedManyToMany]
+ResolvedForeignKeyOptions = Mapping[str, ForeignKeyField]
+ResolvedManyToManyFields = Mapping[str, ResolvedManyToManyField]
 
 
 def resolve_foreign_key_options(
     foreign_key_options: ForeignKeyOptions | None, stacklevel: int = 3
-) -> dict[str, ForeignKey]:
-    """Return ``foreign_key_options`` as `ForeignKey` objects by field name.
+) -> dict[str, ForeignKeyField]:
+    """Return ``foreign_key_options`` as `ForeignKeyField` objects by field name.
 
     Dict entries are converted with one DeprecationWarning; the default
     `stacklevel` points it at the caller of the public ``__init__`` calling this.
     """
     options = foreign_key_options or {}
-    if any(not isinstance(config, ForeignKey) for config in options.values()):
-        warn_dict_entries("foreign_key_options", "ForeignKey", stacklevel + 1)
+    if any(not isinstance(config, ForeignKeyField) for config in options.values()):
+        warn_dict_entries("foreign_key_options", "ForeignKeyField", stacklevel + 1)
     return {
-        name: config if isinstance(config, ForeignKey) else foreign_key_of(config)
+        name: config if isinstance(config, ForeignKeyField) else foreign_key_of(config)
         for name, config in options.items()
     }
 
 
 def resolve_many_to_many_fields(
     many_to_many_fields: ManyToManyFields | None, stacklevel: int = 3
-) -> dict[str, ResolvedManyToMany]:
+) -> dict[str, ResolvedManyToManyField]:
     """Return ``many_to_many_fields`` with every relationship name resolved.
 
     A missing ``relationship`` becomes the mapping key. Dict entries are
     converted with one DeprecationWarning (`stacklevel` as for foreign keys).
     """
     fields = many_to_many_fields or {}
-    if any(not isinstance(config, ManyToMany) for config in fields.values()):
-        warn_dict_entries("many_to_many_fields", "ManyToMany", stacklevel + 1)
+    if any(not isinstance(config, ManyToManyField) for config in fields.values()):
+        warn_dict_entries("many_to_many_fields", "ManyToManyField", stacklevel + 1)
     return {name: many_to_many_of(name, config) for name, config in fields.items()}
 
 
@@ -148,9 +148,9 @@ def warn_dict_entries(parameter: str, replacement: str, stacklevel: int) -> None
     )
 
 
-def foreign_key_of(config: ForeignKeyConfig) -> ForeignKey:
-    """Convert a deprecated dict entry to a `ForeignKey`."""
-    return ForeignKey(
+def foreign_key_of(config: ForeignKeyConfig) -> ForeignKeyField:
+    """Convert a deprecated dict entry to a `ForeignKeyField`."""
+    return ForeignKeyField(
         query=config["query"],
         display_field=config["display_field"],
         value_field=config.get("value_field", "id"),
@@ -158,18 +158,18 @@ def foreign_key_of(config: ForeignKeyConfig) -> ForeignKey:
 
 
 def many_to_many_of(
-    name: str, config: ManyToMany | ManyToManyConfig
-) -> ResolvedManyToMany:
+    name: str, config: ManyToManyField | ManyToManyConfig
+) -> ResolvedManyToManyField:
     """Return the entry under key `name` with its relationship name resolved."""
-    if isinstance(config, ResolvedManyToMany):
+    if isinstance(config, ResolvedManyToManyField):
         return config
-    if isinstance(config, ManyToMany):
-        return ResolvedManyToMany(
+    if isinstance(config, ManyToManyField):
+        return ResolvedManyToManyField(
             display_field=config.display_field,
             relationship=config.relationship or name,
             filter=config.filter,
         )
-    return ResolvedManyToMany(
+    return ResolvedManyToManyField(
         display_field=config["display_field"],
         relationship=config.get("relationship", name),
         filter=config.get("filter"),

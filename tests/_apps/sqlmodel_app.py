@@ -13,7 +13,7 @@ import streamlit as st
 from sqlalchemy import select
 from sqlmodel import Session, SQLModel, create_engine
 
-from streamlit_pydantic_crud import ForeignKey, ManyToMany, SqlUi
+from streamlit_pydantic_crud import ForeignKeyField, ManyToManyField, SqlUi
 from streamlit_pydantic_crud.config_types import ForeignKeyOptions, ManyToManyFields
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
@@ -30,8 +30,8 @@ from tests._apps.sqlmodel_models import (
 
 DB = os.environ["CRUD_TEST_DB"]
 MODE = os.environ.get("CRUD_TEST_MODE", "table_plain")
-FK: ForeignKeyOptions = {"team_id": ForeignKey(select(Team), display_field="name")}
-M2M: ManyToManyFields = {"powers": ManyToMany(display_field="name")}
+FK: ForeignKeyOptions = {"team_id": ForeignKeyField(select(Team), display_field="name")}
+M2M: ManyToManyFields = {"powers": ManyToManyField(display_field="name")}
 if os.environ.get("CRUD_TEST_RELATIONS") == "dict":
     FK = {
         "team_id": {"query": select(Team), "display_field": "name", "value_field": "id"}

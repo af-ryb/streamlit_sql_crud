@@ -16,7 +16,7 @@ import streamlit as st
 from sqlalchemy import create_engine, func, select
 from streamlit.delta_generator import DeltaGenerator
 
-from streamlit_pydantic_crud import ManyToMany, SqlUi
+from streamlit_pydantic_crud import ManyToManyField, SqlUi
 from tests._apps.read_path_models import (
     CATEGORY_COUNT,
     Category,
@@ -80,7 +80,7 @@ def enabled_only(q: Any) -> Any:
     return q.filter(Category.enabled.is_(True))
 
 
-M2M = {"categories": ManyToMany(display_field="name", filter=enabled_only)}
+M2M = {"categories": ManyToManyField(display_field="name", filter=enabled_only)}
 FILTER = ["name", "app_name"]
 """User column configs: replace the price default, label a plain column."""
 COLUMN_CONFIG = {

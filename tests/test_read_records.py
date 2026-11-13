@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Engine, Select, create_engine, func, select
 from sqlalchemy.orm import Session
 
-from streamlit_pydantic_crud.config_types import ResolvedManyToMany
+from streamlit_pydantic_crud.config_types import ResolvedManyToManyField
 from streamlit_pydantic_crud.table import query
 from streamlit_pydantic_crud.table.read import read_records
 from tests._apps.read_path_models import (
@@ -29,7 +29,9 @@ from tests._apps.read_path_models import (
 )
 
 M2M = {
-    "categories": ResolvedManyToMany(display_field="name", relationship="categories")
+    "categories": ResolvedManyToManyField(
+        display_field="name", relationship="categories"
+    )
 }
 ITEM_COLS = ["id", "name", "template_id", "price", "meta", "tags"]
 

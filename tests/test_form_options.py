@@ -18,8 +18,7 @@ from sqlalchemy.orm import (
 from sqlalchemy.pool import StaticPool
 from streamlit.testing.v1 import AppTest
 
-from streamlit_pydantic_crud import ForeignKey as FkOption
-from streamlit_pydantic_crud import ManyToMany
+from streamlit_pydantic_crud import ForeignKeyField, ManyToManyField
 from streamlit_pydantic_crud.config_types import resolve_many_to_many_fields
 from streamlit_pydantic_crud.forms.options import (
     load_form_options,
@@ -80,7 +79,7 @@ class FakeConn:
         return Session(self.engine)
 
 
-AUTHOR_FK = FkOption(query=select(Author), display_field="name")
+AUTHOR_FK = ForeignKeyField(query=select(Author), display_field="name")
 
 
 @pytest.fixture
@@ -132,7 +131,7 @@ def test_many_to_many_options_apply_filter(conn: Any) -> None:
     form = MagicMock()
     m2m = resolve_many_to_many_fields(
         {
-            "tag_ids": ManyToMany(
+            "tag_ids": ManyToManyField(
                 display_field="label",
                 relationship="tags",
                 filter=lambda q: q.where(Tag.id > 1),
@@ -162,8 +161,8 @@ def test_failing_field_is_logged_not_raised(conn: Any, logged: list[str]) -> Non
     form = MagicMock()
     m2m = resolve_many_to_many_fields(
         {
-            "bad": ManyToMany(display_field="label", relationship="missing"),
-            "tag_ids": ManyToMany(display_field="label", relationship="tags"),
+            "bad": ManyToManyField(display_field="label", relationship="missing"),
+            "tag_ids": ManyToManyField(display_field="label", relationship="tags"),
         }
     )
 
@@ -181,7 +180,7 @@ def test_failing_fk_field_is_logged_not_raised(conn: Any, logged: list[str]) -> 
     """A bad FK display_field is logged and leaves the other fields loaded."""
     form = MagicMock()
     fk = {
-        "writer": FkOption(query=select(Author), display_field="nope"),
+        "writer": ForeignKeyField(query=select(Author), display_field="nope"),
         "editor": AUTHOR_FK,
     }
 
@@ -204,7 +203,10 @@ def _warning_app(db: str, disable_log: bool) -> None:
     from pydantic import BaseModel  # noqa: PLC0415
     from sqlalchemy import select  # noqa: PLC0415
 
-    from streamlit_pydantic_crud import ForeignKey, ManyToMany  # noqa: PLC0415
+    from streamlit_pydantic_crud import (  # noqa: PLC0415
+        ForeignKeyField,
+        ManyToManyField,
+    )
     from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
@@ -224,9 +226,9 @@ def _warning_app(db: str, disable_log: bool) -> None:
 
     set_logging(disable_log)
     conn = st.connection("sql", url=f"sqlite:///{db}")
-    fk = {"writer": ForeignKey(query=select(Author), display_field="nope")}
+    fk = {"writer": ForeignKeyField(query=select(Author), display_field="nope")}
     m2m = {
-        "bad": ManyToMany(
+        "bad": ManyToManyField(
             display_field="label", relationship="tags", filter=broken_filter
         )
     }

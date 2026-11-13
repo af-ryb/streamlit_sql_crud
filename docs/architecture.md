@@ -23,13 +23,13 @@ objects; everything else is internal and may change between minor versions.
 - **`PydanticCrudUi`** (`pydantic_ui.py`) — `PydanticUi` with FK / M2M options;
   used by the dialogs.
 
-- **`ForeignKey`** / **`ManyToMany`** (`config_types.py`) — frozen dataclasses,
+- **`ForeignKeyField`** / **`ManyToManyField`** (`config_types.py`) — frozen dataclasses,
   the entries of `foreign_key_options` / `many_to_many_fields`. The dict
   (TypedDict) entry form is deprecated since 0.9.1, not removed before 0.11.0.
 
 The public classes (and `CreateRow` / `UpdateRow`) normalize both mappings once
 with `resolve_foreign_key_options` / `resolve_many_to_many_fields`; everything
-below reads attributes of `ForeignKey` / `ResolvedManyToMany` (`relationship`
+below reads attributes of `ForeignKeyField` / `ResolvedManyToManyField` (`relationship`
 resolved to the mapping key when omitted). The resolvers are idempotent, so
 passing the normalized mappings on does not warn again.
 
@@ -45,10 +45,10 @@ The root holds only the public classes and shared state:
 ```
 streamlit_pydantic_crud/
 ├── __init__.py        # public API: SqlUi, PydanticUi, PydanticCrudUi,
-│                      #   ForeignKey, ManyToMany
+│                      #   ForeignKeyField, ManyToManyField
 ├── sql_ui.py          # SqlUi; action buttons
 ├── pydantic_ui.py     # PydanticUi / PydanticCrudUi
-├── config_types.py    # relation configs (ForeignKey, ManyToMany, deprecated
+├── config_types.py    # relation configs (ForeignKeyField, ManyToManyField, deprecated
 │                      #   TypedDicts) and their resolvers, protocols
 │                      #   (MappedModel, SessionSource), FkOpt,
 │                      #   OperationType, TableWidth / TableHeight

@@ -13,11 +13,11 @@ from loguru import logger
 from sqlalchemy import Select, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.session import Session
-from sqlalchemy.sql.schema import ForeignKey as SaForeignKey
+from sqlalchemy.sql.schema import ForeignKey
 
 from streamlit_pydantic_crud.config_types import (
     FkOpt,
-    ForeignKey,
+    ForeignKeyField,
     ResolvedForeignKeyOptions,
     ResolvedManyToManyFields,
     SessionSource,
@@ -233,7 +233,7 @@ class ExistingData:
         fk_opt = FkOpt(idx, str(row))
         return fk_opt
 
-    def get_foreign_opts(self, col, foreign_key: SaForeignKey) -> list[FkOpt]:
+    def get_foreign_opts(self, col, foreign_key: ForeignKey) -> list[FkOpt]:
         """Return FK options; only the current value if the target is unmapped."""
         foreign_table_name = foreign_key.column.table.name
         model = model_by_tablename(self.Model, foreign_table_name)
@@ -296,7 +296,7 @@ class ExistingData:
 def custom_foreign_opts(
     session: Session,
     col_name: str,
-    fk_config: ForeignKey,
+    fk_config: ForeignKeyField,
     row: DeclarativeBase | None = None,
     dt_filters: dict | None = None,
     no_dt_filters: dict | None = None,

@@ -39,7 +39,7 @@ def _app(db: str, schema: bool) -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
     from sqlalchemy import select  # noqa: PLC0415
 
-    from streamlit_pydantic_crud import ForeignKey  # noqa: PLC0415
+    from streamlit_pydantic_crud import ForeignKeyField  # noqa: PLC0415
     from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
@@ -52,7 +52,9 @@ def _app(db: str, schema: bool) -> None:
     )
 
     conn = st.connection("sql", url=f"sqlite:///{db}")
-    fk = {"department_id": ForeignKey(query=select(Department), display_field="name")}
+    fk = {
+        "department_id": ForeignKeyField(query=select(Department), display_field="name")
+    }
     create = CreateRow(
         conn,
         Employee,

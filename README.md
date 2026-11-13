@@ -209,13 +209,13 @@ SqlUi(
 Configure user-friendly selectboxes for foreign key fields:
 
 ```python
-from streamlit_pydantic_crud import ForeignKey, SqlUi
+from streamlit_pydantic_crud import ForeignKeyField, SqlUi
 
 SqlUi(
     conn=conn,
     model=Alert,
     foreign_key_options={
-        "template_id": ForeignKey(
+        "template_id": ForeignKeyField(
             query=select(Template).where(Template.active == True),
             display_field="config_name",  # Show this field
             value_field="id",             # Save this value (default: "id")
@@ -223,9 +223,6 @@ SqlUi(
     },
 )
 ```
-
-If the module also imports SQLAlchemy's `ForeignKey`, import this one under
-another name (`from streamlit_pydantic_crud import ForeignKey as FkOptions`).
 
 ### Result
 Instead of: `<Template id=abc123>`  
@@ -248,7 +245,7 @@ SqlUi(
     model=Post,
     create_schema=PostCreateSchema,
     many_to_many_fields={
-        "tags": ManyToMany(
+        "tags": ManyToManyField(
             display_field="name",        # Display tag names
             relationship="tags",         # Optional: defaults to the key
             filter=lambda q: q.filter(Tag.active == True),  # Optional
@@ -257,7 +254,7 @@ SqlUi(
 )
 ```
 
-`ManyToMany` is imported from `streamlit_pydantic_crud`. `filter` receives the
+`ManyToManyField` is imported from `streamlit_pydantic_crud`. `filter` receives the
 `select(Tag)` statement listing the options and returns the narrowed statement;
 a plain function (`def only_active(q): ...`) works as well as a lambda.
 
@@ -267,7 +264,7 @@ Until 0.9.1 the entries of `foreign_key_options` and `many_to_many_fields` were
 plain dicts (`{"query": ..., "display_field": ..., "value_field": ...}` and
 `{"relationship": ..., "display_field": ..., "filter": ...}`). They still work
 but emit a `DeprecationWarning` since 0.9.1 and will not be removed before
-0.11.0. Replace each dict with a `ForeignKey(...)` / `ManyToMany(...)` object
+0.11.0. Replace each dict with a `ForeignKeyField(...)` / `ManyToManyField(...)` object
 with the same field names.
 
 ## SQLModel Models
@@ -293,7 +290,7 @@ SqlUi(
     read_instance=select(Hero),
     edit_create_model=Hero,
     create_schema=HeroCreate,
-    many_to_many_fields={"powers": ManyToMany(display_field="name")},
+    many_to_many_fields={"powers": ManyToManyField(display_field="name")},
 )
 ```
 
@@ -581,7 +578,7 @@ SqlUi(
     conn=conn,
     read_instance=read_stmt,
     edit_create_model=AlertConfiguration,
-    many_to_many_fields={"rules": ManyToMany(display_field="name")},
+    many_to_many_fields={"rules": ManyToManyField(display_field="name")},
     available_filter=['is_active', 'app_name', 'platform', 'metric_name'],
 )
 ```

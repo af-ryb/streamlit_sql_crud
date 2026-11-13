@@ -31,7 +31,7 @@ class PostUpdate(BaseModel):
 def _app(db: str, action: str, tag_ids: list[int]) -> None:
     import streamlit as st  # noqa: PLC0415 - AppTest serialises the function
 
-    from streamlit_pydantic_crud import ManyToMany  # noqa: PLC0415
+    from streamlit_pydantic_crud import ManyToManyField  # noqa: PLC0415
     from streamlit_pydantic_crud.dialogs.create import (  # noqa: PLC0415
         CreateRow,
     )
@@ -43,7 +43,7 @@ def _app(db: str, action: str, tag_ids: list[int]) -> None:
     )
 
     conn = st.connection("sql", url=f"sqlite:///{db}")
-    m2m = {"tag_ids": ManyToMany(display_field="label", relationship="tags")}
+    m2m = {"tag_ids": ManyToManyField(display_field="label", relationship="tags")}
     if action == "create":
         create = CreateRow(
             conn, Post, key="c", create_schema=PostCreate, many_to_many_fields=m2m

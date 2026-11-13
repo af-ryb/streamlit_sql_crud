@@ -330,3 +330,25 @@ Side findings (0.9.1, not fixed):
   pins `pyarrow` 19.0.0 (wheels for 3.12 / 3.13 only), so `uv sync --locked` builds
   it from source and fails (seen when `ubuntu-latest` moved to 3.14.4; CI is pinned
   to 3.12 since). Upgrade `pyarrow` in the lock and run CI on a 3.12 + 3.14 matrix
+
+## Step 7 — Typed relation config
+
+- [ ] `many_to_many_fields` / `foreign_key_options` took nested dict literals typed
+  as `Mapping[str, TypedDict]`; PyCharm's built-in analyzer rejects them in the
+  consumer (`web/dictionaries/app_version_dict.py`): the literal is inferred as
+  `dict[Literal["versions"], dict[Literal[...], ... | (q: Unknown) -> Unknown]]`,
+  "matches no member", "Mapping is invariant in _KT" (not reproducible with the
+  ty, pyright or mypy CLIs) — 0.9.1: frozen dataclasses `ForeignKeyField(query,
+  display_field, value_field="id")` and `ManyToManyField(display_field,
+  relationship=None, filter=None)` exported from the package root (`relationship`
+  defaults to the mapping key); normalized once at the public boundary, internals
+  read attributes only; dict entries still work with a `DeprecationWarning` (not
+  removed before 0.11.0). Open: confirm in PyCharm (if the key invariance still
+  fires, annotate the parameter so a `dict[str, ...]` literal is accepted) and
+  migrate the consumer
+- [ ] `filter` is typed `Callable[[Select[Any]], Select[Any]]`, so a lambda body is
+  type-checked: with SQLModel fields (plain `str` / `int | None`) ty rejects
+  `Model.name != "x"` unless `col()` is used; an unannotated `def` is unaffected
+- [ ] A `DeprecationWarning` raised for a call from an imported page module is
+  hidden by Python's default filters (also the 0.10.0 deprecations); consumers
+  see it only with `PYTHONWARNINGS=default::DeprecationWarning`
