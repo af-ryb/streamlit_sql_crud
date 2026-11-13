@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from streamlit_pydantic_crud import ForeignKey
+from streamlit_pydantic_crud.config_types import ResolvedManyToMany
 from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
 from tests.conftest import Department
 
@@ -50,7 +51,9 @@ def test_m2m_fallback_logs_one_accurate_warning(
 
     gen = PydanticInputGenerator(
         schema=Schema,
-        many_to_many_fields={"tags": {"relationship": "tags", "display_field": "name"}},
+        many_to_many_fields={
+            "tags": ResolvedManyToMany(display_field="name", relationship="tags")
+        },
     )
     mock_st.session_state = {}
     mock_st.text_input.return_value = ""

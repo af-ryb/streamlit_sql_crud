@@ -32,8 +32,8 @@ from tests.test_sqlmodel import heroes, power_names
 
 APP = str(Path(__file__).parent / "_apps" / "sqlmodel_app.py")
 FORMS = ["object", "dict"]
-M2M_MSG = r"Dict entries in 'many_to_many_fields' are deprecated since 0\.9\.2"
-FK_MSG = r"Dict entries in 'foreign_key_options' are deprecated since 0\.9\.2"
+M2M_MSG = r"Dict entries in 'many_to_many_fields' are deprecated since 0\.9\.1"
+FK_MSG = r"Dict entries in 'foreign_key_options' are deprecated since 0\.9\.1"
 TEAMS = select(Team)
 Run = Callable[[str, str], tuple[AppTest, list[str]]]
 

@@ -25,7 +25,7 @@ objects; everything else is internal and may change between minor versions.
 
 - **`ForeignKey`** / **`ManyToMany`** (`config_types.py`) — frozen dataclasses,
   the entries of `foreign_key_options` / `many_to_many_fields`. The dict
-  (TypedDict) entry form is deprecated since 0.9.2, not removed before 0.11.0.
+  (TypedDict) entry form is deprecated since 0.9.1, not removed before 0.11.0.
 
 The public classes (and `CreateRow` / `UpdateRow`) normalize both mappings once
 with `resolve_foreign_key_options` / `resolve_many_to_many_fields`; everything

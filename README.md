@@ -266,7 +266,7 @@ a plain function (`def only_active(q): ...`) works as well as a lambda.
 Until 0.9.1 the entries of `foreign_key_options` and `many_to_many_fields` were
 plain dicts (`{"query": ..., "display_field": ..., "value_field": ...}` and
 `{"relationship": ..., "display_field": ..., "filter": ...}`). They still work
-but emit a `DeprecationWarning` since 0.9.2 and will not be removed before
+but emit a `DeprecationWarning` since 0.9.1 and will not be removed before
 0.11.0. Replace each dict with a `ForeignKey(...)` / `ManyToMany(...)` object
 with the same field names.
 

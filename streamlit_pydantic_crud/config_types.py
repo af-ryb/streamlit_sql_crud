@@ -140,7 +140,7 @@ def resolve_many_to_many_fields(
 def warn_dict_entries(parameter: str, replacement: str, stacklevel: int) -> None:
     """Warn that `parameter` got the deprecated dict form of `replacement`."""
     warnings.warn(
-        f"Dict entries in '{parameter}' are deprecated since 0.9.2 and will not "
+        f"Dict entries in '{parameter}' are deprecated since 0.9.1 and will not "
         f"be removed before 0.11.0. Use {replacement}(...) objects: "
         f"from streamlit_pydantic_crud import {replacement}.",
         DeprecationWarning,
