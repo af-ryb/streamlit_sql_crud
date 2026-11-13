@@ -6,6 +6,7 @@ and paged. ``apply_active_filters`` narrows option queries of related models.
 
 from collections.abc import Callable, Sequence
 from datetime import date
+from threading import Lock
 from typing import Any, Protocol
 
 import streamlit as st
@@ -40,6 +41,12 @@ ORDER_MODIFIERS: dict[Any, Callable[[Any], ColumnElement[Any]]] = {
     operators.nulls_last_op: lambda col: col.nulls_last(),
 }
 """ORDER BY modifiers re-applied to the outer query's order columns."""
+
+IGNORED_ORDER_CLAUSES: set[str] = set()
+"""Raw ORDER BY clauses already warned about in this process (see the lock)."""
+
+IGNORED_ORDER_LOCK = Lock()
+"""Guards `IGNORED_ORDER_CLAUSES`: sessions render in separate threads."""
 
 
 class ActiveFilters(Protocol):
@@ -156,8 +163,20 @@ def order_terms(stmt: Select) -> list[tuple[ColumnElement[Any] | str, list[Any]]
         elif isinstance(element, ColumnElement):
             terms.append((element, modifiers))
         else:
-            logger.warning(f"Ignoring ORDER BY clause {element} of the read query")
+            warn_ignored_order(str(element))
     return terms
+
+
+def warn_ignored_order(clause: str) -> None:
+    """Warn once per process that ORDER BY `clause` of the read query is skipped.
+
+    The statement is rebuilt on every rerun, so the clause text is the key.
+    """
+    with IGNORED_ORDER_LOCK:
+        if clause in IGNORED_ORDER_CLAUSES:
+            return
+        IGNORED_ORDER_CLAUSES.add(clause)
+    logger.warning(f"Ignoring ORDER BY clause {clause} of the read query")
 
 
 def has_row_limit(stmt: Select) -> bool:
