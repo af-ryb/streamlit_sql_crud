@@ -312,8 +312,11 @@ Side findings (Step 6, not fixed):
   widget is seeded — 0.9.1: seeded widgets get no `value` / `index` / `default`
   (`"min"` for a non-nullable number, `"today"` for a set date, index 0 for a
   selectbox); the `st.datetime_input` remainder is tracked under 0.7.2 above
-- [ ] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
+- [x] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
   `InputFields.input_array` mixes raw members with `.enums` names (edit and copy)
+  — 0.9.2: `input_enum_array` offers and returns the members (string enums:
+  their values) labelled by name; stored names / values / a PG literal select
+  them; an enum array no longer accepts typed new options
 - [ ] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
   JSON columns
 - [x] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it

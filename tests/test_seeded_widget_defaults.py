@@ -61,6 +61,8 @@ PLAIN_ROW: dict[str, Any] = {
     "pf_update_due": date(2024, 2, 29),
     "pf_update_created": datetime(2025, 3, 4, 9, 33),
     "pf_update_tags": ["x", "y"],
+    "pf_update_levels": [Level.LOW, Level.HIGH],
+    "pf_update_sizes": ["m"],
 }
 PLAIN_OTHER_ROW: dict[str, Any] = {
     "pf_update_title": "second",
@@ -76,6 +78,8 @@ PLAIN_OTHER_ROW: dict[str, Any] = {
     "pf_update_due": None,
     "pf_update_created": datetime(2001, 6, 7, 18, 45),
     "pf_update_tags": [],
+    "pf_update_levels": [],
+    "pf_update_sizes": [],
 }
 
 

@@ -1,6 +1,7 @@
 """Models of the plain (no-schema) forms harness `plain_forms_app.py`.
 
-One column per `InputFields` widget kind; arrays are stored as JSON on SQLite.
+One column per `InputFields` widget kind; arrays are stored as JSON on SQLite,
+enum arrays by member name like PostgreSQL's `ARRAY(Enum(...))`.
 """
 
 from datetime import date, datetime
@@ -10,7 +11,9 @@ from typing import Any
 
 from sqlalchemy import ARRAY, JSON, ForeignKey, Numeric, String
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 
 CREATED = datetime(2025, 3, 4, 9, 33, 25, 80000)
 OTHER_CREATED = datetime(2001, 6, 7, 18, 45, 10)
@@ -26,6 +29,27 @@ class Level(PyEnum):
     LOW = "low"
     MID = "mid"
     HIGH = "high"
+
+
+class LevelNames(TypeDecorator):
+    """SQLite stand-in of `ARRAY(Enum(Level))`: members in, names stored."""
+
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(
+        self, value: list[Any] | None, dialect: Dialect
+    ) -> list[str] | None:
+        """Store member names; a name is accepted like PostgreSQL does."""
+        if value is None:
+            return None
+        return [Level[getattr(item, "name", item)].name for item in value]
+
+    def process_result_value(
+        self, value: list[str] | None, dialect: Dialect
+    ) -> list[Level] | None:
+        """Return the members of the stored names."""
+        return None if value is None else [Level[name] for name in value]
 
 
 class Maker(Base):
@@ -61,6 +85,12 @@ class Item(Base):
     tags: Mapped[list[str] | None] = mapped_column(
         ARRAY(String).with_variant(JSON(), "sqlite")
     )
+    levels: Mapped[list[Level] | None] = mapped_column(
+        ARRAY(SQLEnum(Level, name="level_type")).with_variant(LevelNames(), "sqlite")
+    )
+    sizes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(SQLEnum("s", "m", "l", name="size_type")).with_variant(JSON(), "sqlite")
+    )
 
     def __str__(self) -> str:
         return self.title
@@ -86,6 +116,8 @@ def seed_rows() -> list[Any]:
             due=date(2024, 2, 29),
             created=CREATED,
             tags=["x", "y"],
+            levels=[Level.LOW, Level.HIGH],
+            sizes=["m"],
         ),
         Item(
             id=2,
@@ -95,5 +127,7 @@ def seed_rows() -> list[Any]:
             done=False,
             created=OTHER_CREATED,
             tags=[],
+            levels=[],
+            sizes=[],
         ),
     ]

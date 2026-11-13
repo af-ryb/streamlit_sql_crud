@@ -6,6 +6,7 @@ Every widget seeds its session state (`seed_widget_state`) and gets no
 
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Final
 
 import streamlit as st
@@ -16,6 +17,7 @@ from sqlalchemy.types import Enum as SQLEnum
 
 from streamlit_pydantic_crud.config_types import FkOpt
 from streamlit_pydantic_crud.forms.options import ExistingData
+from streamlit_pydantic_crud.forms.pydantic.option_resolve import known_defaults
 from streamlit_pydantic_crud.forms.pydantic.widgets import (
     nullable_number_input,
     render_checkbox,
@@ -29,6 +31,7 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     is_array_type,
     safe_python_type,
 )
+from streamlit_pydantic_crud.helpers.typing import enum_member
 from streamlit_pydantic_crud.helpers.values import (
     coerce_decimal,
     keep_unchanged_datetime,
@@ -49,7 +52,7 @@ class InputFields:
     Automatically detects field types and creates appropriate inputs:
     - Enum fields: selectbox
     - String fields: selectbox of stored values that also takes a new value
-    - Array[Enum] fields: multiselect
+    - Array fields: multiselect (Array[Enum]: its members, shown by name)
     - Foreign keys: selectbox with related records
     - Numbers, dates, booleans: appropriate input widgets
     """
@@ -227,44 +230,58 @@ class InputFields:
         return coerce_decimal(input_value, step)
 
     def input_array(self, col_name: str, col_type, col_value=None) -> list[Any]:
-        """Handle ARRAY column input with multiselect"""
-        pretty_name = get_pretty_name(col_name)
+        """Render a multiselect for an ARRAY column and return the selection.
+
+        Typed new items are accepted, except for an ARRAY of Enum.
+        """
+        item_type = getattr(col_type, "item_type", None)
+        if isinstance(item_type, SQLEnum):
+            return self.input_enum_array(col_name, item_type, col_value)
 
         """Only lists, tuples and PG array literals preselect values; any other
         scalar gives none (to_list would wrap it)."""
-        current_values = (
-            to_list(col_value) if isinstance(col_value, (list, tuple, str)) else []
-        )
+        current_values = array_items(col_value)
 
-        # Get existing values for options (if available)
         existing_values = self.existing_data.text.get(col_name, set())
         options = list(existing_values) if existing_values else []
-
-        # Add current values to options if not already present
         for val in current_values:
             if val not in options:
                 options.append(val)
 
-        # Check if this is an ARRAY of ENUM type
-        enum_options = []
-        if hasattr(col_type, "item_type") and isinstance(col_type.item_type, SQLEnum):
-            enum_options = list(col_type.item_type.enums)
-            options.extend([opt for opt in enum_options if opt not in options])
-
-        """Typed new options are accepted; the seeded state is the selection."""
         key = f"{self.key_prefix}_{col_name}"
         seed_widget_state(key, current_values)
-        selected_values = st.multiselect(
-            pretty_name,
+        return st.multiselect(
+            get_pretty_name(col_name),
             options=options,
             accept_new_options=True,
             key=key,
-            help="Select existing options or type new ones"
-            if not enum_options
-            else f"Select from: {', '.join(enum_options)}",
+            help="Select existing options or type new ones",
         )
 
-        return selected_values
+    def input_enum_array(
+        self, col_name: str, item_enum: SQLEnum, col_value: object = None
+    ) -> list[Any]:
+        """Render a multiselect for an ARRAY of Enum, labelled by name.
+
+        `Enum(PyEnum)` items offer (and return) members, string enums their
+        literal values; stored names, values and members all select the option.
+        """
+        enum_class = item_enum.enum_class
+        options: list = list(enum_class) if enum_class else list(item_enum.enums)
+        label = get_pretty_name(col_name)
+
+        items = array_items(col_value)
+        if enum_class:
+            items = [stored_enum_member(item, enum_class) for item in items]
+        key = f"{self.key_prefix}_{col_name}"
+        seed_widget_state(key, known_defaults(items, options, label))
+        return st.multiselect(
+            label,
+            options=options,
+            format_func=lambda opt: opt.name if enum_class else str(opt),
+            key=key,
+            help=f"Select from: {', '.join(item_enum.enums)}",
+        )
 
     def input_datetime(self, col_name: str, value: datetime | None) -> Any:
         """Render a datetime input; an untouched one returns `value` unchanged.
@@ -339,3 +356,19 @@ class InputFields:
             f"{self.key_prefix}_{column_label(col)}"
             for col in self.model.__table__.columns
         )
+
+
+def array_items(value: object) -> list[Any]:
+    """Return the items of a stored array: a list, tuple or PG array literal."""
+    return to_list(value) if isinstance(value, (list, tuple, str)) else []
+
+
+def stored_enum_member(item: object, enum_class: type[Enum]) -> object:
+    """Return the member a stored array item stands for, else the item.
+
+    The database stores member names, so a name wins over an equal value.
+    """
+    if isinstance(item, str) and item in enum_class.__members__:
+        return enum_class.__members__[item]
+    member = enum_member(item, enum_class)
+    return item if member is None else member
