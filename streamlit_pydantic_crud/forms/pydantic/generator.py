@@ -232,10 +232,9 @@ class PydanticInputGenerator:
                     label, self.many_to_many_data[field_name], value, key
                 )
             logger.warning(
-                f"Many-to-many field {field_name} has no loaded data, "
-                "falling back to foreign key input"
+                f"Many-to-many field {field_name} has no loaded options, "
+                "falling back to a text input"
             )
-            logger.warning(f"Field {field_name} not found in foreign_key_options")
             return widgets.render_foreign_key_fallback(label, value, key)
 
         if is_enum_annotation(annotation):
