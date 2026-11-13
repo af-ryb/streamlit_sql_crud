@@ -273,9 +273,12 @@ Side findings (0.7.2, not fixed):
   — 0.9.1: seeded widgets pass no default any more (see Step 6); still open for
   `st.datetime_input` with a value: its default bounds (value ± 10 years) and
   the clear button derive from `value`, and "now" is validated against bounds
-- [ ] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
+- [x] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
   like the Pydantic ones did before #16, so they may show stale browser values
-  after a programmatic reset (only number inputs seed their state)
+  after a programmatic reset (only number inputs seed their state) — 0.9.2: every
+  plain widget seeds its state and passes no default (shared `seed_widget_state`
+  / `seeded_index` / `render_date_input` / `render_checkbox`); a set datetime
+  passes `"now"` with bounds spanning the stored value and now
 - [x] Schema and no-schema read paths show ARRAY cells differently (list chips vs
   a comma-joined string) — 0.9.0 (#28): one display path, lists in both modes
 - [x] `PydanticUi.from_json_schema` is annotated `-> "PydanticUi"` but returns
@@ -309,10 +312,20 @@ Side findings (Step 6, not fixed):
   widget is seeded — 0.9.1: seeded widgets get no `value` / `index` / `default`
   (`"min"` for a non-nullable number, `"today"` for a set date, index 0 for a
   selectbox); the `st.datetime_input` remainder is tracked under 0.7.2 above
-- [ ] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
+- [x] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
   `InputFields.input_array` mixes raw members with `.enums` names (edit and copy)
-- [ ] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
-  JSON columns
+  — 0.9.2: `input_enum_array` offers and returns the members (string enums:
+  their values) labelled by name; stored names / values / a PG literal select
+  them; an enum array no longer accepts typed new options
+- [x] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
+  JSON columns — 0.9.2: `InputFields.input_json`, a text area with the value as
+  indented JSON, parsed on save (`parse_json_input`): unchanged text or the same
+  JSON returns the stored object (no UPDATE), invalid JSON or an emptied NOT NULL
+  column is an `st.error` and blocks the save, an emptied nullable one is SQL
+  NULL, an empty one without a stored value stays `NO_INPUT` (column default)
+- [x] Plain copy inserted the copied row's primary key (only the Pydantic form
+  dropped it), so it failed as a duplicate entry — 0.9.2: `CreateRow` drops the
+  PK from `initial_data` in both modes (`tests/test_plain_copy.py`)
 - [x] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it
   is skipped with a warning on every render — 0.9.1: warned once per process and
   clause (`query.IGNORED_ORDER_CLAUSES`); still skipped
@@ -352,3 +365,24 @@ Side findings (0.9.1, not fixed):
 - [ ] A `DeprecationWarning` raised for a call from an imported page module is
   hidden by Python's default filters (also the 0.10.0 deprecations); consumers
   see it only with `PYTHONWARNINGS=default::DeprecationWarning`
+
+Side findings (0.9.2, not fixed):
+- [ ] Plain forms turn a NULL `ARRAY` into an empty array on an untouched edit:
+  the multiselect returns `[]` for a stored NULL (seen on the example's
+  "Null Numbers Probe": `tags` / `categories` / `numbers` NULL → `{}`, one UPDATE);
+  return None for a nullable column whose stored value is None and selection empty
+- [ ] `render_datetime_input` (Pydantic forms) still passes `value=`; the plain
+  `InputFields.input_datetime` avoids it with `value="now"` and explicit bounds
+  spanning the stored value and now (± 10 years) — the same would close the
+  `st.datetime_input` remainder under 0.7.2 (user `min_value` / `max_value` in
+  the widget kwargs need care)
+- [ ] The plain datetime picker now reaches from 10 years before the earlier of
+  (stored value, now) to 10 years after the later one; it was stored value ± 10
+- [ ] JSON text areas (both modes, `values.json_to_text` / `sa_fields.json_source`)
+  escape non-ASCII text (`"h\u00e9llo"`): `json.dumps` without
+  `ensure_ascii=False`; the table cells do the same
+- [ ] An enum ARRAY item matching no member (a value removed from the enum) is
+  dropped from the plain multiselect with a log warning, so saving removes it
+- [ ] Plain create cannot tell "left empty" from "cleared": an empty JSON text
+  area without a stored value is left out of the INSERT, so a column default
+  applies (same as before the widget existed); typing `null` stores SQL NULL

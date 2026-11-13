@@ -1,7 +1,7 @@
 """Saving the edit form must keep untouched JSON and datetime values exactly.
 
-The datetime widget has minute precision, and no-schema mode has no JSON
-widget, so neither may overwrite the stored value unless the user changed it.
+The datetime widget has minute precision and the JSON text area re-parses its
+text, so neither may overwrite the stored value unless the user changed it.
 """
 
 import json

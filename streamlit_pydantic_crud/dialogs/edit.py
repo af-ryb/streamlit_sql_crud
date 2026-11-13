@@ -245,7 +245,7 @@ class UpdateRow:
                 updated = self.get_sqlalchemy_updates()
                 update_btn = st.form_submit_button("Save")
 
-            if update_btn:
+            if update_btn and not self.input_fields.show_errors():
                 return self.save_sqlalchemy(updated)
 
         if self.update_show_many:

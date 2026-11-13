@@ -1,7 +1,7 @@
 """Copying a row with a JSON column prefills the create form from the raw record.
 
-The record keeps JSON as a dict, so the schema form's text area holds valid
-JSON (not a JSON-encoded string). AppTest cannot rerun an open dialog, so
+The record keeps JSON as a dict, so the form's text area holds valid JSON (not
+a JSON-encoded string), with a schema and without. AppTest cannot rerun an open dialog, so
 saving is covered by the dialog tests.
 """
 
@@ -47,5 +47,6 @@ def test_schema_copy_prefills_valid_json(
 def test_plain_copy_prefills_columns(open_copy: Callable[[str], AppTest]) -> None:
     at = open_copy("plain")
     assert at.selectbox(key="note_create_title").value == "first"
-    """Plain forms have no JSON widget: `meta` is not part of the form."""
-    assert not at.text_area
+    text = at.text_area(key="note_create_meta").value
+    assert text is not None
+    assert json.loads(text) == META

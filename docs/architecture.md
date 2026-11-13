@@ -75,6 +75,8 @@ streamlit_pydantic_crud/
 │                         #   style_fn, SqlUi.df); removed in 0.10.0
 ├── forms/             # form fields in both modes
 │   ├── sa_fields.py   # InputFields: plain (no-schema) widgets, one per column
+│   │                  #   (seeded like the Pydantic ones; JSON text area,
+│   │                  #   parse_json_input)
 │   ├── options.py     # FK / M2M options: load_form_options (Pydantic forms),
 │   │                  #   ExistingData, custom_foreign_opts (plain forms)
 │   ├── schema_builder.py  # dynamic Pydantic models from JSON schemas
@@ -138,7 +140,9 @@ sub-package must be added to `LAYERS` in that test.
    `st.dataframe` renders the records. `SqlUi.rows` keeps the raw records.
 
 **Write** (dialogs): selection positions index `SqlUi.rows`; edit / delete use
-the record's PK, copy passes the raw record. Pydantic forms validate input,
+the record's PK, copy passes the raw record (minus its PK). Plain forms collect
+one value per column (`NO_INPUT` leaves a column out; an invalid JSON input is
+shown as an error and blocks the save). Pydantic forms validate input,
 `dialogs/persist` splits M2M values and maps JSON `None` to SQL NULL, the model
 is committed, and `record_write` bumps the data version so cached counts and
 options refresh.
