@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import Row, RowMapping, Select, select
 from sqlalchemy.orm import DeclarativeBase, Session
 
-from streamlit_pydantic_crud.config_types import ManyToManyFields, SessionSource
+from streamlit_pydantic_crud.config_types import ResolvedManyToManyFields, SessionSource
 from streamlit_pydantic_crud.helpers.sa_model import m2m_load_options, pk_attr, pk_name
 
 
@@ -20,7 +20,7 @@ def read_records(
     stmt: Select[Any],
     model: type[DeclarativeBase],
     read_schema: type[BaseModel] | None = None,
-    many_to_many_fields: ManyToManyFields | None = None,
+    many_to_many_fields: ResolvedManyToManyFields | None = None,
 ) -> list[dict[str, Any]]:
     """Run `stmt` and return one dict per row, in query order.
 
@@ -45,7 +45,7 @@ def load_entities(
     s: Session,
     rows: Sequence[Row[Any]],
     model: type[DeclarativeBase],
-    many_to_many_fields: ManyToManyFields,
+    many_to_many_fields: ResolvedManyToManyFields,
 ) -> dict[Any, object]:
     """Load the `model` entities of `rows` with their M2M relationships, by PK."""
     pk = pk_name(model)

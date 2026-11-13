@@ -15,10 +15,10 @@ from streamlit.delta_generator import DeltaGenerator
 
 from streamlit_pydantic_crud.config_types import (
     ForeignKeyData,
-    ForeignKeyOptions,
     ManyToManyData,
-    ManyToManyFields,
     OperationType,
+    ResolvedForeignKeyOptions,
+    ResolvedManyToManyFields,
 )
 from streamlit_pydantic_crud.forms.pydantic import widgets
 from streamlit_pydantic_crud.forms.pydantic.field_info import (
@@ -45,8 +45,8 @@ class PydanticInputGenerator:
         self,
         schema: type[BaseModel],
         key_prefix: str = "",
-        foreign_key_options: ForeignKeyOptions | None = None,
-        many_to_many_fields: ManyToManyFields | None = None,
+        foreign_key_options: ResolvedForeignKeyOptions | None = None,
+        many_to_many_fields: ResolvedManyToManyFields | None = None,
         operation_type: OperationType = "create",
         pk_name: str = "id",
     ) -> None:

@@ -11,6 +11,8 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     MappedModel,
     SessionSource,
+    resolve_foreign_key_options,
+    resolve_many_to_many_fields,
 )
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
 from streamlit_pydantic_crud.dialogs.persist import (
@@ -53,8 +55,8 @@ class CreateRow:
         self.conn = conn
         self.model = declarative_model(model)
         self.create_schema = create_schema
-        self.foreign_key_options = foreign_key_options or {}
-        self.many_to_many_fields = many_to_many_fields or {}
+        self.foreign_key_options = resolve_foreign_key_options(foreign_key_options)
+        self.many_to_many_fields = resolve_many_to_many_fields(many_to_many_fields)
         self.initial_data = initial_data or {}
         self.dt_filters = dt_filters or {}
         self.no_dt_filters = no_dt_filters or {}
@@ -163,9 +165,9 @@ class CreateRow:
                 s.add(row)
                 s.flush()
                 for field_name, selected_options in m2m_data.items():
-                    relationship_name = self.many_to_many_fields[field_name][
-                        "relationship"
-                    ]
+                    relationship_name = self.many_to_many_fields[
+                        field_name
+                    ].relationship
                     related_objects = load_related(
                         s, self.model, relationship_name, selected_options
                     )

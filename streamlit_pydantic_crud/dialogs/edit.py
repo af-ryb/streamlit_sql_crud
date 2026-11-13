@@ -12,6 +12,8 @@ from streamlit_pydantic_crud.config_types import (
     ManyToManyFields,
     MappedModel,
     SessionSource,
+    resolve_foreign_key_options,
+    resolve_many_to_many_fields,
 )
 from streamlit_pydantic_crud.dialogs import one_to_many
 from streamlit_pydantic_crud.dialogs.frame import show_crud_dialog
@@ -65,8 +67,8 @@ class UpdateRow:
         self.default_values = default_values or {}
         self.update_show_many = update_show_many
         self.update_schema = update_schema
-        self.foreign_key_options = foreign_key_options or {}
-        self.many_to_many_fields = many_to_many_fields or {}
+        self.foreign_key_options = resolve_foreign_key_options(foreign_key_options)
+        self.many_to_many_fields = resolve_many_to_many_fields(many_to_many_fields)
         self.key = key
         self.key_prefix = f"{key}_update"
 
@@ -109,7 +111,7 @@ class UpdateRow:
                     self.current_values[col_name] = value
 
             for field_name, config in self.many_to_many_fields.items():
-                relationship_name = config["relationship"]
+                relationship_name = config.relationship
                 if hasattr(self.row, relationship_name):
                     current_objects = getattr(self.row, relationship_name)
                     related = related_model(self.model, relationship_name)
@@ -193,9 +195,9 @@ class UpdateRow:
                         setattr(row, field_name, field_value)
 
                 for field_name, selected_options in m2m_data.items():
-                    relationship_name = self.many_to_many_fields[field_name][
-                        "relationship"
-                    ]
+                    relationship_name = self.many_to_many_fields[
+                        field_name
+                    ].relationship
                     related_objects = load_related(
                         s, self.model, relationship_name, selected_options
                     )

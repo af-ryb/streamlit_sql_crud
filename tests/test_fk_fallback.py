@@ -10,8 +10,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy import select
 
+from streamlit_pydantic_crud import ForeignKeyField
+from streamlit_pydantic_crud.config_types import ResolvedManyToManyField
 from streamlit_pydantic_crud.forms.pydantic.generator import PydanticInputGenerator
+from tests.conftest import Department
 
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
@@ -24,7 +28,7 @@ def test_fk_fallback_uses_text_input(mock_st: MagicMock) -> None:
     gen = PydanticInputGenerator(
         schema=Schema,
         foreign_key_options={
-            "dept_id": {"query": None, "display_field": "name", "value_field": "id"}
+            "dept_id": ForeignKeyField(query=select(Department), display_field="name")
         },
     )
     mock_st.text_input.return_value = "5"
@@ -47,7 +51,9 @@ def test_m2m_fallback_logs_one_accurate_warning(
 
     gen = PydanticInputGenerator(
         schema=Schema,
-        many_to_many_fields={"tags": {"relationship": "tags", "display_field": "name"}},
+        many_to_many_fields={
+            "tags": ResolvedManyToManyField(display_field="name", relationship="tags")
+        },
     )
     mock_st.session_state = {}
     mock_st.text_input.return_value = ""

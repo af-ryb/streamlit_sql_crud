@@ -1,10 +1,11 @@
-"""Shared typing aliases: CRUD configuration dicts, protocols and FkOpt."""
+"""Shared config types: relation configs, their normalizers, protocols, FkOpt."""
 
+import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal, NotRequired, Protocol, TypedDict
 
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, Select
 from sqlalchemy.orm import Session
 
 OperationType = Literal["create", "update"]
@@ -40,24 +41,139 @@ class SessionSource(Protocol):
         ...
 
 
+"""The related model is only known at runtime, so the row type stays `Any`."""
+OptionsFilter = Callable[[Select[Any]], Select[Any]]
+
+
+@dataclass(frozen=True)
+class ForeignKeyField:
+    """One ``foreign_key_options`` entry: the selectbox options of a field.
+
+    Attributes:
+        query: ``select(Related)`` (optionally narrowed) listing the options.
+        display_field: Attribute of the related row shown in the selectbox.
+        value_field: Attribute of the related row saved in the field.
+    """
+
+    query: Select[Any]
+    display_field: str
+    value_field: str = "id"
+
+
+@dataclass(frozen=True)
+class ManyToManyField:
+    """One ``many_to_many_fields`` entry: the multiselect of a relationship.
+
+    Attributes:
+        display_field: Attribute of the related row shown in the multiselect.
+        relationship: SQLAlchemy relationship name; defaults to the mapping key.
+        filter: Narrows the ``select(Related)`` that lists the options.
+    """
+
+    display_field: str
+    relationship: str | None = None
+    filter: OptionsFilter | None = None
+
+
+@dataclass(frozen=True)
+class ResolvedManyToManyField(ManyToManyField):
+    """Internal form of `ManyToManyField`: `relationship` is always a name."""
+
+    relationship: str
+
+
 class ForeignKeyConfig(TypedDict):
-    """One ``foreign_key_options`` entry: the options query and its fields."""
+    """Deprecated dict form of a `ForeignKeyField` entry (not removed before 0.11.0)."""
 
     query: Any
     display_field: str
-    value_field: str
+    value_field: NotRequired[str]
 
 
 class ManyToManyConfig(TypedDict):
-    """One ``many_to_many_fields`` entry: relationship and display field."""
+    """Deprecated dict form of a `ManyToManyField` entry (not removed before 0.11.0)."""
 
-    relationship: str
+    relationship: NotRequired[str]
     display_field: str
     filter: NotRequired[Callable[[Any], Any]]
 
 
-ForeignKeyOptions = Mapping[str, ForeignKeyConfig]
-ManyToManyFields = Mapping[str, ManyToManyConfig]
+"""Public parameter types: entries are config objects or the deprecated dicts."""
+ForeignKeyOptions = Mapping[str, ForeignKeyField | ForeignKeyConfig]
+ManyToManyFields = Mapping[str, ManyToManyField | ManyToManyConfig]
+"""Normalized form every internal module reads (attributes only)."""
+ResolvedForeignKeyOptions = Mapping[str, ForeignKeyField]
+ResolvedManyToManyFields = Mapping[str, ResolvedManyToManyField]
+
+
+def resolve_foreign_key_options(
+    foreign_key_options: ForeignKeyOptions | None, stacklevel: int = 3
+) -> dict[str, ForeignKeyField]:
+    """Return ``foreign_key_options`` as `ForeignKeyField` objects by field name.
+
+    Dict entries are converted with one DeprecationWarning; the default
+    `stacklevel` points it at the caller of the public ``__init__`` calling this.
+    """
+    options = foreign_key_options or {}
+    if any(not isinstance(config, ForeignKeyField) for config in options.values()):
+        warn_dict_entries("foreign_key_options", "ForeignKeyField", stacklevel + 1)
+    return {
+        name: config if isinstance(config, ForeignKeyField) else foreign_key_of(config)
+        for name, config in options.items()
+    }
+
+
+def resolve_many_to_many_fields(
+    many_to_many_fields: ManyToManyFields | None, stacklevel: int = 3
+) -> dict[str, ResolvedManyToManyField]:
+    """Return ``many_to_many_fields`` with every relationship name resolved.
+
+    A missing ``relationship`` becomes the mapping key. Dict entries are
+    converted with one DeprecationWarning (`stacklevel` as for foreign keys).
+    """
+    fields = many_to_many_fields or {}
+    if any(not isinstance(config, ManyToManyField) for config in fields.values()):
+        warn_dict_entries("many_to_many_fields", "ManyToManyField", stacklevel + 1)
+    return {name: many_to_many_of(name, config) for name, config in fields.items()}
+
+
+def warn_dict_entries(parameter: str, replacement: str, stacklevel: int) -> None:
+    """Warn that `parameter` got the deprecated dict form of `replacement`."""
+    warnings.warn(
+        f"Dict entries in '{parameter}' are deprecated since 0.9.1 and will not "
+        f"be removed before 0.11.0. Use {replacement}(...) objects: "
+        f"from streamlit_pydantic_crud import {replacement}.",
+        DeprecationWarning,
+        stacklevel=stacklevel,
+    )
+
+
+def foreign_key_of(config: ForeignKeyConfig) -> ForeignKeyField:
+    """Convert a deprecated dict entry to a `ForeignKeyField`."""
+    return ForeignKeyField(
+        query=config["query"],
+        display_field=config["display_field"],
+        value_field=config.get("value_field", "id"),
+    )
+
+
+def many_to_many_of(
+    name: str, config: ManyToManyField | ManyToManyConfig
+) -> ResolvedManyToManyField:
+    """Return the entry under key `name` with its relationship name resolved."""
+    if isinstance(config, ResolvedManyToManyField):
+        return config
+    if isinstance(config, ManyToManyField):
+        return ResolvedManyToManyField(
+            display_field=config.display_field,
+            relationship=config.relationship or name,
+            filter=config.filter,
+        )
+    return ResolvedManyToManyField(
+        display_field=config["display_field"],
+        relationship=config.get("relationship", name),
+        filter=config.get("filter"),
+    )
 
 
 class ForeignKeyData(TypedDict):

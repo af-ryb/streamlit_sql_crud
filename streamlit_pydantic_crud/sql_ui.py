@@ -17,6 +17,8 @@ from streamlit_pydantic_crud.config_types import (
     SessionSource,
     TableHeight,
     TableWidth,
+    resolve_foreign_key_options,
+    resolve_many_to_many_fields,
 )
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
@@ -126,8 +128,8 @@ class SqlUi:
             create_schema (Optional[Type[BaseModel]]): Pydantic schema for create operations. If provided, uses Pydantic validation for creation forms. Defaults to None
             update_schema (Optional[Type[BaseModel]]): Pydantic schema for update operations. If provided, uses Pydantic validation for update forms. Defaults to None
             read_schema (Optional[Type[BaseModel]]): Pydantic schema for read operations. If provided, each row (or its reloaded entity) is validated with model_validate(from_attributes=True) and only the schema fields are shown. Defaults to None
-            foreign_key_options (dict, optional): Custom foreign key selectbox configuration. Dict with field names as keys and config dicts as values. Each config should have 'query' (SQLAlchemy select statement), 'display_field' (column name for display), and 'value_field' (column name for value). Defaults to None
-            many_to_many_fields (dict, optional): Custom many-to-many multiselect configuration. Dict with relationship names as keys and config dicts as values. Each config should have 'relationship' (SQLAlchemy relationship name), 'display_field' (column name for display), and 'filter' (optional lambda for filtering options). Defaults to None
+            foreign_key_options (Mapping[str, ForeignKeyField], optional): Custom foreign key selectbox configuration, keyed by field name. Each value is a ForeignKeyField(query, display_field, value_field="id"): the select statement listing the options, the attribute to display and the attribute to save. Dict entries with the same keys are deprecated since 0.9.1 (not removed before 0.11.0). Defaults to None
+            many_to_many_fields (Mapping[str, ManyToManyField], optional): Custom many-to-many multiselect configuration, keyed by schema field name. Each value is a ManyToManyField(display_field, relationship=None, filter=None): the attribute to display, the SQLAlchemy relationship name (defaults to the key) and an optional callable narrowing the select statement of the options. Dict entries with the same keys are deprecated since 0.9.1 (not removed before 0.11.0). Defaults to None
             show_delete_btn (bool, optional): Show delete button. Defaults to True
             show_create_btn (bool, optional): Show create button. Defaults to True
             items_per_page_default (int, optional): Deprecated, removed in 0.10.0; use page_size. Index (0-5) into (50, 100, 200, 500, 1000, Show All), e.g. 5 becomes page_size=None. Ignored (with a warning) when page_size is changed from its default
@@ -174,11 +176,9 @@ class SqlUi:
                 update_show_many=True,
                 disable_log=False,
                 foreign_key_options={
-                    'client_id': {
-                        'query': select(db.Client),
-                        'display_field': 'name',
-                        'value_field': 'id'
-                    }
+                    "client_id": ForeignKeyField(
+                        query=select(db.Client), display_field="name"
+                    ),
                 },
             )
             ```
@@ -262,8 +262,8 @@ class SqlUi:
         self.create_schema = create_schema
         self.update_schema = update_schema
         self.read_schema = read_schema
-        self.foreign_key_options = foreign_key_options or {}
-        self.many_to_many_fields = many_to_many_fields or {}
+        self.foreign_key_options = resolve_foreign_key_options(foreign_key_options)
+        self.many_to_many_fields = resolve_many_to_many_fields(many_to_many_fields)
         self._df: pd.DataFrame | None = None
 
         """Fail fast when a Pydantic schema does not fit the edited model."""

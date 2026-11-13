@@ -6,7 +6,7 @@ from loguru import logger
 from sqlalchemy import JSON, inspect, null
 from sqlalchemy.orm import DeclarativeBase, Session
 
-from streamlit_pydantic_crud.config_types import ManyToManyFields
+from streamlit_pydantic_crud.config_types import ResolvedManyToManyFields
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
 from streamlit_pydantic_crud.helpers.logs import log
 from streamlit_pydantic_crud.helpers.sa_model import pk_attr, related_model, tablename
@@ -19,7 +19,7 @@ def form_data_key(key_prefix: str) -> str:
 
 
 def pop_m2m_data(
-    main_data: dict[str, Any], many_to_many_fields: ManyToManyFields
+    main_data: dict[str, Any], many_to_many_fields: ResolvedManyToManyFields
 ) -> dict[str, Any]:
     """Move the many-to-many fields out of `main_data` and return them."""
     m2m_data = {}

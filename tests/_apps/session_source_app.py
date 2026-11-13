@@ -18,8 +18,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-from streamlit_pydantic_crud import SqlUi
-from streamlit_pydantic_crud.config_types import ForeignKeyOptions
+from streamlit_pydantic_crud import ForeignKeyField, SqlUi
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
@@ -94,9 +93,7 @@ class EngineConn:
         return Session(self.engine)
 
 
-FK: ForeignKeyOptions = {
-    "team_id": {"query": select(Team), "display_field": "name", "value_field": "id"}
-}
+FK = {"team_id": ForeignKeyField(query=select(Team), display_field="name")}
 
 eng = create_engine(f"sqlite:///{DB}")
 Base.metadata.create_all(eng)

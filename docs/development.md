@@ -37,8 +37,9 @@ uv run -- pytest -k pagination            # by name
   between runs.
 - Models used by AppTest harness apps live in importable modules (e.g.
   `tests/_apps/*_models.py`), not in the script: a rerun would redefine them.
-- The library's own "removed in 0.10.0" deprecations are errors in tests unless
-  the test expects them (`filterwarnings` in `pyproject.toml`).
+- The library's own deprecations ("removed in 0.10.0", dict relation entries)
+  are errors in tests unless the test expects them (`filterwarnings` in
+  `pyproject.toml`).
 
 ## Verifying in a browser
 
