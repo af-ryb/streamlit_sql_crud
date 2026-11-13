@@ -99,10 +99,12 @@ def test_enum_list_detection_pep604() -> None:
 
 def test_render_enum_input_pep604() -> None:
     """The selectbox receives the enum values, not a crash on UnionType."""
-    with patch("streamlit_pydantic_crud.forms.pydantic.widgets.st.selectbox") as sb:
-        sb.return_value = "blue"
+    with patch("streamlit_pydantic_crud.forms.pydantic.widgets.st") as mock_st:
+        mock_st.session_state = {}
+        mock_st.selectbox.return_value = "blue"
         result = render_enum_select("Color", Color | None, Color.BLUE, key="k")
     assert result == "blue"
-    args, kwargs = sb.call_args
+    args, kwargs = mock_st.selectbox.call_args
     assert args[1] == ["red", "blue"]
-    assert kwargs["index"] == 1
+    assert mock_st.session_state == {"k": "blue"}
+    assert kwargs["index"] == 0

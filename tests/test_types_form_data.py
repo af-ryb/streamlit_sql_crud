@@ -47,12 +47,14 @@ class WithId(BaseModel):
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_id_field_shown_in_update_mode_without_value(mock_st: MagicMock) -> None:
     """Update forms always show the read-only id, even before a value is known."""
+    mock_st.session_state = {}
     gen = PydanticInputGenerator(WithId, key_prefix="f_update", operation_type="update")
     gen.render_field("id", gen.field_info["id"], None, key="f_update_id")
     mock_st.text_input.assert_called_once()
     kwargs = mock_st.text_input.call_args.kwargs
     assert kwargs["disabled"] is True
-    assert kwargs["value"] == ""
+    assert "value" not in kwargs
+    assert mock_st.session_state == {"f_update_id": ""}
 
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
@@ -86,15 +88,19 @@ def test_field_info_default_resolution() -> None:
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_default_factory_prefills_list_widget(mock_st: MagicMock) -> None:
+    mock_st.session_state = {}
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
     gen.render_field("tags", gen.field_info["tags"], existing_value=None, key="f_tags")
-    assert mock_st.multiselect.call_args.kwargs["default"] == ["a", "b"]
+    assert mock_st.session_state == {"f_tags": ["a", "b"]}
+    assert "default" not in mock_st.multiselect.call_args.kwargs
 
 
 @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
 def test_default_factory_selects_custom_widget_option(mock_st: MagicMock) -> None:
+    mock_st.session_state = {}
     gen = PydanticInputGenerator(Defaults, key_prefix="f")
     gen.render_field(
         "level", gen.field_info["level"], existing_value=None, key="f_level"
     )
-    assert mock_st.selectbox.call_args.kwargs["index"] == 1
+    assert mock_st.session_state == {"f_level": "high"}
+    assert mock_st.selectbox.call_args.kwargs["index"] == 0

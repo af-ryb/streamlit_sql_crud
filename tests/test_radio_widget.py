@@ -26,7 +26,8 @@ class TestRenderRadioWidget:
 
     @patch("streamlit_pydantic_crud.forms.pydantic.widgets.st")
     def test_existing_value_sets_index(self, mock_st: MagicMock) -> None:
-        """Existing value selects the matching option by index."""
+        """Existing value is seeded as widget state; the index stays 0."""
+        mock_st.session_state = {}
         mock_st.radio.return_value = "line"
         render_radio(
             label="Chart type",
@@ -34,10 +35,11 @@ class TestRenderRadioWidget:
             existing_value="line",
             key="test_key",
         )
+        assert mock_st.session_state == {"test_key": "line"}
         mock_st.radio.assert_called_once_with(
             "Chart type",
             options=["area", "line", "bar"],
-            index=1,
+            index=0,
             key="test_key",
         )
 
