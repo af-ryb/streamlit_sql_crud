@@ -325,3 +325,8 @@ Side findings (Step 6, not fixed):
   object repr); copy in its alert-configuration table leaves the FK
   `template_id` selectbox empty (same on v0.7.0)
 
+Side findings (0.9.1, not fixed):
+- [ ] Python 3.14 is not tested and does not install from the lock: `uv.lock`
+  pins `pyarrow` 19.0.0 (wheels for 3.12 / 3.13 only), so `uv sync --locked` builds
+  it from source and fails (seen when `ubuntu-latest` moved to 3.14.4; CI is pinned
+  to 3.12 since). Upgrade `pyarrow` in the lock and run CI on a 3.12 + 3.14 matrix
