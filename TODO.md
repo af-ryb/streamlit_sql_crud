@@ -247,8 +247,14 @@ Side findings (code review, not fixed):
   `input_str_enum` accepts new options too (a String column is not an Enum)
 - [x] `st.dataframe` logs an Arrow conversion traceback when a JSON column holds
   mixed-type lists (`convert_arrow` leaves list JSON as Python objects) — 0.7.2 (#15)
-- [ ] Unconfirmed: a ticket saved `opened_on` 2025-12-07 while the date widget showed
+- [x] Unconfirmed: a ticket saved `opened_on` 2025-12-07 while the date widget showed
   12-31 after an earlier attempt in the same dialog (may be a browser-tool artefact)
+  — 0.9.2: a browser-tool artefact, not a library bug. Typing into `st.date_input`
+  opens its calendar popover, which covers the form's Save button; a click aimed at
+  the button's centre lands on the calendar cell under it ("Sunday, December 7,
+  2025" for December 2025) and picks that day, and the next Save stores it. The
+  stored date always equals what the widget holds at submit (create and edit,
+  typed and picked, after failed attempts and after close / reopen)
 
 Side findings (0.7.0, not fixed):
 - [x] Count/option caches are keyed by `stsql_updated`, which every new session
@@ -275,7 +281,7 @@ Side findings (0.7.2, not fixed):
   the clear button derive from `value`, and "now" is validated against bounds
 - [x] No-schema `InputFields` (`forms/sa_fields.py`) builds widgets with `value=`
   like the Pydantic ones did before #16, so they may show stale browser values
-  after a programmatic reset (only number inputs seed their state) — 0.9.2: every
+  after a programmatic reset (only number inputs seed their state) — 0.9.1: every
   plain widget seeds its state and passes no default (shared `seed_widget_state`
   / `seeded_index` / `render_date_input` / `render_checkbox`); a set datetime
   passes `"now"` with bounds spanning the stored value and now
@@ -314,17 +320,17 @@ Side findings (Step 6, not fixed):
   selectbox); the `st.datetime_input` remainder is tracked under 0.7.2 above
 - [x] Plain (no-schema) forms show enum ARRAY items as `Enum.MEMBER`:
   `InputFields.input_array` mixes raw members with `.enums` names (edit and copy)
-  — 0.9.2: `input_enum_array` offers and returns the members (string enums:
+  — 0.9.1: `input_enum_array` offers and returns the members (string enums:
   their values) labelled by name; stored names / values / a PG literal select
   them; an enum array no longer accepts typed new options
 - [x] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
-  JSON columns — 0.9.2: `InputFields.input_json`, a text area with the value as
+  JSON columns — 0.9.1: `InputFields.input_json`, a text area with the value as
   indented JSON, parsed on save (`parse_json_input`): unchanged text or the same
   JSON returns the stored object (no UPDATE), invalid JSON or an emptied NOT NULL
   column is an `st.error` and blocks the save, an emptied nullable one is SQL
   NULL, an empty one without a stored value stays `NO_INPUT` (column default)
 - [x] Plain copy inserted the copied row's primary key (only the Pydantic form
-  dropped it), so it failed as a duplicate entry — 0.9.2: `CreateRow` drops the
+  dropped it), so it failed as a duplicate entry — 0.9.1: `CreateRow` drops the
   PK from `initial_data` in both modes (`tests/test_plain_copy.py`)
 - [x] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it
   is skipped with a warning on every render — 0.9.1: warned once per process and
@@ -337,6 +343,12 @@ Side findings (Step 6, not fixed):
 - [ ] Consumer: `ConfidenceIntervalRule` has no `__str__` (delete dialog shows the
   object repr); copy in its alert-configuration table leaves the FK
   `template_id` selectbox empty (same on v0.7.0)
+  — 0.9.2: the copy half is fixed in the library. The copy was prefilled from the
+  table record, which holds only the `read_schema` fields (or the read query's
+  columns), and the consumer's read DTO has no `template_id`; it is now overlaid
+  with the stored row's columns and M2M keys (`persist.load_form_values`,
+  `tests/test_copy_fk.py`), so no consumer change is needed. Still open: the
+  missing `__str__` is consumer code (see the 0.9.2 investigations below)
 
 Side findings (0.9.1, not fixed):
 - [ ] Python 3.14 is not tested and does not install from the lock: `uv.lock`
@@ -366,7 +378,7 @@ Side findings (0.9.1, not fixed):
   hidden by Python's default filters (also the 0.10.0 deprecations); consumers
   see it only with `PYTHONWARNINGS=default::DeprecationWarning`
 
-Side findings (0.9.2, not fixed):
+Side findings (0.9.1 plain forms, not fixed):
 - [ ] Plain forms turn a NULL `ARRAY` into an empty array on an untouched edit:
   the multiselect returns `[]` for a stored NULL (seen on the example's
   "Null Numbers Probe": `tags` / `categories` / `numbers` NULL → `{}`, one UPDATE);
@@ -386,3 +398,15 @@ Side findings (0.9.2, not fixed):
 - [ ] Plain create cannot tell "left empty" from "cleared": an empty JSON text
   area without a stored value is left out of the INSERT, so a column default
   applies (same as before the widget existed); typing `null` stores SQL NULL
+
+Side findings (0.9.2 investigations, not fixed):
+- [ ] The delete dialog, the save messages and the action log show `str(row)`: a
+  model without `__str__` appears as `<pkg.Model object at 0x...>`. The library
+  could fall back to `Model(pk=...)` when `type(row).__str__` is `object.__str__`
+- [ ] The calendar popover of a date field near the end of a dialog form covers
+  the Save button until the field loses focus; browser checks must close it
+  (click elsewhere) before clicking Save, or the click picks a day instead
+- [ ] Not verified: create / copy narrow the FK options by the active page
+  filters on same-named columns of the related model, so a copied FK value
+  outside the narrowed options would show an empty selectbox (e.g. a filter on
+  a `name` column that both tables have)

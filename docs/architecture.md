@@ -94,7 +94,8 @@ streamlit_pydantic_crud/
     ├── frame.py       # shared dialog wrapper (show_crud_dialog)
     ├── create.py / edit.py / delete.py  # CreateRow / UpdateRow / DeleteRows
     ├── persist.py     # M2M split/load, JSON None as SQL NULL, form session key,
-    │                  #   handle_save_ok / handle_save_error
+    │                  #   handle_save_ok / handle_save_error, stored-row form
+    │                  #   values (row_form_values, load_form_values)
     └── one_to_many.py # related-rows panels in the edit dialog
 ```
 
@@ -145,7 +146,9 @@ one value per column (`NO_INPUT` leaves a column out; an invalid JSON input is
 shown as an error and blocks the save). Pydantic forms validate input,
 `dialogs/persist` splits M2M values and maps JSON `None` to SQL NULL, the model
 is committed, and `record_write` bumps the data version so cached counts and
-options refresh.
+options refresh. A copy overlays the record with the stored row's columns and
+M2M keys (`persist.load_form_values`), as the edit form reads them
+(`row_form_values`), so columns the read query hides are copied too.
 
 ## Key patterns
 
