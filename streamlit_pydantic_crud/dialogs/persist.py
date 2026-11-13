@@ -6,16 +6,74 @@ from loguru import logger
 from sqlalchemy import JSON, inspect, null
 from sqlalchemy.orm import DeclarativeBase, Session
 
-from streamlit_pydantic_crud.config_types import ResolvedManyToManyFields
+from streamlit_pydantic_crud.config_types import (
+    ResolvedManyToManyFields,
+    SessionSource,
+)
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
 from streamlit_pydantic_crud.helpers.logs import log
-from streamlit_pydantic_crud.helpers.sa_model import pk_attr, related_model, tablename
+from streamlit_pydantic_crud.helpers.sa_model import (
+    column_label,
+    m2m_load_options,
+    pk_attr,
+    pk_name,
+    related_model,
+    tablename,
+)
+from streamlit_pydantic_crud.helpers.values import to_python_scalar
 from streamlit_pydantic_crud.state import clear_state_keys, record_write
 
 
 def form_data_key(key_prefix: str) -> str:
     """Return the session-state key holding a dialog's Pydantic form values."""
     return f"{key_prefix}_form_data"
+
+
+def load_form_values(
+    conn: SessionSource,
+    model: type[DeclarativeBase],
+    row_id: Any,
+    many_to_many_fields: ResolvedManyToManyFields,
+) -> dict[str, Any]:
+    """Return the form values of the stored row `row_id`; {} when it is gone.
+
+    The copy dialog prefills from them: the table record holds only what the
+    read query or `read_schema` shows.
+    """
+    options = m2m_load_options(model, many_to_many_fields)
+    with conn.session as s:
+        row = s.get(model, row_id, options=options)
+        if row is None:
+            return {}
+        return row_form_values(row, model, many_to_many_fields)
+
+
+def row_form_values(
+    row: object,
+    model: type[DeclarativeBase],
+    many_to_many_fields: ResolvedManyToManyFields,
+) -> dict[str, Any]:
+    """Return the form values of `row`: its columns and many-to-many PK lists.
+
+    Call it while the session of `row` is open or its relationships are loaded.
+    """
+    values: dict[str, Any] = {}
+    for col in model.__table__.columns:
+        col_name = column_label(col)
+        if hasattr(row, col_name):
+            values[col_name] = to_python_scalar(getattr(row, col_name))
+
+    for field_name, config in many_to_many_fields.items():
+        relationship_name = config.relationship
+        if not hasattr(row, relationship_name):
+            logger.warning(f"Row does not have relationship {relationship_name}")
+            continue
+        """The multiselect holds the PKs of the selected rows."""
+        related_pk = pk_name(related_model(model, relationship_name))
+        values[field_name] = [
+            getattr(obj, related_pk) for obj in getattr(row, relationship_name)
+        ]
+    return values
 
 
 def pop_m2m_data(

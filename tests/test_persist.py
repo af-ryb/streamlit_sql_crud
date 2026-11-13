@@ -3,8 +3,8 @@
 from typing import Any
 from unittest.mock import patch
 
-from sqlalchemy import JSON, Null
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import JSON, Engine, Null
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from streamlit_pydantic_crud.config_types import ResolvedManyToManyField
 from streamlit_pydantic_crud.dialogs.persist import (
@@ -12,11 +12,12 @@ from streamlit_pydantic_crud.dialogs.persist import (
     handle_save_error,
     handle_save_ok,
     json_none_as_sql_null,
+    load_form_values,
     pop_m2m_data,
 )
 from streamlit_pydantic_crud.helpers.db_errors import format_database_error
 from streamlit_pydantic_crud.state import UPDATED_KEY, data_version
-from tests.conftest import Department
+from tests.conftest import Department, Employee
 
 PERSIST = "streamlit_pydantic_crud.dialogs.persist"
 
@@ -24,6 +25,34 @@ PERSIST = "streamlit_pydantic_crud.dialogs.persist"
 def test_form_data_key() -> None:
     """The Pydantic form values live under `<prefix>_form_data`."""
     assert form_data_key("k_create") == "k_create_form_data"
+
+
+class EngineSource:
+    """Duck-typed `SessionSource` over an engine."""
+
+    def __init__(self, engine: Engine) -> None:
+        self.engine = engine
+
+    @property
+    def session(self) -> Session:
+        """Return a new session on the engine."""
+        return Session(self.engine)
+
+
+def test_load_form_values_returns_stored_columns(
+    engine: Engine, session: Session
+) -> None:
+    """The copy prefill is the stored row: every column, the FK included."""
+    values = load_form_values(EngineSource(engine), Employee, 3, {})
+
+    assert values == {"id": 3, "name": "Emp 3", "department_id": 4, "salary": 300}
+
+
+def test_load_form_values_of_missing_row_is_empty(
+    engine: Engine, session: Session
+) -> None:
+    """A row deleted meanwhile yields no values: the table record is used."""
+    assert load_form_values(EngineSource(engine), Employee, 999, {}) == {}
 
 
 def test_pop_m2m_data_moves_only_configured_fields() -> None:

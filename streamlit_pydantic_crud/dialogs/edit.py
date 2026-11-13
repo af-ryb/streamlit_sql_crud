@@ -3,7 +3,6 @@
 from typing import Any
 
 import streamlit as st
-from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -24,6 +23,7 @@ from streamlit_pydantic_crud.dialogs.persist import (
     json_none_as_sql_null,
     load_related,
     pop_m2m_data,
+    row_form_values,
 )
 from streamlit_pydantic_crud.forms.options import ExistingData, load_form_options
 from streamlit_pydantic_crud.forms.sa_fields import NO_INPUT, InputFields
@@ -35,10 +35,8 @@ from streamlit_pydantic_crud.helpers.sa_model import (
     pk_attr,
     pk_column,
     pk_name,
-    related_model,
     tablename,
 )
-from streamlit_pydantic_crud.helpers.values import to_python_scalar
 from streamlit_pydantic_crud.pydantic_ui import PydanticCrudUi
 
 
@@ -103,27 +101,9 @@ class UpdateRow:
 
         if self.update_schema:
             """Prefill the Pydantic form from the row's current values."""
-            self.current_values = {}
-            for col in self.model.__table__.columns:
-                col_name = column_label(col)
-                if hasattr(self.row, col_name):
-                    value = to_python_scalar(getattr(self.row, col_name))
-                    self.current_values[col_name] = value
-
-            for field_name, config in self.many_to_many_fields.items():
-                relationship_name = config.relationship
-                if hasattr(self.row, relationship_name):
-                    current_objects = getattr(self.row, relationship_name)
-                    related = related_model(self.model, relationship_name)
-                    related_pk = pk_name(related)
-                    """The multiselect holds the PKs of the selected rows."""
-                    self.current_values[field_name] = [
-                        getattr(obj, related_pk) for obj in current_objects
-                    ]
-                else:
-                    logger.warning(
-                        f"Row does not have relationship {relationship_name}"
-                    )
+            self.current_values = row_form_values(
+                self.row, self.model, self.many_to_many_fields
+            )
 
             st.session_state[self.get_session_key] = self.current_values
 

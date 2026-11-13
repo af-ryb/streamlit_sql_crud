@@ -347,6 +347,10 @@ def test_copy_passes_raw_record(run: Callable[..., AppTest], mode: str) -> None:
     assert data is not at.session_state["ROWS"][2]
 
 
+"""Columns of the stored row the JOIN read schemas leave out."""
+STORED_ALPHA = {"template_id": 1, "meta": META_ALPHA, "tags": [Tag.HOT, Tag.NEW]}
+
+
 @pytest.mark.parametrize(
     ("mode", "pos", "expected"),
     [
@@ -371,6 +375,7 @@ def test_copy_passes_raw_record(run: Callable[..., AppTest], mode: str) -> None:
                 "name": "alpha",
                 "price": Decimal("12.50"),
                 "id": ID_ALPHA,
+                "categories": [1, 3],
             },
         ),
     ],
@@ -381,5 +386,5 @@ def test_copy_join_passes_schema_row(
     at = run(mode, select=[pos])
     [(name, kwargs)] = click(at, "add")
     assert name == "CreateRow"
-    """Copy prefill holds the read schema fields, labels included."""
-    assert kwargs["initial_data"] == expected
+    """Copy prefill: the read schema fields (labels included) and the stored row."""
+    assert kwargs["initial_data"] == expected | STORED_ALPHA

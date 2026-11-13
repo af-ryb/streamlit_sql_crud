@@ -64,36 +64,14 @@ SQL `NULL`, an untouched one is not rewritten), an `ARRAY` column a multiselect
 
 The SqlUi interface includes a copy button that allows duplicating existing rows:
 - Select a single row and click the copy button (appears next to edit)
-- Creates a new record with all fields pre-populated from the selected row's raw values (JSON stays an object, `Decimal` stays `Decimal`)
-- The 'id' field is automatically removed to avoid conflicts
+- Creates a new record pre-populated from the stored row of `edit_create_model`
+  (every column, many-to-many selections included), not from the table cells: a
+  foreign key or any other column the read query or `read_schema` leaves out is
+  copied too. Raw values are kept (JSON stays an object, `Decimal` stays `Decimal`)
+- The primary key is automatically removed to avoid conflicts
 
-**Important: read_schema and copy behavior**
-
-⚠️ **Critical**: When using `read_schema`, only fields included in the schema will be available for copying:
-
-```python
-# ❌ PROBLEMATIC: Missing fields in read schema
-class AlertReadSchema(BaseModel):
-    alert_name: str
-    is_active: bool
-    # fact_query field is missing!
-
-SqlUi(
-    conn=conn,
-    model=Alert,
-    read_schema=AlertReadSchema,  # fact_query won't be copied!
-)
-```
-
-```python
-# ✅ SOLUTION: Include all fields you want to copy
-class AlertReadSchema(BaseModel):
-    alert_name: str
-    is_active: bool
-    fact_query: str  # Now available for copying
-```
-
-**Why this happens**: The copy function takes the selected page record (`SqlUi.rows`), which only contains fields defined in the read_schema. Missing fields won't be available for copying, even if they exist in the database.
+A `read_schema` therefore only decides what the table shows; it does not need a
+field for the copy to carry it.
 
 ### DELETE
 - Delete single or multiple rows

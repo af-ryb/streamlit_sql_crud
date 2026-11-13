@@ -23,6 +23,7 @@ from streamlit_pydantic_crud.config_types import (
 from streamlit_pydantic_crud.dialogs.create import CreateRow
 from streamlit_pydantic_crud.dialogs.delete import DeleteRows
 from streamlit_pydantic_crud.dialogs.edit import UpdateRow
+from streamlit_pydantic_crud.dialogs.persist import load_form_values
 from streamlit_pydantic_crud.forms.schema_check import validate_schema_compatibility
 from streamlit_pydantic_crud.helpers import logs
 from streamlit_pydantic_crud.helpers.display import (
@@ -585,7 +586,7 @@ class SqlUi:
             initial_data = None
             if action == "copy":
                 """A copy: CreateRow drops the PK from the dict it receives."""
-                initial_data = dict(self.rows[rows_selected[0]])
+                initial_data = self.copy_values(self.rows[rows_selected[0]])
             create_row = CreateRow(
                 conn=self.conn,
                 model=self.edit_create_model,
@@ -624,6 +625,17 @@ class SqlUi:
                 key=self.key,
             )
             delete_rows.show_dialog()
+
+    def copy_values(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Return the copy prefill of a table `record`: the stored row over it.
+
+        The record lacks columns the read query or `read_schema` leaves out.
+        """
+        row_id = record[pk_name(self.edit_create_model)]
+        stored = load_form_values(
+            self.conn, self.edit_create_model, row_id, self.many_to_many_fields
+        )
+        return {**record, **stored}
 
 
 def action_btns(
