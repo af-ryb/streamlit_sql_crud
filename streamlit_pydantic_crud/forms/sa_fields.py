@@ -4,13 +4,14 @@ Every widget seeds its session state (`seed_widget_state`) and gets no
 `value` / `index` / `default`, like the Pydantic renderers in `forms.pydantic`.
 """
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Final
 
 import streamlit as st
-from sqlalchemy import Float, Numeric
+from sqlalchemy import JSON, Float, Numeric
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.types import Enum as SQLEnum
@@ -22,6 +23,7 @@ from streamlit_pydantic_crud.forms.pydantic.widgets import (
     nullable_number_input,
     render_checkbox,
     render_date_input,
+    render_json_text_area,
     seed_widget_state,
     seeded_index,
 )
@@ -42,8 +44,10 @@ from streamlit_pydantic_crud.state import clear_state_keys
 DATETIME_YEARS: Final = 10
 """Years the datetime picker reaches before and after the value, as Streamlit."""
 
+JSON_HELP: Final = "JSON, e.g. an object or a list"
+
 NO_INPUT: Final = object()
-"""Returned for a column without a widget; callers must leave it unchanged."""
+"""Returned for a column without a value to save; callers leave it unchanged."""
 
 
 class InputFields:
@@ -54,7 +58,10 @@ class InputFields:
     - String fields: selectbox of stored values that also takes a new value
     - Array fields: multiselect (Array[Enum]: its members, shown by name)
     - Foreign keys: selectbox with related records
+    - JSON fields: text area holding the value as JSON, parsed on save
     - Numbers, dates, booleans: appropriate input widgets
+
+    `errors` maps a column to the message of its invalid input.
     """
 
     def __init__(
@@ -79,6 +86,7 @@ class InputFields:
         self.default_values = default_values
         self.existing_data = existing_data
         self.string_enum_threshold = string_enum_threshold
+        self.errors: dict[str, str] = {}
 
     def input_fk(self, col_name: str, value: int | None) -> int | None:
         key = f"{self.key_prefix}_{col_name}"
@@ -305,10 +313,38 @@ class InputFields:
         )
         return keep_unchanged_datetime(input_value, value)
 
+    def input_json(
+        self, col_name: str, value: object = None, nullable: bool = True
+    ) -> Any:
+        """Render a JSON text area and return the parsed value.
+
+        Returns `NO_INPUT` for an invalid input, recording it in `errors`.
+        """
+        label = get_pretty_name(col_name)
+        text = render_json_text_area(
+            label,
+            {"help": JSON_HELP},
+            json_source(value) or None,
+            f"{self.key_prefix}_{col_name}",
+        )
+        self.errors.pop(col_name, None)
+        try:
+            return parse_json_input(text, value, nullable)
+        except ValueError as error:
+            self.errors[col_name] = f"{label}: {error}"
+            return NO_INPUT
+
+    def show_errors(self) -> bool:
+        """Show the message of every invalid input; True when there is one."""
+        for message in self.errors.values():
+            st.error(message)
+        return bool(self.errors)
+
     def get_input_value(self, col: KeyedColumnElement, col_value) -> Any:
         """Render the widget for `col` and return its value.
 
-        Returns `NO_INPUT` for a type without a widget (e.g. JSON).
+        Returns `NO_INPUT` for a type without a widget or without a value to
+        save (an invalid or an empty, unchanged JSON input).
         """
         col_name = column_label(col)
         pretty_name = get_pretty_name(col_name)
@@ -321,6 +357,8 @@ class InputFields:
             input_value = self.input_fk(col_name, col_value)
         elif is_array_type(col.type):
             input_value = self.input_array(col_name, col.type, col_value)
+        elif isinstance(col.type, JSON):
+            input_value = self.input_json(col_name, col_value, bool(col.nullable))
         elif isinstance(col.type, SQLEnum):
             input_value = self.input_enum(col_name, col.type, col_value)
         elif py_type is str:
@@ -356,6 +394,37 @@ class InputFields:
             f"{self.key_prefix}_{column_label(col)}"
             for col in self.model.__table__.columns
         )
+
+
+def parse_json_input(text: str | None, stored: object, nullable: bool) -> Any:
+    """Return the value of a JSON text area seeded with `json_source(stored)`.
+
+    The same JSON gives `stored` itself, nothing typed without a stored value
+    `NO_INPUT`; raises ValueError for invalid JSON or a missing required value.
+    """
+    typed = (text or "").strip()
+    if stored is None and not typed:
+        return NO_INPUT
+    if typed == json_source(stored):
+        return stored
+    try:
+        parsed = json.loads(typed) if typed else None
+    except json.JSONDecodeError as error:
+        msg = f"invalid JSON ({error.msg}, line {error.lineno} column {error.colno})"
+        raise ValueError(msg) from error
+    if parsed is None and not nullable:
+        msg = "a JSON value is required"
+        raise ValueError(msg)
+    """Compared as text: Python's == would take 1 for true."""
+    return stored if json_source(parsed) == json_source(stored) else parsed
+
+
+def json_source(value: object) -> str:
+    """Return `value` as indented JSON text, empty for None.
+
+    Unlike `json_to_text`, scalars are JSON too (a string is quoted).
+    """
+    return "" if value is None else json.dumps(value, indent=2, default=str)
 
 
 def array_items(value: object) -> list[Any]:

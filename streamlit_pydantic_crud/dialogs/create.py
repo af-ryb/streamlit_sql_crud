@@ -150,7 +150,7 @@ class CreateRow:
             created = self.get_sqlalchemy_fields()
             create_btn = st.form_submit_button("Save", type="primary")
 
-        if create_btn:
+        if create_btn and not self.input_fields.show_errors():
             return self.save_sqlalchemy(created)
         return None, None
 

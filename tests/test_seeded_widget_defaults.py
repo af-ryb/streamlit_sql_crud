@@ -5,6 +5,7 @@ the Session State API" when a widget gets both in one run. The check needs a
 server runtime, so the tests record the same condition from the policy hook.
 """
 
+import json
 import os
 import sqlite3
 from collections.abc import Callable
@@ -18,7 +19,7 @@ from streamlit.testing.v1 import AppTest
 
 from streamlit_pydantic_crud.config_types import FkOpt
 from streamlit_pydantic_crud.forms.pydantic.widgets import seeded_number_value
-from tests._apps.plain_forms_models import Level
+from tests._apps.plain_forms_models import META, Level
 
 APP = "seeded_widgets_app.py"
 PLAIN_APP = "plain_forms_app.py"
@@ -63,6 +64,9 @@ PLAIN_ROW: dict[str, Any] = {
     "pf_update_tags": ["x", "y"],
     "pf_update_levels": [Level.LOW, Level.HIGH],
     "pf_update_sizes": ["m"],
+    "pf_update_meta": json.dumps(META, indent=2),
+    "pf_update_config": '{\n  "k": 1\n}',
+    "pf_update_revised": 0,
 }
 PLAIN_OTHER_ROW: dict[str, Any] = {
     "pf_update_title": "second",
@@ -80,6 +84,9 @@ PLAIN_OTHER_ROW: dict[str, Any] = {
     "pf_update_tags": [],
     "pf_update_levels": [],
     "pf_update_sizes": [],
+    "pf_update_meta": "",
+    "pf_update_config": "{}",
+    "pf_update_revised": 0,
 }
 
 

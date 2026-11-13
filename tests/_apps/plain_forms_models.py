@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import Enum as PyEnum
 from typing import Any
 
-from sqlalchemy import ARRAY, JSON, ForeignKey, Numeric, String
+from sqlalchemy import ARRAY, JSON, ForeignKey, Numeric, String, null, text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -17,6 +17,8 @@ from sqlalchemy.types import TypeDecorator
 
 CREATED = datetime(2025, 3, 4, 9, 33, 25, 80000)
 OTHER_CREATED = datetime(2001, 6, 7, 18, 45, 10)
+"""Keys are not sorted: an untouched save must keep their order."""
+META: dict[str, Any] = {"zeta": 1, "alpha": [1, "a", None], "nested": {"n": 1.5}}
 
 
 class Base(DeclarativeBase):
@@ -65,7 +67,10 @@ class Maker(Base):
 
 
 class Item(Base):
-    """Table with one column per plain-form widget kind."""
+    """Table with one column per plain-form widget kind.
+
+    `revised` counts the UPDATEs of a row.
+    """
 
     __tablename__ = "item"
 
@@ -91,6 +96,9 @@ class Item(Base):
     sizes: Mapped[list[str] | None] = mapped_column(
         ARRAY(SQLEnum("s", "m", "l", name="size_type")).with_variant(JSON(), "sqlite")
     )
+    meta: Mapped[Any | None] = mapped_column(JSON)
+    config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    revised: Mapped[int] = mapped_column(default=0, onupdate=text("revised + 1"))
 
     def __str__(self) -> str:
         return self.title
@@ -118,6 +126,8 @@ def seed_rows() -> list[Any]:
             tags=["x", "y"],
             levels=[Level.LOW, Level.HIGH],
             sizes=["m"],
+            meta=META,
+            config={"k": 1},
         ),
         Item(
             id=2,
@@ -129,5 +139,6 @@ def seed_rows() -> list[Any]:
             tags=[],
             levels=[],
             sizes=[],
+            meta=null(),
         ),
     ]

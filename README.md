@@ -52,6 +52,14 @@ Key enhancements over the original streamlit_sql package:
 - **Pydantic validation with custom error messages**
 - **Many-to-many relationship selection**
 
+#### Forms without schemas
+
+Without `create_schema` / `update_schema` the forms are built from the model
+columns: a JSON column is a text area holding the value as JSON (parsed on save,
+invalid JSON is reported and nothing is saved, an emptied nullable column stores
+SQL `NULL`, an untouched one is not rewritten), an `ARRAY` column a multiselect
+(an `ARRAY` of `Enum` offers the enum members by name).
+
 #### Copy Functionality
 
 The SqlUi interface includes a copy button that allows duplicating existing rows:

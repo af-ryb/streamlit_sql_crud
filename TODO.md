@@ -317,8 +317,12 @@ Side findings (Step 6, not fixed):
   — 0.9.2: `input_enum_array` offers and returns the members (string enums:
   their values) labelled by name; stored names / values / a PG literal select
   them; an enum array no longer accepts typed new options
-- [ ] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
-  JSON columns
+- [x] Plain forms have no JSON widget (`NO_INPUT`), so plain create / copy drop
+  JSON columns — 0.9.2: `InputFields.input_json`, a text area with the value as
+  indented JSON, parsed on save (`parse_json_input`): unchanged text or the same
+  JSON returns the stored object (no UPDATE), invalid JSON or an emptied NOT NULL
+  column is an `st.error` and blocks the save, an emptied nullable one is SQL
+  NULL, an empty one without a stored value stays `NO_INPUT` (column default)
 - [x] A raw `text()` ORDER BY on `read_instance` can't be lifted into the CTE; it
   is skipped with a warning on every render — 0.9.1: warned once per process and
   clause (`query.IGNORED_ORDER_CLAUSES`); still skipped
